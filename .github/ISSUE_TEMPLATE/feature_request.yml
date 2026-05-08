@@ -1,0 +1,84 @@
+name: Feature Request
+description: Suggest a new feature or improvement
+title: "[Feature]: "
+labels: ["T-Feat"]
+assignees: []
+
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for suggesting a feature! Please provide enough detail to evaluate and implement it.
+
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: A concise description of the feature in 1-2 sentences.
+      placeholder: Add a read-only schema browser panel showing tables, columns, and indexes for the active connection.
+    validations:
+      required: true
+
+  - type: textarea
+    id: design_notes
+    attributes:
+      label: Design Notes
+      description: |
+        Architecture considerations, relevant file paths, APIs to investigate, or implementation constraints.
+        Use `> **Note**:` for anything that requires investigation before implementation.
+      placeholder: |
+        Files: `app/ui/schema_browser.slint`, `app/src/controller/schema.rs`, `crates/wf-db/src/schema.rs`
+
+        - `wf-db` already exposes `DbService::fetch_schema()` — reuse this for the browser.
+        - Toggle via a `Command` sent through `tx_cmd`; result returned as `Event::SchemaLoaded`.
+        - Use `Rc<VecModel<TableItem>>` for the Slint list binding; convert `SchemaTable` domain types first.
+
+        > **Note**: Investigate Slint `TreeView` or nested `ListView` for hierarchical table → column display.
+        > Check whether `fetch_schema()` returns column metadata (type, nullable) needed for the detail pane.
+
+  - type: textarea
+    id: requirements
+    attributes:
+      label: Requirements
+      description: Implementation checklist. Each line becomes a trackable task on the issue.
+      placeholder: |
+        - [ ] Schema browser panel can be toggled open/closed (keyboard shortcut or toolbar)
+        - [ ] Lists all tables for the active connection, grouped by schema
+        - [ ] Expanding a table shows column names, types, and nullable flags
+        - [ ] Selecting a table inserts its name at the cursor in the SQL editor
+        - [ ] Panel refreshes on `Event::ConnectionChanged`
+        - [ ] Unit tests verify `wf-db` schema fetch returns expected metadata for SQLite
+    validations:
+      required: true
+
+  - type: textarea
+    id: related
+    attributes:
+      label: Related
+      description: Dependencies, related issues, or prior art.
+      placeholder: |
+        Depends on: #12 (DbService schema API)
+        Related: #43 (completion popup — shares schema metadata source)
+        Prior art: TablePlus schema panel, DataGrip database tree
+
+  - type: checkboxes
+    id: contribution
+    attributes:
+      label: Contribution
+      options:
+        - label: I am willing to help implement this feature
+          required: false
+        - label: I can provide test cases or sample SQL
+          required: false
+
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: Pre-submission Checklist
+      options:
+        - label: I have searched existing issues to ensure this is not a duplicate
+          required: true
+        - label: I have checked the roadmap to see if this is already planned
+          required: false
+        - label: This feature aligns with the project's goals (fast, keyboard-centric SQL client)
+          required: false

@@ -1,0 +1,123 @@
+name: Bug Report
+description: Report a bug or unexpected behavior
+title: "[Bug]: "
+labels: ["T-Fix"]
+assignees: []
+
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for reporting a bug! Please provide detailed information to help us understand and fix the issue.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: |
+        Describe the bug in detail. Include relevant code snippets, struct definitions, or API surfaces
+        that demonstrate the missing or broken behavior.
+      placeholder: |
+        `CompletionService` does not debounce correctly when the SQL editor contains
+        a multi-statement query. Completions fire on every keystroke instead of waiting
+        for the configured interval:
+
+        ```rust
+        // crates/wf-completion/src/service.rs — debounce timer (abridged)
+        pub struct CompletionService {
+            debounce_ms: u64,
+            // timer resets on text change but not on cursor movement
+        }
+        ```
+
+        Observed: the completion popup appears immediately after each keystroke when
+        editing the second statement in `SELECT 1; SELECT |` (cursor after the pipe).
+        Expected: completions fire after `debounce_ms` of inactivity regardless of
+        cursor position within the document.
+    validations:
+      required: true
+
+  - type: textarea
+    id: desired_behaviour
+    attributes:
+      label: Desired Behaviour
+      description: What should happen instead? Describe the correct API, behavior, or output.
+      placeholder: |
+        `CompletionService` debounce timer should reset on every keystroke and cursor
+        movement, firing only after the configured interval of inactivity.
+        The popup should not appear mid-keystroke when typing rapidly.
+    validations:
+      required: true
+
+  - type: textarea
+    id: fix
+    attributes:
+      label: Fix
+      description: |
+        Proposed implementation — file paths, code changes, and steps.
+        Leave blank if you are unsure how to fix it.
+      placeholder: |
+        ### Step 1 — Reset debounce on cursor movement
+
+        ```rust
+        // crates/wf-completion/src/service.rs
+        pub fn on_cursor_moved(&mut self) {
+            self.reset_debounce();
+        }
+        ```
+
+        ### Step 2 — Add unit test
+
+        ```rust
+        // crates/wf-completion/tests/debounce.rs
+        #[test]
+        fn debounce_resets_on_cursor_move_should_not_fire_immediately() { … }
+        ```
+
+  - type: textarea
+    id: acceptance_criteria
+    attributes:
+      label: Acceptance Criteria
+      description: Conditions that must hold for this bug to be considered fixed.
+      placeholder: |
+        - [ ] Completion does not fire during rapid keystrokes within `debounce_ms`.
+        - [ ] Debounce resets on cursor movement as well as text changes.
+        - [ ] Unit test `debounce_resets_on_cursor_move_should_not_fire_immediately` passes.
+        - [ ] `just ci` passes.
+    validations:
+      required: true
+
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: wellfeather version, OS, Rust toolchain, and DB type if relevant.
+      placeholder: |
+        - wellfeather: 0.9.1 (`wellfeather --version` or title bar)
+        - OS: Windows 11 / macOS 15 / Ubuntu 24.04
+        - Rust: rustc 1.87.0 (`rustc --version`)
+        - DB type: PostgreSQL 17 / MySQL 8.4 / SQLite 3.47
+      render: markdown
+
+  - type: textarea
+    id: additional_context
+    attributes:
+      label: Additional Context
+      description: Error output, backtraces (`RUST_BACKTRACE=1`), related issues, or workarounds.
+      placeholder: |
+        - Only reproducible when the editor contains multiple semicolon-separated statements
+        - `RUST_LOG=wf_completion=debug just run` shows timer resets being skipped
+        - Workaround: move cursor to the first statement before triggering completion
+        - Related: #43 (completion popup UI)
+
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: Pre-submission Checklist
+      options:
+        - label: I have searched existing issues to ensure this is not a duplicate
+          required: true
+        - label: I have provided enough detail to reproduce or understand the problem
+          required: true
+        - label: I have tested on the latest release
+          required: false
