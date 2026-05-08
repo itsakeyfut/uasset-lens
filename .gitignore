@@ -4,3 +4,6 @@ SESSION.md
 
 .claude/
 CLAUDE.md
+
+target/
+.uasset-lens/

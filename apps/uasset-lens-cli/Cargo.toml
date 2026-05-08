@@ -1,0 +1,7 @@
+[package]
+name    = "uasset-lens-cli"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+cli = { path = "../../crates/cli" }

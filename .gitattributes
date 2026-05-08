@@ -1,0 +1,3 @@
+tests/fixtures/**/*.uasset binary
+tests/fixtures/**/*.umap   binary
+tests/fixtures/**/*.bin    binary
