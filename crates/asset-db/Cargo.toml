@@ -1,0 +1,4 @@
+[package]
+name    = "asset-db"
+version.workspace = true
+edition.workspace = true
