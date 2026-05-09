@@ -1,0 +1,7 @@
+[package]
+name    = "impact-analyzer"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+dependency-graph = { path = "../dependency-graph" }
