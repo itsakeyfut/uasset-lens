@@ -58,6 +58,34 @@ pub fn parse_import_table(
     Ok(deps)
 }
 
+// Returns the ObjectName string for every import entry (all entries, no filtering).
+// Used by parse_export_table to resolve ClassIndex → class name.
+pub(crate) fn parse_import_class_names(
+    data: &[u8],
+    offset: u64,
+    count: usize,
+    name_table: &[String],
+) -> Result<Vec<String>, ScanError> {
+    let mut cur = Cursor::new(data);
+    cur.set_position(offset);
+
+    let mut names = Vec::with_capacity(count);
+    for _ in 0..count {
+        // Skip ClassPackage FName (8 bytes) + ClassName FName (8 bytes) + OuterIndex (4 bytes)
+        for _ in 0..5 {
+            cur.read_i32::<LittleEndian>().map_err(map_io)?;
+        }
+        let on_idx = cur.read_i32::<LittleEndian>().map_err(map_io)?;
+        // Skip ObjectName.Number + PackageName FName (8 bytes) + bImportOptional (4 bytes)
+        for _ in 0..4 {
+            cur.read_i32::<LittleEndian>().map_err(map_io)?;
+        }
+        names.push(name_table.get(on_idx as usize).cloned().unwrap_or_default());
+    }
+
+    Ok(names)
+}
+
 fn map_io(e: std::io::Error) -> ScanError {
     if e.kind() == std::io::ErrorKind::UnexpectedEof {
         ScanError::UnexpectedEof

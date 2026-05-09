@@ -18,6 +18,7 @@ pub struct FPackageFileSummary {
     pub export_offset: u64,
     pub import_count: usize,
     pub import_offset: u64,
+    pub depends_offset: u64,
 }
 
 pub fn parse_header(data: &[u8]) -> Result<FPackageFileSummary, ScanError> {
@@ -95,6 +96,8 @@ pub fn parse_header(data: &[u8]) -> Result<FPackageFileSummary, ScanError> {
     let import_count = cur.read_i32::<LittleEndian>().map_err(map_io)?;
     let import_offset = cur.read_i32::<LittleEndian>().map_err(map_io)?;
 
+    let depends_offset = cur.read_i32::<LittleEndian>().map_err(map_io)?;
+
     Ok(FPackageFileSummary {
         version,
         name_count: name_count as usize,
@@ -103,6 +106,7 @@ pub fn parse_header(data: &[u8]) -> Result<FPackageFileSummary, ScanError> {
         export_offset: export_offset as u64,
         import_count: import_count as usize,
         import_offset: import_offset as u64,
+        depends_offset: depends_offset as u64,
     })
 }
 
@@ -167,6 +171,7 @@ mod tests {
         assert_eq!(header.export_offset, 4133);
         assert_eq!(header.import_count, 22);
         assert_eq!(header.import_offset, 3253);
+        assert_eq!(header.depends_offset, 5477);
     }
 
     #[test]
