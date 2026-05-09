@@ -170,6 +170,7 @@ dependencies = [
  "anyhow",
  "asset-db",
  "clap",
+ "dependency-graph",
  "scanner",
  "serde",
  "serde_json",

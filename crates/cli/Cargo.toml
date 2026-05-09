@@ -6,7 +6,8 @@ edition.workspace = true
 [dependencies]
 shared     = { path = "../shared" }
 scanner    = { path = "../scanner" }
-asset-db   = { path = "../asset-db" }
+asset-db         = { path = "../asset-db" }
+dependency-graph = { path = "../dependency-graph" }
 clap       = { workspace = true }
 anyhow     = { workspace = true }
 tracing    = { workspace = true }

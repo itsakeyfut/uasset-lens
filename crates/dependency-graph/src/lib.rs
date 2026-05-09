@@ -48,6 +48,10 @@ impl DependencyGraph {
         self.graph.node_weights()
     }
 
+    pub fn edge_count(&self) -> usize {
+        self.graph.edge_count()
+    }
+
     pub fn in_degree(&self, path: &AssetPath) -> usize {
         self.index
             .get(path)
