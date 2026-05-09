@@ -4,10 +4,11 @@ version.workspace = true
 edition.workspace = true
 
 [dependencies]
-shared     = { path = "../shared" }
-scanner    = { path = "../scanner" }
-asset-db         = { path = "../asset-db" }
-dependency-graph = { path = "../dependency-graph" }
+shared              = { path = "../shared" }
+scanner             = { path = "../scanner" }
+asset-db            = { path = "../asset-db" }
+dependency-graph    = { path = "../dependency-graph" }
+dead-asset-detector = { path = "../dead-asset-detector" }
 clap       = { workspace = true }
 anyhow     = { workspace = true }
 tracing    = { workspace = true }

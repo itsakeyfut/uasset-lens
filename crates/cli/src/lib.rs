@@ -127,7 +127,18 @@ fn dispatch(cli: &Cli) -> anyhow::Result<i32> {
             let db_path = resolve_db_path(project_dir, cli.db.as_deref());
             commands::graph::handle_graph(project_dir, *cycles_only, &db_path, &cli.format)
         }
-        Commands::DeadAssets { .. } => todo!(),
+        Commands::DeadAssets {
+            project_dir,
+            asset_type,
+        } => {
+            let db_path = resolve_db_path(project_dir, cli.db.as_deref());
+            commands::dead_assets::handle_dead_assets(
+                project_dir,
+                asset_type.as_deref(),
+                &db_path,
+                &cli.format,
+            )
+        }
         Commands::Impact { .. } => todo!(),
         Commands::Redirectors { .. } => todo!(),
         Commands::Find { .. } => todo!(),
