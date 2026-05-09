@@ -4,7 +4,10 @@ version.workspace = true
 edition.workspace = true
 
 [dependencies]
-shared   = { path = "../shared" }
-clap     = { workspace = true }
-anyhow   = { workspace = true }
-tracing  = { workspace = true }
+shared    = { path = "../shared" }
+scanner   = { path = "../scanner" }
+asset-db  = { path = "../asset-db" }
+clap      = { workspace = true }
+anyhow    = { workspace = true }
+tracing   = { workspace = true }
+walkdir   = { workspace = true }
