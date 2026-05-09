@@ -2,3 +2,9 @@
 name    = "cli"
 version.workspace = true
 edition.workspace = true
+
+[dependencies]
+shared   = { path = "../shared" }
+clap     = { workspace = true }
+anyhow   = { workspace = true }
+tracing  = { workspace = true }
