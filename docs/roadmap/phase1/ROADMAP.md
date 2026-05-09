@@ -141,7 +141,7 @@
 ### 5. `crates/cli` — `scan` コマンド実装
 
 - [ ] clap による CLI エントリポイント構築（コマンドツリー設計）
-- [ ] DB パス解決ロジック（`<project_dir>/.uasset-lens/lens.db`、`--db` フラグ対応）
+- [ ] DB パス解決ロジック（`<project_dir>/.uasset-lens/uasset-lens.db`、`--db` フラグ対応）
 - [ ] Content root 解決ルール
   - `<project_dir>/Content/` が存在 → `content_root = Content/`
   - 存在しない → `content_root = <project_dir>`

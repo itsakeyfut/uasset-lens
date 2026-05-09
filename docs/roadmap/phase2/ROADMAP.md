@@ -7,7 +7,7 @@
 
 ## 前提条件
 
-Phase 1 完了（`scan` コマンドが動作し、lens.db に Asset が索引された状態）
+Phase 1 完了（`scan` コマンドが動作し、uasset-lens.db に Asset が索引された状態）
 
 ## 対象クレート
 
