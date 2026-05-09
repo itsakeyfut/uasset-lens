@@ -4,7 +4,14 @@ use std::io::Cursor;
 
 use crate::ScanError;
 
-// FObjectImport layout: ClassPkg(FName=8) + ClassName(FName=8) + OuterIdx(4) + ObjName(FName=8) + PkgName(FName=8) + bOptional(4) = 40 bytes
+// FObjectImport layout (UE5, empirically verified at 40 bytes/entry):
+//   ClassPackage (FName: i32 index + i32 number) = 8 bytes
+//   ClassName    (FName: i32 index + i32 number) = 8 bytes
+//   OuterIndex   (i32)                           = 4 bytes
+//   ObjectName   (FName: i32 index + i32 number) = 8 bytes
+//   PackageName  (FName: i32 index + i32 number) = 8 bytes  [UE5 addition]
+//   bImportOptional (serialised as i32)          = 4 bytes
+// Note: the issue spec described this as 5×i32=20 bytes, but real fixtures show 40.
 pub fn parse_import_table(
     data: &[u8],
     offset: u64,

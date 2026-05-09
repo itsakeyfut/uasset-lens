@@ -229,3 +229,32 @@ let value = unsafe { ptr.read() };
 
 コミット前に未使用の `use`・関数・変数を削除する。
 `#[allow(dead_code)]` を使う場合は残す理由をコメントで記述する。
+
+---
+
+## コメントポリシー
+
+- コメントは「なぜ」のみ書く（「何をするか」は書かない）。
+- 自明なコードにコメントは不要。
+- **バイナリ形式・外部仕様（UE5 バイナリレイアウト等）を文書化する関数・構造体**では
+  multi-line コメントを許容する。1 行に収まらない仕様はこちらを優先する。
+
+```rust
+// ✅ OK — バイナリ仕様の文書化（multi-line 許容）
+// FObjectImport layout (UE5.4, FileVersionUE5 >= 1012):
+//   ClassPackage (FName: i32 index + i32 number) = 8 bytes
+//   ClassName    (FName: i32 index + i32 number) = 8 bytes
+//   OuterIndex   (i32)                           = 4 bytes
+//   ObjectName   (FName: i32 index + i32 number) = 8 bytes
+//   PackageName  (FName: i32 index + i32 number) = 8 bytes  [UE5 addition]
+//   bImportOptional (serialised as i32)          = 4 bytes
+pub fn parse_import_table(...) { ... }
+
+// ✅ OK — 非自明な WHY を 1 行で
+// from_utf8 consumes the Vec directly — no copy in the happy path
+String::from_utf8(bytes).unwrap_or_else(...)
+
+// ❌ NG — 自明なコードに "what" コメント
+// Loop over all entries
+for entry in &entries { ... }
+```
