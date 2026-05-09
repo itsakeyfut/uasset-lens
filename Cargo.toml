@@ -30,3 +30,18 @@ petgraph   = "0.8.3"
 serde_json = "1.0.149"
 toml       = "1"
 globset    = "0.4"
+
+[profile.dev]
+opt-level    = 0
+debug        = true
+incremental  = true
+
+# Optimize dependencies (rusqlite, rayon, nom, etc.) even in dev builds so
+# binary parsing and SQLite operations don't become the bottleneck during iteration.
+[profile.dev.package."*"]
+opt-level = 3
+
+[profile.release]
+opt-level = 3
+lto       = "thin"
+strip     = true

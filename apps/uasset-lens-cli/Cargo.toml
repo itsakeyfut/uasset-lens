@@ -3,5 +3,9 @@ name    = "uasset-lens-cli"
 version.workspace = true
 edition.workspace = true
 
+[[bin]]
+name = "uasset-lens"
+path = "src/main.rs"
+
 [dependencies]
 cli = { path = "../../crates/cli" }
