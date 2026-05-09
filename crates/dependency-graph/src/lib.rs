@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet, VecDeque};
 
 use petgraph::Direction;
 use petgraph::graph::{DiGraph, NodeIndex};
@@ -9,7 +9,8 @@ pub struct AssetNode {
     pub asset_type: AssetType,
 }
 
-/// Returned by `find_impact()` (implemented in a later issue).
+/// Assets that would be affected if the target asset were deleted or renamed.
+/// `direct` and `transitive` are mutually exclusive; neither contains the target itself.
 pub struct ImpactResult {
     pub direct: Vec<AssetPath>,
     pub transitive: Vec<AssetPath>,
@@ -52,6 +53,51 @@ impl DependencyGraph {
             .get(path)
             .map(|&idx| self.graph.edges_directed(idx, Direction::Incoming).count())
             .unwrap_or(0)
+    }
+
+    pub fn find_impact(&self, target: &AssetPath) -> ImpactResult {
+        let start_idx = match self.index.get(target) {
+            Some(&idx) => idx,
+            None => {
+                return ImpactResult {
+                    direct: vec![],
+                    transitive: vec![],
+                };
+            }
+        };
+
+        let mut direct = Vec::new();
+        let mut transitive = Vec::new();
+        let mut visited: HashSet<NodeIndex> = HashSet::new();
+        visited.insert(start_idx);
+
+        // BFS on incoming edges (who references target) with depth tracking.
+        // Depth 1 → direct; depth 2+ → transitive.
+        let mut queue: VecDeque<(NodeIndex, usize)> = VecDeque::new();
+        for neighbor in self
+            .graph
+            .neighbors_directed(start_idx, Direction::Incoming)
+        {
+            if visited.insert(neighbor) {
+                queue.push_back((neighbor, 1));
+            }
+        }
+
+        while let Some((node_idx, depth)) = queue.pop_front() {
+            let path = self.graph[node_idx].path.clone(); // clone required: AssetPath is not Copy
+            if depth == 1 {
+                direct.push(path);
+            } else {
+                transitive.push(path);
+            }
+            for neighbor in self.graph.neighbors_directed(node_idx, Direction::Incoming) {
+                if visited.insert(neighbor) {
+                    queue.push_back((neighbor, depth + 1));
+                }
+            }
+        }
+
+        ImpactResult { direct, transitive }
     }
 
     pub fn find_cycles(&self) -> Vec<Vec<AssetPath>> {
@@ -215,6 +261,77 @@ mod tests {
             0,
             "unknown path should return 0"
         );
+    }
+
+    #[test]
+    fn find_impact_should_return_direct_only_when_single_hop_referencing_assets() {
+        // B→A and C→A: both directly reference A, no transitive chain.
+        let graph = DependencyGraph::build(
+            vec![node("/Game/A"), node("/Game/B"), node("/Game/C")],
+            vec![
+                (ap("/Game/B"), ap("/Game/A")),
+                (ap("/Game/C"), ap("/Game/A")),
+            ],
+        );
+
+        let result = graph.find_impact(&ap("/Game/A"));
+        assert_eq!(result.direct.len(), 2);
+        assert!(result.direct.iter().any(|p| p.as_str() == "/Game/B"));
+        assert!(result.direct.iter().any(|p| p.as_str() == "/Game/C"));
+        assert!(result.transitive.is_empty());
+    }
+
+    #[test]
+    fn find_impact_should_separate_direct_and_transitive_for_multi_hop_chain() {
+        // C→B→A: B directly references A; C references A only through B.
+        let graph = DependencyGraph::build(
+            vec![node("/Game/A"), node("/Game/B"), node("/Game/C")],
+            vec![
+                (ap("/Game/B"), ap("/Game/A")),
+                (ap("/Game/C"), ap("/Game/B")),
+            ],
+        );
+
+        let result = graph.find_impact(&ap("/Game/A"));
+        assert_eq!(result.direct, vec![ap("/Game/B")]);
+        assert_eq!(result.transitive, vec![ap("/Game/C")]);
+    }
+
+    #[test]
+    fn find_impact_should_return_empty_when_no_referencing_assets() {
+        let graph = DependencyGraph::build(
+            vec![node("/Game/A"), node("/Game/B")],
+            vec![(ap("/Game/A"), ap("/Game/B"))],
+        );
+
+        let result = graph.find_impact(&ap("/Game/A"));
+        assert!(result.direct.is_empty());
+        assert!(result.transitive.is_empty());
+    }
+
+    #[test]
+    fn find_impact_should_return_empty_for_target_not_in_graph() {
+        let graph = DependencyGraph::build(vec![node("/Game/A")], vec![]);
+
+        let result = graph.find_impact(&ap("/Game/NotInGraph"));
+        assert!(result.direct.is_empty());
+        assert!(result.transitive.is_empty());
+    }
+
+    #[test]
+    fn find_impact_should_not_include_target_in_results() {
+        let graph = DependencyGraph::build(
+            vec![node("/Game/A"), node("/Game/B")],
+            vec![(ap("/Game/B"), ap("/Game/A"))],
+        );
+
+        let result = graph.find_impact(&ap("/Game/A"));
+        let all_paths: Vec<_> = result
+            .direct
+            .iter()
+            .chain(result.transitive.iter())
+            .collect();
+        assert!(!all_paths.iter().any(|p| p.as_str() == "/Game/A"));
     }
 
     #[test]
