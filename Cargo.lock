@@ -171,6 +171,8 @@ dependencies = [
  "asset-db",
  "clap",
  "scanner",
+ "serde",
+ "serde_json",
  "shared",
  "tracing",
  "walkdir",

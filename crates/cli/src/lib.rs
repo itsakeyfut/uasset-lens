@@ -96,7 +96,7 @@ fn dispatch(cli: &Cli) -> anyhow::Result<i32> {
             full_scan,
         } => {
             let db_path = resolve_db_path(project_dir, cli.db.as_deref());
-            commands::scan::handle_scan(project_dir, *full_scan, &db_path)
+            commands::scan::handle_scan(project_dir, *full_scan, &db_path, &cli.format, cli.yes)
         }
         Commands::Graph { .. } => todo!(),
         Commands::DeadAssets { .. } => todo!(),
