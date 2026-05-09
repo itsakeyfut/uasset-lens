@@ -30,7 +30,7 @@ Stub each command handler with `todo!()` for now — they will be implemented in
 
 ```rust
 fn resolve_db_path(project_dir: &Path, db_override: Option<&Path>) -> PathBuf
-// → db_override if Some, else <project_dir>/.uasset-lens/lens.db
+// → db_override if Some, else <project_dir>/.uasset-lens/uasset-lens.db
 
 fn resolve_content_root(project_dir: &Path) -> PathBuf
 // → <project_dir>/Content/ if that directory exists, else <project_dir>

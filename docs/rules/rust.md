@@ -32,7 +32,7 @@ pub enum ScanError {
 // ✅ cli/src/commands/scan.rs — anyhow for application layer
 pub fn handle_scan(project_dir: &Path, opts: &ScanOpts) -> anyhow::Result<()> {
     let db = AssetDb::open(&db_path)
-        .context("Failed to open lens.db")?;
+        .context("Failed to open uasset-lens.db")?;
     Ok(())
 }
 ```

@@ -2,13 +2,13 @@
 
 ## DB ファイルの配置
 
-`<project_dir>/.uasset-lens/lens.db` に自動生成される。
+`<project_dir>/.uasset-lens/uasset-lens.db` に自動生成される。
 
 ```
 /MyProject/
   ├─ Content/           # UE コンテンツ
   ├─ .uasset-lens/
-  │   └─ lens.db        # ← scan 時に自動生成（.gitignore に追加推奨）
+  │   └─ uasset-lens.db  # ← scan 時に自動生成（.gitignore に追加推奨）
   └─ .uasset-lens.toml  # 設定ファイル（任意）
 ```
 
@@ -21,7 +21,7 @@
 1. `<project_dir>/Content/` が存在する → `content_root = <project_dir>/Content/`
 2. 存在しない → `content_root = <project_dir>`（Content ディレクトリを直接渡した場合）
 
-`impact` コマンド等でアセットパスのみ渡された場合は、パスを上方に辿って `.uasset-lens/lens.db` を自動検索する。
+`impact` コマンド等でアセットパスのみ渡された場合は、パスを上方に辿って `.uasset-lens/uasset-lens.db` を自動検索する。
 
 ## scan 未実行時の挙動
 

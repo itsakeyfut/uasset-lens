@@ -5,7 +5,7 @@
 Implement the core logic of the `scan` command: enumerating `.uasset`/`.umap` files,
 performing a differential scan via `filter_changed()`, parsing changed files with
 `scan_files()`, and batch-upserting the results into SQLite.
-Complete when `uasset-lens scan ./Project` indexes all assets into `lens.db`.
+Complete when `uasset-lens scan ./Project` indexes all assets into `uasset-lens.db`.
 
 ## Design Notes
 

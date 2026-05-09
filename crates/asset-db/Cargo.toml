@@ -2,3 +2,8 @@
 name    = "asset-db"
 version.workspace = true
 edition.workspace = true
+
+[dependencies]
+shared    = { path = "../shared" }
+rusqlite  = { workspace = true, features = ["bundled"] }
+thiserror = { workspace = true }
