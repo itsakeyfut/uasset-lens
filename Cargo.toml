@@ -6,6 +6,7 @@ members = [
     "crates/asset-db",
     "crates/dependency-graph",
     "crates/dead-asset-detector",
+    "crates/impact-analyzer",
     "crates/cli",
     "apps/uasset-lens-cli",
 ]
