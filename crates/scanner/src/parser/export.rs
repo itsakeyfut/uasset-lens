@@ -91,7 +91,7 @@ fn class_name_to_asset_type(name: &str) -> Option<AssetType> {
 mod tests {
     use super::*;
     use crate::parser::{
-        header::parse_header, import::parse_import_class_names, name_table::parse_name_table,
+        header::parse_header, import::parse_import_entries, name_table::parse_name_table,
     };
     use std::fs;
 
@@ -106,8 +106,8 @@ mod tests {
         let data = read_fixture("valid/BP_Simple.uasset");
         let hdr = parse_header(&data).unwrap();
         let names = parse_name_table(&data, hdr.name_offset, hdr.name_count).unwrap();
-        let cls_names =
-            parse_import_class_names(&data, hdr.import_offset, hdr.import_count, &names).unwrap();
+        let (cls_names, _) =
+            parse_import_entries(&data, hdr.import_offset, hdr.import_count, &names).unwrap();
         let result = parse_export_table(
             &data,
             hdr.export_offset,
@@ -124,8 +124,8 @@ mod tests {
         let data = read_fixture("valid/T_Rock.uasset");
         let hdr = parse_header(&data).unwrap();
         let names = parse_name_table(&data, hdr.name_offset, hdr.name_count).unwrap();
-        let cls_names =
-            parse_import_class_names(&data, hdr.import_offset, hdr.import_count, &names).unwrap();
+        let (cls_names, _) =
+            parse_import_entries(&data, hdr.import_offset, hdr.import_count, &names).unwrap();
         let result = parse_export_table(
             &data,
             hdr.export_offset,
@@ -142,8 +142,8 @@ mod tests {
         let data = read_fixture("valid/Redirect.uasset");
         let hdr = parse_header(&data).unwrap();
         let names = parse_name_table(&data, hdr.name_offset, hdr.name_count).unwrap();
-        let cls_names =
-            parse_import_class_names(&data, hdr.import_offset, hdr.import_count, &names).unwrap();
+        let (cls_names, _) =
+            parse_import_entries(&data, hdr.import_offset, hdr.import_count, &names).unwrap();
         let result = parse_export_table(
             &data,
             hdr.export_offset,

@@ -11,9 +11,10 @@ use shared::{AssetPath, AssetType};
 
 use parser::export::parse_export_table;
 use parser::header::parse_header;
-use parser::import::{parse_import_class_names, parse_import_table};
+use parser::import::parse_import_entries;
 use parser::name_table::parse_name_table;
 
+#[derive(Debug)]
 pub struct AssetMetadata {
     pub asset_path: AssetPath,
     pub file_path: PathBuf,
@@ -23,11 +24,13 @@ pub struct AssetMetadata {
     pub dependencies: Vec<AssetPath>,
 }
 
+#[derive(Debug)]
 pub struct ScanResult {
     pub assets: Vec<AssetMetadata>,
     pub skipped: Vec<SkippedFile>,
 }
 
+#[derive(Debug)]
 pub struct SkippedFile {
     pub file_path: PathBuf,
     pub reason: ScanError,
@@ -80,11 +83,12 @@ fn scan_single(file: &Path, content_root: &Path) -> Result<AssetMetadata, ScanEr
     let hdr = parse_header(&data)?;
     let name_table = parse_name_table(&data, hdr.name_offset, hdr.name_count)?;
 
+    let (cls_names, dependencies) =
+        parse_import_entries(&data, hdr.import_offset, hdr.import_count, &name_table)?;
+
     let asset_type = if is_umap {
         AssetType::World
     } else {
-        let cls_names =
-            parse_import_class_names(&data, hdr.import_offset, hdr.import_count, &name_table)?;
         parse_export_table(
             &data,
             hdr.export_offset,
@@ -93,8 +97,6 @@ fn scan_single(file: &Path, content_root: &Path) -> Result<AssetMetadata, ScanEr
             &cls_names,
         )?
     };
-
-    let dependencies = parse_import_table(&data, hdr.import_offset, hdr.import_count, &name_table)?;
 
     let asset_path = AssetPath::from_fs_path(content_root, file)?;
 

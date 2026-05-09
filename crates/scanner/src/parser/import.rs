@@ -58,32 +58,50 @@ pub fn parse_import_table(
     Ok(deps)
 }
 
-// Returns the ObjectName string for every import entry (all entries, no filtering).
-// Used by parse_export_table to resolve ClassIndex → class name.
-pub(crate) fn parse_import_class_names(
+// Parses the import table in a single pass, returning both:
+//   - class_names: ObjectName string for every entry (used by export parser for ClassIndex resolution)
+//   - deps: filtered /Game/ package-level paths (the asset's hard-reference dependencies)
+pub(crate) fn parse_import_entries(
     data: &[u8],
     offset: u64,
     count: usize,
     name_table: &[String],
-) -> Result<Vec<String>, ScanError> {
+) -> Result<(Vec<String>, Vec<AssetPath>), ScanError> {
     let mut cur = Cursor::new(data);
     cur.set_position(offset);
 
-    let mut names = Vec::with_capacity(count);
+    let mut class_names = Vec::with_capacity(count);
+    let mut deps = Vec::new();
+
     for _ in 0..count {
-        // Skip ClassPackage FName (8 bytes) + ClassName FName (8 bytes) + OuterIndex (4 bytes)
-        for _ in 0..5 {
-            cur.read_i32::<LittleEndian>().map_err(map_io)?;
-        }
+        let _cp_idx = cur.read_i32::<LittleEndian>().map_err(map_io)?;
+        let _cp_num = cur.read_i32::<LittleEndian>().map_err(map_io)?;
+        let _cn_idx = cur.read_i32::<LittleEndian>().map_err(map_io)?;
+        let _cn_num = cur.read_i32::<LittleEndian>().map_err(map_io)?;
+        let outer_index = cur.read_i32::<LittleEndian>().map_err(map_io)?;
         let on_idx = cur.read_i32::<LittleEndian>().map_err(map_io)?;
-        // Skip ObjectName.Number + PackageName FName (8 bytes) + bImportOptional (4 bytes)
-        for _ in 0..4 {
-            cur.read_i32::<LittleEndian>().map_err(map_io)?;
+        let _on_num = cur.read_i32::<LittleEndian>().map_err(map_io)?;
+        let _pn_idx = cur.read_i32::<LittleEndian>().map_err(map_io)?;
+        let _pn_num = cur.read_i32::<LittleEndian>().map_err(map_io)?;
+        let _import_optional = cur.read_i32::<LittleEndian>().map_err(map_io)?;
+
+        let name = name_table
+            .get(on_idx as usize)
+            .map(String::as_str)
+            .unwrap_or("");
+
+        class_names.push(name.to_owned());
+
+        // Only package-level entries (OuterIndex == 0) carry the full package path
+        if outer_index == 0 && name.starts_with("/Game/") {
+            // Filter before allocating: discard /Script/ and /Engine/, keep only /Game/
+            if let Ok(path) = AssetPath::new(name) {
+                deps.push(path);
+            }
         }
-        names.push(name_table.get(on_idx as usize).cloned().unwrap_or_default());
     }
 
-    Ok(names)
+    Ok((class_names, deps))
 }
 
 fn map_io(e: std::io::Error) -> ScanError {
