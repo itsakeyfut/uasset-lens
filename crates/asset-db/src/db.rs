@@ -7,6 +7,23 @@ use shared::AssetPath;
 use crate::DbError;
 use crate::record::{AssetFilter, AssetRecord};
 
+fn upsert_asset_conn(conn: &Connection, meta: &scanner::AssetMetadata) -> Result<i64, DbError> {
+    let asset_type = serde_json::to_string(&meta.asset_type)?;
+    conn.execute(
+        "INSERT OR REPLACE INTO assets \
+         (asset_path, file_path, asset_type, file_size, last_modified) \
+         VALUES (?1, ?2, ?3, ?4, ?5)",
+        rusqlite::params![
+            meta.asset_path.as_str(),
+            meta.file_path.to_string_lossy().as_ref(),
+            asset_type,
+            meta.file_size as i64,
+            meta.last_modified as i64,
+        ],
+    )?;
+    Ok(conn.last_insert_rowid())
+}
+
 fn parse_asset_record(
     id: i64,
     asset_path: String,
@@ -41,20 +58,7 @@ impl AssetDb {
     /// Uses INSERT OR REPLACE, so existing dependencies are cascade-deleted on replace;
     /// call `replace_dependencies` with the returned id to re-insert them.
     pub fn upsert_asset(&self, meta: &scanner::AssetMetadata) -> Result<i64, DbError> {
-        let asset_type = serde_json::to_string(&meta.asset_type)?;
-        self.conn.execute(
-            "INSERT OR REPLACE INTO assets \
-             (asset_path, file_path, asset_type, file_size, last_modified) \
-             VALUES (?1, ?2, ?3, ?4, ?5)",
-            rusqlite::params![
-                meta.asset_path.as_str(),
-                meta.file_path.to_string_lossy().as_ref(),
-                asset_type,
-                meta.file_size as i64,
-                meta.last_modified as i64,
-            ],
-        )?;
-        Ok(self.conn.last_insert_rowid())
+        upsert_asset_conn(&self.conn, meta)
     }
 
     pub fn delete_asset(&self, asset_path: &AssetPath) -> Result<(), DbError> {
@@ -79,6 +83,22 @@ impl AssetDb {
         for path in to_paths {
             stmt.execute(rusqlite::params![from_id, path.as_str()])?;
         }
+        Ok(())
+    }
+
+    pub fn upsert_all(&mut self, assets: &[scanner::AssetMetadata]) -> Result<(), DbError> {
+        let tx = self.conn.transaction()?;
+        for meta in assets {
+            let id = upsert_asset_conn(&tx, meta)?;
+            tx.execute("DELETE FROM dependencies WHERE from_id = ?1", [id])?;
+            for dep in &meta.dependencies {
+                tx.execute(
+                    "INSERT INTO dependencies (from_id, to_path) VALUES (?1, ?2)",
+                    rusqlite::params![id, dep.as_str()],
+                )?;
+            }
+        }
+        tx.commit()?;
         Ok(())
     }
 
@@ -620,5 +640,37 @@ mod tests {
         };
         let results = db.find_assets(&filter).unwrap();
         assert!(results.is_empty());
+    }
+
+    #[test]
+    fn upsert_all_should_insert_multiple_assets_and_their_dependencies() {
+        let mut db = AssetDb::open(Path::new(":memory:")).unwrap();
+        let assets = vec![
+            scanner::AssetMetadata {
+                asset_path: AssetPath::new("/Game/A").unwrap(),
+                file_path: PathBuf::from("/proj/Content/A.uasset"),
+                asset_type: AssetType::Blueprint,
+                file_size: 1024,
+                last_modified: 100,
+                dependencies: vec![AssetPath::new("/Game/Dep").unwrap()],
+            },
+            scanner::AssetMetadata {
+                asset_path: AssetPath::new("/Game/B").unwrap(),
+                file_path: PathBuf::from("/proj/Content/B.uasset"),
+                asset_type: AssetType::Texture2D,
+                file_size: 2048,
+                last_modified: 200,
+                dependencies: vec![],
+            },
+        ];
+        db.upsert_all(&assets).unwrap();
+
+        let records = db.all_assets().unwrap();
+        assert_eq!(records.len(), 2);
+
+        let edges = db.all_edges().unwrap();
+        assert_eq!(edges.len(), 1);
+        assert_eq!(edges[0].0.as_str(), "/Game/A");
+        assert_eq!(edges[0].1.as_str(), "/Game/Dep");
     }
 }

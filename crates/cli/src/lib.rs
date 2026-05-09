@@ -1,3 +1,4 @@
+mod commands;
 mod paths;
 
 use std::path::PathBuf;
@@ -90,7 +91,13 @@ pub fn run() -> i32 {
 
 fn dispatch(cli: &Cli) -> anyhow::Result<i32> {
     match &cli.command {
-        Commands::Scan { .. } => todo!(),
+        Commands::Scan {
+            project_dir,
+            full_scan,
+        } => {
+            let db_path = resolve_db_path(project_dir, cli.db.as_deref());
+            commands::scan::handle_scan(project_dir, *full_scan, &db_path)
+        }
         Commands::Graph { .. } => todo!(),
         Commands::DeadAssets { .. } => todo!(),
         Commands::Impact { .. } => todo!(),
