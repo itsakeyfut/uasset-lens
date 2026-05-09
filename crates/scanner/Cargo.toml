@@ -2,3 +2,8 @@
 name    = "scanner"
 version.workspace = true
 edition.workspace = true
+
+[dependencies]
+shared    = { path = "../shared" }
+byteorder = { workspace = true }
+thiserror = { workspace = true }
