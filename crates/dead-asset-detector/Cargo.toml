@@ -1,0 +1,8 @@
+[package]
+name    = "dead-asset-detector"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+shared           = { path = "../shared" }
+dependency-graph = { path = "../dependency-graph" }
