@@ -52,6 +52,10 @@ impl DependencyGraph {
         self.graph.edge_count()
     }
 
+    pub fn contains(&self, path: &AssetPath) -> bool {
+        self.index.contains_key(path)
+    }
+
     pub fn in_degree(&self, path: &AssetPath) -> usize {
         self.index
             .get(path)
@@ -217,6 +221,18 @@ mod tests {
             "isolated node /Game/C should also be returned"
         );
         assert_eq!(paths.len(), 3);
+    }
+
+    #[test]
+    fn contains_should_return_true_for_existing_node() {
+        let graph = DependencyGraph::build(vec![node("/Game/A")], vec![]);
+        assert!(graph.contains(&ap("/Game/A")));
+    }
+
+    #[test]
+    fn contains_should_return_false_for_unknown_path() {
+        let graph = DependencyGraph::build(vec![node("/Game/A")], vec![]);
+        assert!(!graph.contains(&ap("/Game/NotInGraph")));
     }
 
     #[test]
