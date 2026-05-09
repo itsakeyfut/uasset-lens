@@ -170,6 +170,7 @@ dependencies = [
  "anyhow",
  "asset-db",
  "clap",
+ "dead-asset-detector",
  "dependency-graph",
  "scanner",
  "serde",

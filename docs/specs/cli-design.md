@@ -121,10 +121,11 @@ Options:
   --type <AssetType>    型でフィルタ
 
 Output (text):
-  Unreferenced Assets (47 found)
-    /Game/Unused/T_OldTexture.uasset          (Texture2D, 2.1 MB)
-    /Game/Characters/SK_OldEnemy.uasset       (SkeletalMesh, 8.4 MB)
-    ...
+  /Game/Unused/T_OldTexture          (Texture2D, 2.1 MB)
+  /Game/Characters/SK_OldEnemy       (SkeletalMesh, 8.4 MB)
+  ...
+
+  Dead Assets (47 found)
 ```
 
 ---
