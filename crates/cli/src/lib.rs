@@ -1,8 +1,9 @@
 mod commands;
 mod paths;
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
+use anyhow::Context;
 use clap::{Parser, Subcommand, ValueEnum};
 
 pub use paths::{resolve_content_root, resolve_db_path};
@@ -78,6 +79,27 @@ pub enum Commands {
     },
 }
 
+pub(crate) fn load_graph(db_path: &Path) -> anyhow::Result<dependency_graph::DependencyGraph> {
+    if !db_path.exists() {
+        anyhow::bail!("no scan data found.\nRun 'uasset-lens scan <project_dir>' first.");
+    }
+    let db = asset_db::AssetDb::open(db_path).context("Failed to open database")?;
+    let records = db
+        .all_assets()
+        .context("Failed to read assets from database")?;
+    let nodes: Vec<dependency_graph::AssetNode> = records
+        .iter()
+        .map(|r| dependency_graph::AssetNode {
+            path: r.asset_path.clone(),       // clone required: AssetPath is not Copy
+            asset_type: r.asset_type.clone(), // clone required: AssetType is not Copy
+        })
+        .collect();
+    let edges = db
+        .all_edges()
+        .context("Failed to read dependency edges from database")?;
+    Ok(dependency_graph::DependencyGraph::build(nodes, edges))
+}
+
 pub fn run() -> i32 {
     let cli = Cli::parse();
     match dispatch(&cli) {
@@ -98,7 +120,13 @@ fn dispatch(cli: &Cli) -> anyhow::Result<i32> {
             let db_path = resolve_db_path(project_dir, cli.db.as_deref());
             commands::scan::handle_scan(project_dir, *full_scan, &db_path, &cli.format, cli.yes)
         }
-        Commands::Graph { .. } => todo!(),
+        Commands::Graph {
+            project_dir,
+            cycles_only,
+        } => {
+            let db_path = resolve_db_path(project_dir, cli.db.as_deref());
+            commands::graph::handle_graph(project_dir, *cycles_only, &db_path, &cli.format)
+        }
         Commands::DeadAssets { .. } => todo!(),
         Commands::Impact { .. } => todo!(),
         Commands::Redirectors { .. } => todo!(),
