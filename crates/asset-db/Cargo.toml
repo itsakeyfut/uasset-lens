@@ -9,3 +9,4 @@ scanner    = { path = "../scanner" }
 rusqlite   = { workspace = true, features = ["bundled"] }
 serde_json = { workspace = true }
 thiserror  = { workspace = true }
+globset    = { workspace = true }

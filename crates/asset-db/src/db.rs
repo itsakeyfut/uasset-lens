@@ -1,10 +1,29 @@
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
-use rusqlite::Connection;
+use rusqlite::{Connection, types::Value};
 use shared::AssetPath;
 
 use crate::DbError;
+use crate::record::{AssetFilter, AssetRecord};
+
+fn parse_asset_record(
+    id: i64,
+    asset_path: String,
+    file_path: String,
+    asset_type_json: String,
+    file_size: i64,
+    last_modified: i64,
+) -> Result<AssetRecord, DbError> {
+    Ok(AssetRecord {
+        id,
+        asset_path: AssetPath::new(&asset_path)?,
+        file_path: PathBuf::from(file_path),
+        asset_type: serde_json::from_str(&asset_type_json)?,
+        file_size: file_size as u64,
+        last_modified: last_modified as u64,
+    })
+}
 
 pub struct AssetDb {
     pub(crate) conn: Connection,
@@ -98,6 +117,113 @@ impl AssetDb {
             })?
             .collect::<Result<Vec<_>, _>>()?;
         Ok(paths)
+    }
+
+    pub fn all_assets(&self) -> Result<Vec<AssetRecord>, DbError> {
+        let mut stmt = self.conn.prepare(
+            "SELECT id, asset_path, file_path, asset_type, file_size, last_modified FROM assets",
+        )?;
+        stmt.query_map([], |row| {
+            Ok((
+                row.get::<_, i64>(0)?,
+                row.get::<_, String>(1)?,
+                row.get::<_, String>(2)?,
+                row.get::<_, String>(3)?,
+                row.get::<_, i64>(4)?,
+                row.get::<_, i64>(5)?,
+            ))
+        })?
+        .collect::<Result<Vec<_>, _>>()?
+        .into_iter()
+        .map(|(id, ap, fp, at, fs, lm)| parse_asset_record(id, ap, fp, at, fs, lm))
+        .collect()
+    }
+
+    pub fn all_edges(&self) -> Result<Vec<(AssetPath, AssetPath)>, DbError> {
+        let mut stmt = self.conn.prepare(
+            "SELECT a.asset_path, d.to_path \
+             FROM dependencies d \
+             JOIN assets a ON d.from_id = a.id",
+        )?;
+        stmt.query_map([], |row| {
+            Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+        })?
+        .collect::<Result<Vec<_>, _>>()?
+        .into_iter()
+        .map(|(from, to)| Ok((AssetPath::new(&from)?, AssetPath::new(&to)?)))
+        .collect()
+    }
+
+    pub fn get_asset(&self, asset_path: &AssetPath) -> Result<Option<AssetRecord>, DbError> {
+        let mut stmt = self.conn.prepare(
+            "SELECT id, asset_path, file_path, asset_type, file_size, last_modified \
+             FROM assets WHERE asset_path = ?1",
+        )?;
+        match stmt.query_row([asset_path.as_str()], |row| {
+            Ok((
+                row.get::<_, i64>(0)?,
+                row.get::<_, String>(1)?,
+                row.get::<_, String>(2)?,
+                row.get::<_, String>(3)?,
+                row.get::<_, i64>(4)?,
+                row.get::<_, i64>(5)?,
+            ))
+        }) {
+            Ok((id, ap, fp, at, fs, lm)) => parse_asset_record(id, ap, fp, at, fs, lm).map(Some),
+            Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
+            Err(e) => Err(DbError::Sqlite(e)),
+        }
+    }
+
+    pub fn find_assets(&self, filter: &AssetFilter) -> Result<Vec<AssetRecord>, DbError> {
+        let mut conditions: Vec<&str> = Vec::new();
+        let mut values: Vec<Value> = Vec::new();
+
+        if let Some(ref at) = filter.asset_type {
+            conditions.push("asset_type = ?");
+            values.push(Value::Text(serde_json::to_string(at)?));
+        }
+        if let Some(min_size) = filter.min_size {
+            conditions.push("file_size >= ?");
+            values.push(Value::Integer(min_size as i64));
+        }
+        if let Some(max_size) = filter.max_size {
+            conditions.push("file_size <= ?");
+            values.push(Value::Integer(max_size as i64));
+        }
+
+        let sql = format!(
+            "SELECT id, asset_path, file_path, asset_type, file_size, last_modified FROM assets{}",
+            if conditions.is_empty() {
+                String::new()
+            } else {
+                format!(" WHERE {}", conditions.join(" AND "))
+            }
+        );
+
+        let mut stmt = self.conn.prepare(&sql)?;
+        let mut records = stmt
+            .query_map(rusqlite::params_from_iter(values), |row| {
+                Ok((
+                    row.get::<_, i64>(0)?,
+                    row.get::<_, String>(1)?,
+                    row.get::<_, String>(2)?,
+                    row.get::<_, String>(3)?,
+                    row.get::<_, i64>(4)?,
+                    row.get::<_, i64>(5)?,
+                ))
+            })?
+            .collect::<Result<Vec<_>, _>>()?
+            .into_iter()
+            .map(|(id, ap, fp, at, fs, lm)| parse_asset_record(id, ap, fp, at, fs, lm))
+            .collect::<Result<Vec<_>, _>>()?;
+
+        if let Some(ref pattern) = filter.path_pattern {
+            let matcher = globset::Glob::new(pattern)?.compile_matcher();
+            records.retain(|r| matcher.is_match(&r.file_path));
+        }
+
+        Ok(records)
     }
 
     fn init_schema(&self) -> Result<(), DbError> {
@@ -259,5 +385,240 @@ mod tests {
         AssetDb::open(&db_path).unwrap();
         AssetDb::open(&db_path).unwrap();
         let _ = std::fs::remove_file(&db_path);
+    }
+
+    fn make_meta_full(
+        asset_path: &str,
+        file_path: &str,
+        file_size: u64,
+        asset_type: AssetType,
+    ) -> scanner::AssetMetadata {
+        scanner::AssetMetadata {
+            asset_path: AssetPath::new(asset_path).unwrap(),
+            file_path: PathBuf::from(file_path),
+            asset_type,
+            file_size,
+            last_modified: 100,
+            dependencies: vec![],
+        }
+    }
+
+    #[test]
+    fn all_assets_should_return_all_upserted_records() {
+        let db = AssetDb::open(Path::new(":memory:")).unwrap();
+        db.upsert_asset(&make_meta("/Game/A", "/proj/Content/A.uasset", 100))
+            .unwrap();
+        db.upsert_asset(&make_meta("/Game/B", "/proj/Content/B.uasset", 200))
+            .unwrap();
+
+        let records = db.all_assets().unwrap();
+        assert_eq!(records.len(), 2);
+        let paths: Vec<_> = records.iter().map(|r| r.asset_path.as_str()).collect();
+        assert!(paths.contains(&"/Game/A"));
+        assert!(paths.contains(&"/Game/B"));
+    }
+
+    #[test]
+    fn all_edges_should_return_correct_from_to_pairs() {
+        let db = AssetDb::open(Path::new(":memory:")).unwrap();
+        let id = db
+            .upsert_asset(&make_meta("/Game/A", "/proj/Content/A.uasset", 100))
+            .unwrap();
+        db.replace_dependencies(id, &[AssetPath::new("/Game/B").unwrap()])
+            .unwrap();
+
+        let edges = db.all_edges().unwrap();
+        assert_eq!(edges.len(), 1);
+        assert_eq!(edges[0].0.as_str(), "/Game/A");
+        assert_eq!(edges[0].1.as_str(), "/Game/B");
+    }
+
+    #[test]
+    fn get_asset_should_return_record_for_existing_path() {
+        let db = AssetDb::open(Path::new(":memory:")).unwrap();
+        db.upsert_asset(&make_meta("/Game/A", "/proj/Content/A.uasset", 100))
+            .unwrap();
+
+        let record = db
+            .get_asset(&AssetPath::new("/Game/A").unwrap())
+            .unwrap()
+            .unwrap();
+        assert_eq!(record.asset_path.as_str(), "/Game/A");
+        assert_eq!(record.asset_type, AssetType::Blueprint);
+    }
+
+    #[test]
+    fn get_asset_should_return_none_for_unknown_path() {
+        let db = AssetDb::open(Path::new(":memory:")).unwrap();
+        let result = db
+            .get_asset(&AssetPath::new("/Game/NoSuchAsset").unwrap())
+            .unwrap();
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn find_assets_should_filter_by_asset_type() {
+        let db = AssetDb::open(Path::new(":memory:")).unwrap();
+        db.upsert_asset(&make_meta_full(
+            "/Game/BP_A",
+            "/proj/Content/BP_A.uasset",
+            1024,
+            AssetType::Blueprint,
+        ))
+        .unwrap();
+        db.upsert_asset(&make_meta_full(
+            "/Game/T_Rock",
+            "/proj/Content/T_Rock.uasset",
+            1024,
+            AssetType::Texture2D,
+        ))
+        .unwrap();
+
+        let filter = AssetFilter {
+            asset_type: Some(AssetType::Blueprint),
+            min_size: None,
+            max_size: None,
+            path_pattern: None,
+        };
+        let results = db.find_assets(&filter).unwrap();
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0].asset_path.as_str(), "/Game/BP_A");
+    }
+
+    #[test]
+    fn find_assets_should_filter_by_min_size() {
+        let db = AssetDb::open(Path::new(":memory:")).unwrap();
+        db.upsert_asset(&make_meta_full(
+            "/Game/Small",
+            "/proj/Content/Small.uasset",
+            512,
+            AssetType::Blueprint,
+        ))
+        .unwrap();
+        db.upsert_asset(&make_meta_full(
+            "/Game/Large",
+            "/proj/Content/Large.uasset",
+            4096,
+            AssetType::Blueprint,
+        ))
+        .unwrap();
+
+        let filter = AssetFilter {
+            asset_type: None,
+            min_size: Some(1024),
+            max_size: None,
+            path_pattern: None,
+        };
+        let results = db.find_assets(&filter).unwrap();
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0].asset_path.as_str(), "/Game/Large");
+    }
+
+    #[test]
+    fn find_assets_should_filter_by_max_size() {
+        let db = AssetDb::open(Path::new(":memory:")).unwrap();
+        db.upsert_asset(&make_meta_full(
+            "/Game/Small",
+            "/proj/Content/Small.uasset",
+            512,
+            AssetType::Blueprint,
+        ))
+        .unwrap();
+        db.upsert_asset(&make_meta_full(
+            "/Game/Large",
+            "/proj/Content/Large.uasset",
+            4096,
+            AssetType::Blueprint,
+        ))
+        .unwrap();
+
+        let filter = AssetFilter {
+            asset_type: None,
+            min_size: None,
+            max_size: Some(1024),
+            path_pattern: None,
+        };
+        let results = db.find_assets(&filter).unwrap();
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0].asset_path.as_str(), "/Game/Small");
+    }
+
+    #[test]
+    fn find_assets_should_filter_by_path_pattern() {
+        let db = AssetDb::open(Path::new(":memory:")).unwrap();
+        db.upsert_asset(&make_meta(
+            "/Game/Characters/BP_Player",
+            "/proj/Content/Characters/BP_Player.uasset",
+            100,
+        ))
+        .unwrap();
+        db.upsert_asset(&make_meta(
+            "/Game/UI/WBP_HUD",
+            "/proj/Content/UI/WBP_HUD.uasset",
+            100,
+        ))
+        .unwrap();
+
+        let filter = AssetFilter {
+            asset_type: None,
+            min_size: None,
+            max_size: None,
+            path_pattern: Some("**/Characters/**".to_string()),
+        };
+        let results = db.find_assets(&filter).unwrap();
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0].asset_path.as_str(), "/Game/Characters/BP_Player");
+    }
+
+    #[test]
+    fn find_assets_should_apply_combined_filters() {
+        let db = AssetDb::open(Path::new(":memory:")).unwrap();
+        db.upsert_asset(&make_meta_full(
+            "/Game/BP_Big",
+            "/proj/Content/BP_Big.uasset",
+            4096,
+            AssetType::Blueprint,
+        ))
+        .unwrap();
+        db.upsert_asset(&make_meta_full(
+            "/Game/BP_Small",
+            "/proj/Content/BP_Small.uasset",
+            512,
+            AssetType::Blueprint,
+        ))
+        .unwrap();
+        db.upsert_asset(&make_meta_full(
+            "/Game/T_Big",
+            "/proj/Content/T_Big.uasset",
+            4096,
+            AssetType::Texture2D,
+        ))
+        .unwrap();
+
+        let filter = AssetFilter {
+            asset_type: Some(AssetType::Blueprint),
+            min_size: Some(1024),
+            max_size: None,
+            path_pattern: None,
+        };
+        let results = db.find_assets(&filter).unwrap();
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0].asset_path.as_str(), "/Game/BP_Big");
+    }
+
+    #[test]
+    fn find_assets_should_return_empty_for_no_match() {
+        let db = AssetDb::open(Path::new(":memory:")).unwrap();
+        db.upsert_asset(&make_meta("/Game/BP_A", "/proj/Content/BP_A.uasset", 100))
+            .unwrap();
+
+        let filter = AssetFilter {
+            asset_type: Some(AssetType::StaticMesh),
+            min_size: None,
+            max_size: None,
+            path_pattern: None,
+        };
+        let results = db.find_assets(&filter).unwrap();
+        assert!(results.is_empty());
     }
 }

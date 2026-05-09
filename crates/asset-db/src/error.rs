@@ -4,4 +4,8 @@ pub enum DbError {
     Sqlite(#[from] rusqlite::Error),
     #[error("json serialization error: {0}")]
     Json(#[from] serde_json::Error),
+    #[error("invalid asset path stored in database: {0}")]
+    InvalidAssetPath(#[from] shared::AssetPathError),
+    #[error("invalid glob pattern: {0}")]
+    Glob(#[from] globset::Error),
 }
