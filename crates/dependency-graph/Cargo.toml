@@ -1,0 +1,8 @@
+[package]
+name    = "dependency-graph"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+shared   = { path = "../shared" }
+petgraph = { workspace = true }
