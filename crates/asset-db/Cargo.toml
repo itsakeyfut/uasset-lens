@@ -4,6 +4,8 @@ version.workspace = true
 edition.workspace = true
 
 [dependencies]
-shared    = { path = "../shared" }
-rusqlite  = { workspace = true, features = ["bundled"] }
-thiserror = { workspace = true }
+shared     = { path = "../shared" }
+scanner    = { path = "../scanner" }
+rusqlite   = { workspace = true, features = ["bundled"] }
+serde_json = { workspace = true }
+thiserror  = { workspace = true }
