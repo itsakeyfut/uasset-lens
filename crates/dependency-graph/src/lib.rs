@@ -53,6 +53,18 @@ impl DependencyGraph {
             .map(|&idx| self.graph.edges_directed(idx, Direction::Incoming).count())
             .unwrap_or(0)
     }
+
+    pub fn find_cycles(&self) -> Vec<Vec<AssetPath>> {
+        petgraph::algo::tarjan_scc(&self.graph)
+            .into_iter()
+            .filter(|scc| scc.len() >= 2)
+            .map(|scc| {
+                scc.into_iter()
+                    .map(|idx| self.graph[idx].path.clone()) // clone required: AssetPath is not Copy
+                    .collect()
+            })
+            .collect()
+    }
 }
 
 fn get_or_insert_placeholder(
@@ -202,6 +214,91 @@ mod tests {
             graph.in_degree(&ap("/Game/NotInGraph")),
             0,
             "unknown path should return 0"
+        );
+    }
+
+    #[test]
+    fn find_cycles_should_return_empty_for_dag() {
+        let graph = DependencyGraph::build(
+            vec![node("/Game/A"), node("/Game/B"), node("/Game/C")],
+            vec![
+                (ap("/Game/A"), ap("/Game/B")),
+                (ap("/Game/B"), ap("/Game/C")),
+            ],
+        );
+
+        assert!(graph.find_cycles().is_empty());
+    }
+
+    #[test]
+    fn find_cycles_should_return_one_cycle_for_two_node_mutual_reference() {
+        let graph = DependencyGraph::build(
+            vec![node("/Game/A"), node("/Game/B")],
+            vec![
+                (ap("/Game/A"), ap("/Game/B")),
+                (ap("/Game/B"), ap("/Game/A")),
+            ],
+        );
+
+        let cycles = graph.find_cycles();
+        assert_eq!(cycles.len(), 1);
+        let cycle = &cycles[0];
+        assert_eq!(cycle.len(), 2);
+        assert!(cycle.iter().any(|p| p.as_str() == "/Game/A"));
+        assert!(cycle.iter().any(|p| p.as_str() == "/Game/B"));
+    }
+
+    #[test]
+    fn find_cycles_should_return_one_cycle_for_three_node_cycle() {
+        let graph = DependencyGraph::build(
+            vec![node("/Game/A"), node("/Game/B"), node("/Game/C")],
+            vec![
+                (ap("/Game/A"), ap("/Game/B")),
+                (ap("/Game/B"), ap("/Game/C")),
+                (ap("/Game/C"), ap("/Game/A")),
+            ],
+        );
+
+        let cycles = graph.find_cycles();
+        assert_eq!(cycles.len(), 1);
+        let cycle = &cycles[0];
+        assert_eq!(cycle.len(), 3);
+        assert!(cycle.iter().any(|p| p.as_str() == "/Game/A"));
+        assert!(cycle.iter().any(|p| p.as_str() == "/Game/B"));
+        assert!(cycle.iter().any(|p| p.as_str() == "/Game/C"));
+    }
+
+    #[test]
+    fn find_cycles_should_return_two_entries_for_independent_cycles() {
+        let graph = DependencyGraph::build(
+            vec![
+                node("/Game/A"),
+                node("/Game/B"),
+                node("/Game/C"),
+                node("/Game/D"),
+            ],
+            vec![
+                (ap("/Game/A"), ap("/Game/B")),
+                (ap("/Game/B"), ap("/Game/A")),
+                (ap("/Game/C"), ap("/Game/D")),
+                (ap("/Game/D"), ap("/Game/C")),
+            ],
+        );
+
+        let cycles = graph.find_cycles();
+        assert_eq!(cycles.len(), 2, "two independent cycles should be detected");
+        assert!(cycles.iter().all(|c| c.len() == 2));
+    }
+
+    #[test]
+    fn find_cycles_should_exclude_self_loop_only() {
+        // A self-loop A→A forms a single-node SCC, which must be filtered out.
+        let graph =
+            DependencyGraph::build(vec![node("/Game/A")], vec![(ap("/Game/A"), ap("/Game/A"))]);
+
+        assert!(
+            graph.find_cycles().is_empty(),
+            "self-loop should not be reported as a cycle"
         );
     }
 }
