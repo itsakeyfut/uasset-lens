@@ -6,6 +6,8 @@ pub enum ScanError {
     UnsupportedVersion(i32, u32),
     #[error("unexpected end of file")]
     UnexpectedEof,
+    #[error("invalid asset path: {0}")]
+    AssetPath(#[from] shared::AssetPathError),
     #[error("io error: {0}")]
     Io(#[from] std::io::Error),
 }
