@@ -139,7 +139,9 @@ fn dispatch(cli: &Cli) -> anyhow::Result<i32> {
                 &cli.format,
             )
         }
-        Commands::Impact { .. } => todo!(),
+        Commands::Impact { asset_path } => {
+            commands::impact::handle_impact(asset_path, cli.db.as_deref(), &cli.format)
+        }
         Commands::Redirectors { .. } => todo!(),
         Commands::Find { .. } => todo!(),
     }
