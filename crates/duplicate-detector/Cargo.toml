@@ -1,0 +1,8 @@
+[package]
+name    = "duplicate-detector"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+asset-db = { path = "../asset-db" }
+shared   = { path = "../shared" }
