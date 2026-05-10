@@ -24,16 +24,12 @@ pub fn handle_find(
     db_path: &Path,
     format: &FormatKind,
 ) -> anyhow::Result<i32> {
-    if !db_path.exists() {
-        anyhow::bail!("no scan data found.\nRun 'uasset-lens scan <project_dir>' first.");
-    }
-
     let at = asset_type.map(|s| {
         serde_json::from_str::<shared::AssetType>(&format!("\"{}\"", s))
             .unwrap_or_else(|_| shared::AssetType::Unknown(s.to_string()))
     });
 
-    let db = asset_db::AssetDb::open(db_path).context("Failed to open database")?;
+    let db = crate::open_db(db_path)?;
 
     let filter = asset_db::AssetFilter {
         asset_type: at,
@@ -45,7 +41,7 @@ pub fn handle_find(
     let mut results = db.find_assets(&filter).context("Failed to query assets")?;
 
     if unreferenced {
-        let graph = crate::load_graph(db_path)?;
+        let graph = crate::load_graph(&db)?;
         let dead: HashSet<shared::AssetPath> =
             dead_asset_detector::detect(&graph).into_iter().collect();
         results.retain(|r| dead.contains(&r.asset_path));
@@ -356,7 +352,8 @@ mod tests {
             .unwrap();
         }
 
-        let graph = crate::load_graph(&db_path).unwrap();
+        let db = asset_db::AssetDb::open(&db_path).unwrap();
+        let graph = crate::load_graph(&db).unwrap();
         let dead: std::collections::HashSet<AssetPath> =
             dead_asset_detector::detect(&graph).into_iter().collect();
 

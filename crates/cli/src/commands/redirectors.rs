@@ -15,7 +15,8 @@ pub fn handle_redirectors(
     db_path: &Path,
     format: &FormatKind,
 ) -> anyhow::Result<i32> {
-    let graph = crate::load_graph(db_path)?;
+    let db = crate::open_db(db_path)?;
+    let graph = crate::load_graph(&db)?;
     let paths = redirector_analyzer::detect(&graph);
 
     let redirector_paths: Vec<String> = paths

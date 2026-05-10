@@ -19,7 +19,8 @@ pub fn handle_impact(
     format: &FormatKind,
 ) -> anyhow::Result<i32> {
     let (target, db_path) = resolve_target_and_db(asset_path, db_override)?;
-    let graph = crate::load_graph(&db_path)?;
+    let db = crate::open_db(&db_path)?;
+    let graph = crate::load_graph(&db)?;
 
     if !graph.contains(&target) {
         anyhow::bail!("asset not found in scan data: {}", target.as_str());
