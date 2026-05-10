@@ -591,6 +591,26 @@ mod tests {
     }
 
     #[test]
+    fn find_assets_should_return_empty_when_path_pattern_matches_nothing() {
+        let db = AssetDb::open(Path::new(":memory:")).unwrap();
+        db.upsert_asset(&make_meta(
+            "/Game/Characters/BP_Player",
+            "/proj/Content/Characters/BP_Player.uasset",
+            100,
+        ))
+        .unwrap();
+
+        let filter = AssetFilter {
+            asset_type: None,
+            min_size: None,
+            max_size: None,
+            path_pattern: Some("**/Levels/**".to_string()),
+        };
+        let results = db.find_assets(&filter).unwrap();
+        assert!(results.is_empty());
+    }
+
+    #[test]
     fn find_assets_should_apply_combined_filters() {
         let db = AssetDb::open(Path::new(":memory:")).unwrap();
         db.upsert_asset(&make_meta_full(
