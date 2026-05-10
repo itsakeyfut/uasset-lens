@@ -75,6 +75,7 @@ pub fn parse_export_table(
 fn class_name_to_asset_type(name: &str) -> Option<AssetType> {
     match name {
         "Blueprint" => Some(AssetType::Blueprint),
+        "BlueprintInterface" => Some(AssetType::BlueprintInterface),
         "AnimBlueprint" => Some(AssetType::AnimBlueprint),
         "WidgetBlueprint" => Some(AssetType::UserWidget),
         "Texture2D" => Some(AssetType::Texture2D),
@@ -82,6 +83,13 @@ fn class_name_to_asset_type(name: &str) -> Option<AssetType> {
         "SkeletalMesh" => Some(AssetType::SkeletalMesh),
         "Material" => Some(AssetType::Material),
         "MaterialInstanceConstant" => Some(AssetType::MaterialInstance),
+        "MaterialFunction" => Some(AssetType::MaterialFunction),
+        "SoundWave" => Some(AssetType::SoundWave),
+        "SoundCue" => Some(AssetType::SoundCue),
+        "AnimSequence" => Some(AssetType::AnimSequence),
+        "AnimMontage" => Some(AssetType::AnimMontage),
+        "DataTable" => Some(AssetType::DataTable),
+        "DataAsset" => Some(AssetType::DataAsset),
         "ObjectRedirector" => Some(AssetType::ObjectRedirector),
         _ => None,
     }
@@ -160,5 +168,76 @@ mod tests {
         let data = vec![0u8; 64];
         let result = parse_export_table(&data, 0, 0, 0, &[]).unwrap();
         assert!(matches!(result, AssetType::Unknown(_)));
+    }
+
+    #[test]
+    fn class_name_to_asset_type_should_return_blueprint_interface_for_blueprint_interface() {
+        assert_eq!(
+            class_name_to_asset_type("BlueprintInterface"),
+            Some(AssetType::BlueprintInterface)
+        );
+    }
+
+    #[test]
+    fn class_name_to_asset_type_should_return_material_function_for_material_function() {
+        assert_eq!(
+            class_name_to_asset_type("MaterialFunction"),
+            Some(AssetType::MaterialFunction)
+        );
+    }
+
+    #[test]
+    fn class_name_to_asset_type_should_return_sound_wave_for_sound_wave() {
+        assert_eq!(
+            class_name_to_asset_type("SoundWave"),
+            Some(AssetType::SoundWave)
+        );
+    }
+
+    #[test]
+    fn class_name_to_asset_type_should_return_sound_cue_for_sound_cue() {
+        assert_eq!(
+            class_name_to_asset_type("SoundCue"),
+            Some(AssetType::SoundCue)
+        );
+    }
+
+    #[test]
+    fn class_name_to_asset_type_should_return_anim_sequence_for_anim_sequence() {
+        assert_eq!(
+            class_name_to_asset_type("AnimSequence"),
+            Some(AssetType::AnimSequence)
+        );
+    }
+
+    #[test]
+    fn class_name_to_asset_type_should_return_anim_montage_for_anim_montage() {
+        assert_eq!(
+            class_name_to_asset_type("AnimMontage"),
+            Some(AssetType::AnimMontage)
+        );
+    }
+
+    #[test]
+    fn class_name_to_asset_type_should_return_data_table_for_data_table() {
+        assert_eq!(
+            class_name_to_asset_type("DataTable"),
+            Some(AssetType::DataTable)
+        );
+    }
+
+    #[test]
+    fn class_name_to_asset_type_should_return_data_asset_for_data_asset() {
+        assert_eq!(
+            class_name_to_asset_type("DataAsset"),
+            Some(AssetType::DataAsset)
+        );
+    }
+
+    #[test]
+    fn class_name_to_asset_type_should_return_none_for_unknown_class() {
+        assert_eq!(class_name_to_asset_type("NiagaraSystem"), None);
+        assert_eq!(class_name_to_asset_type(""), None);
+        assert_eq!(class_name_to_asset_type("SomeCustomClass"), None);
     }
 }
