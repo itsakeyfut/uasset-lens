@@ -1,0 +1,177 @@
+use std::path::Path;
+
+use anyhow::Context;
+
+use crate::FormatKind;
+
+#[derive(serde::Serialize)]
+struct RedirectorsOutput {
+    count: usize,
+    redirectors: Vec<String>,
+}
+
+pub fn handle_redirectors(
+    _project_dir: &Path,
+    db_path: &Path,
+    format: &FormatKind,
+) -> anyhow::Result<i32> {
+    let graph = crate::load_graph(db_path)?;
+    let paths = redirector_analyzer::detect(&graph);
+
+    let redirector_paths: Vec<String> = paths
+        .iter()
+        .map(|p| p.as_str().to_owned()) // clone required: AssetPath is not Copy
+        .collect();
+    let found = !redirector_paths.is_empty();
+
+    match format {
+        FormatKind::Json => {
+            let count = redirector_paths.len();
+            let output = RedirectorsOutput {
+                count,
+                redirectors: redirector_paths,
+            };
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&output)
+                    .context("Failed to serialize redirectors output to JSON")?
+            );
+        }
+        FormatKind::Text => {
+            let header = format!("ObjectRedirectors ({} found)", redirector_paths.len());
+            let separator = "=".repeat(header.len());
+            println!("{header}");
+            println!("{separator}");
+            for path in &redirector_paths {
+                println!("{path}");
+            }
+            println!();
+            println!("Note: redirect target resolution is available in Phase 4 analysis.");
+        }
+    }
+
+    if found { Ok(1) } else { Ok(0) }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use shared::{AssetPath, AssetType};
+
+    fn make_meta(
+        asset_path: &str,
+        file_path: std::path::PathBuf,
+        asset_type: AssetType,
+    ) -> scanner::AssetMetadata {
+        scanner::AssetMetadata {
+            asset_path: AssetPath::new(asset_path).unwrap(),
+            file_path,
+            asset_type,
+            file_size: 1024,
+            last_modified: 0,
+            dependencies: vec![],
+        }
+    }
+
+    #[test]
+    fn handle_redirectors_should_return_err_when_db_does_not_exist() {
+        let db_path = std::env::temp_dir().join(format!(
+            "uasset_lens_redir26_missing_{}.db",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_file(&db_path);
+
+        let result = handle_redirectors(Path::new("/proj"), &db_path, &FormatKind::Text);
+        assert!(result.is_err(), "missing DB should return an error");
+    }
+
+    #[test]
+    fn handle_redirectors_should_return_0_when_no_redirectors_found() {
+        let dir =
+            std::env::temp_dir().join(format!("uasset_lens_redir26_empty_{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let db_path = dir.join("test.db");
+
+        {
+            let mut db = asset_db::AssetDb::open(&db_path).unwrap();
+            db.upsert_all(&[make_meta(
+                "/Game/BP_Player",
+                dir.join("BP_Player.uasset"),
+                AssetType::Blueprint,
+            )])
+            .unwrap();
+        }
+
+        let result = handle_redirectors(&dir, &db_path, &FormatKind::Text).unwrap();
+        assert_eq!(result, 0, "no redirectors → exit 0");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn handle_redirectors_should_return_1_when_redirectors_found() {
+        let dir =
+            std::env::temp_dir().join(format!("uasset_lens_redir26_found_{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let db_path = dir.join("test.db");
+
+        {
+            let mut db = asset_db::AssetDb::open(&db_path).unwrap();
+            db.upsert_all(&[make_meta(
+                "/Game/OldName",
+                dir.join("OldName.uasset"),
+                AssetType::ObjectRedirector,
+            )])
+            .unwrap();
+        }
+
+        let result = handle_redirectors(&dir, &db_path, &FormatKind::Text).unwrap();
+        assert_eq!(result, 1, "redirector found → exit 1");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn handle_redirectors_json_should_return_0_when_no_redirectors_found() {
+        let dir = std::env::temp_dir().join(format!(
+            "uasset_lens_redir26_json_empty_{}",
+            std::process::id()
+        ));
+        std::fs::create_dir_all(&dir).unwrap();
+        let db_path = dir.join("test.db");
+        asset_db::AssetDb::open(&db_path).unwrap();
+
+        let result = handle_redirectors(&dir, &db_path, &FormatKind::Json).unwrap();
+        assert_eq!(result, 0);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn handle_redirectors_json_should_return_1_when_redirectors_found() {
+        let dir = std::env::temp_dir().join(format!(
+            "uasset_lens_redir26_json_found_{}",
+            std::process::id()
+        ));
+        std::fs::create_dir_all(&dir).unwrap();
+        let db_path = dir.join("test.db");
+
+        {
+            let mut db = asset_db::AssetDb::open(&db_path).unwrap();
+            db.upsert_all(&[
+                make_meta(
+                    "/Game/OldMesh",
+                    dir.join("OldMesh.uasset"),
+                    AssetType::ObjectRedirector,
+                ),
+                make_meta(
+                    "/Game/OldBP",
+                    dir.join("OldBP.uasset"),
+                    AssetType::ObjectRedirector,
+                ),
+            ])
+            .unwrap();
+        }
+
+        let result = handle_redirectors(&dir, &db_path, &FormatKind::Json).unwrap();
+        assert_eq!(result, 1, "JSON format exits 1 when redirectors are found");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+}

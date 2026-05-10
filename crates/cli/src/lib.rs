@@ -143,7 +143,10 @@ fn dispatch(cli: &Cli) -> anyhow::Result<i32> {
         Commands::Impact { asset_path } => {
             commands::impact::handle_impact(asset_path, cli.db.as_deref(), &cli.format)
         }
-        Commands::Redirectors { .. } => todo!(),
+        Commands::Redirectors { project_dir } => {
+            let db_path = resolve_db_path(project_dir, cli.db.as_deref());
+            commands::redirectors::handle_redirectors(project_dir, &db_path, &cli.format)
+        }
         Commands::Find { .. } => todo!(),
     }
 }

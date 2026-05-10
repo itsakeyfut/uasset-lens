@@ -172,6 +172,7 @@ dependencies = [
  "clap",
  "dead-asset-detector",
  "dependency-graph",
+ "redirector-analyzer",
  "scanner",
  "serde",
  "serde_json",
