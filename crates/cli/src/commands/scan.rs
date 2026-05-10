@@ -257,6 +257,7 @@ mod tests {
             file_size: 1024,
             last_modified: mtime,
             dependencies: vec![],
+            blueprint_metrics: None,
         }
     }
 

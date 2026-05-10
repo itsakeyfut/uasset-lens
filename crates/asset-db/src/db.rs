@@ -297,6 +297,7 @@ mod tests {
             file_size: 1024,
             last_modified: mtime,
             dependencies: vec![],
+            blueprint_metrics: None,
         }
     }
 
@@ -450,6 +451,7 @@ mod tests {
             file_size,
             last_modified: 100,
             dependencies: vec![],
+            blueprint_metrics: None,
         }
     }
 
@@ -703,6 +705,7 @@ mod tests {
                 file_size: 1024,
                 last_modified: 100,
                 dependencies: vec![AssetPath::new("/Game/Dep").unwrap()],
+                blueprint_metrics: None,
             },
             scanner::AssetMetadata {
                 asset_path: AssetPath::new("/Game/B").unwrap(),
@@ -711,6 +714,7 @@ mod tests {
                 file_size: 2048,
                 last_modified: 200,
                 dependencies: vec![],
+                blueprint_metrics: None,
             },
         ];
         db.upsert_all(&assets).unwrap();
