@@ -130,23 +130,8 @@ fn find_project_dir(start: &Path) -> anyhow::Result<PathBuf> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::commands::make_meta;
     use shared::{AssetPath, AssetType};
-
-    fn make_meta(
-        asset_path: &str,
-        file_path: std::path::PathBuf,
-        asset_type: AssetType,
-        deps: Vec<AssetPath>,
-    ) -> scanner::AssetMetadata {
-        scanner::AssetMetadata {
-            asset_path: AssetPath::new(asset_path).unwrap(),
-            file_path,
-            asset_type,
-            file_size: 1024,
-            last_modified: 0,
-            dependencies: deps,
-        }
-    }
 
     #[test]
     fn handle_impact_should_return_err_when_db_does_not_exist() {
@@ -197,6 +182,7 @@ mod tests {
                 "/Game/Target",
                 dir.join("Target.uasset"),
                 AssetType::Blueprint,
+                1024,
                 vec![],
             )])
             .unwrap();
@@ -225,12 +211,14 @@ mod tests {
                     "/Game/Target",
                     dir.join("Target.uasset"),
                     AssetType::Blueprint,
+                    1024,
                     vec![],
                 ),
                 make_meta(
                     "/Game/A",
                     dir.join("A.uasset"),
                     AssetType::Blueprint,
+                    1024,
                     vec![AssetPath::new("/Game/Target").unwrap()],
                 ),
             ])
@@ -260,18 +248,21 @@ mod tests {
                     "/Game/Target",
                     dir.join("Target.uasset"),
                     AssetType::Blueprint,
+                    1024,
                     vec![],
                 ),
                 make_meta(
                     "/Game/B",
                     dir.join("B.uasset"),
                     AssetType::Blueprint,
+                    1024,
                     vec![AssetPath::new("/Game/Target").unwrap()],
                 ),
                 make_meta(
                     "/Game/C",
                     dir.join("C.uasset"),
                     AssetType::Blueprint,
+                    1024,
                     vec![AssetPath::new("/Game/B").unwrap()],
                 ),
             ])
@@ -299,6 +290,7 @@ mod tests {
                 "/Game/Target",
                 dir.join("Target.uasset"),
                 AssetType::Blueprint,
+                1024,
                 vec![],
             )])
             .unwrap();
@@ -326,12 +318,14 @@ mod tests {
                     "/Game/Target",
                     dir.join("Target.uasset"),
                     AssetType::Blueprint,
+                    1024,
                     vec![],
                 ),
                 make_meta(
                     "/Game/Referencing",
                     dir.join("Referencing.uasset"),
                     AssetType::Blueprint,
+                    1024,
                     vec![AssetPath::new("/Game/Target").unwrap()],
                 ),
             ])

@@ -85,24 +85,8 @@ pub fn handle_dead_assets(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::commands::make_meta;
     use shared::{AssetPath, AssetType};
-
-    fn make_meta(
-        asset_path: &str,
-        file_path: std::path::PathBuf,
-        asset_type: AssetType,
-        file_size: u64,
-        deps: Vec<AssetPath>,
-    ) -> scanner::AssetMetadata {
-        scanner::AssetMetadata {
-            asset_path: AssetPath::new(asset_path).unwrap(),
-            file_path,
-            asset_type,
-            file_size,
-            last_modified: 0,
-            dependencies: deps,
-        }
-    }
 
     #[test]
     fn handle_dead_assets_should_return_err_when_db_does_not_exist() {
