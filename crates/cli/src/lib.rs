@@ -1,5 +1,5 @@
 mod commands;
-pub(crate) mod config;
+pub mod config;
 mod paths;
 
 use std::path::{Path, PathBuf};
