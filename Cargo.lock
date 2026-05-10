@@ -180,6 +180,7 @@ dependencies = [
  "clap",
  "dead-asset-detector",
  "dependency-graph",
+ "lint-engine",
  "redirector-analyzer",
  "scanner",
  "serde",
