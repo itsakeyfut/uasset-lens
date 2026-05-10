@@ -1,6 +1,8 @@
+mod blueprint;
 pub mod error;
 pub mod parser;
 
+pub use blueprint::BlueprintMetrics;
 pub use error::ScanError;
 pub use parser::properties::{ParsedProperty, parse_properties};
 
@@ -23,6 +25,7 @@ pub struct AssetMetadata {
     pub file_size: u64,
     pub last_modified: u64,
     pub dependencies: Vec<AssetPath>,
+    pub blueprint_metrics: Option<BlueprintMetrics>,
 }
 
 #[derive(Debug)]
@@ -63,6 +66,49 @@ pub fn scan_files(files: &[PathBuf], content_root: &Path) -> ScanResult {
     ScanResult { assets, skipped }
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const FIXTURES_DIR: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../../tests/fixtures");
+
+    #[test]
+    fn scan_files_should_set_blueprint_metrics_for_blueprint_asset() {
+        let fixture = PathBuf::from(format!("{FIXTURES_DIR}/valid/BP_Simple.uasset"));
+        let content_root = PathBuf::from(format!("{FIXTURES_DIR}/valid"));
+        let result = scan_files(&[fixture], &content_root);
+
+        assert!(result.skipped.is_empty());
+        assert_eq!(result.assets.len(), 1);
+        let meta = &result.assets[0];
+        assert_eq!(meta.asset_type, AssetType::Blueprint);
+
+        let metrics = meta
+            .blueprint_metrics
+            .as_ref()
+            .expect("Blueprint should have metrics");
+        assert!(
+            metrics.node_count > 0,
+            "Blueprint fixture must have at least one K2Node export"
+        );
+    }
+
+    #[test]
+    fn scan_files_should_set_no_blueprint_metrics_for_texture_asset() {
+        let fixture = PathBuf::from(format!("{FIXTURES_DIR}/valid/T_Rock.uasset"));
+        let content_root = PathBuf::from(format!("{FIXTURES_DIR}/valid"));
+        let result = scan_files(&[fixture], &content_root);
+
+        assert!(result.skipped.is_empty());
+        assert_eq!(result.assets.len(), 1);
+        let meta = &result.assets[0];
+        assert!(
+            meta.blueprint_metrics.is_none(),
+            "Texture2D should not have blueprint metrics"
+        );
+    }
+}
+
 fn scan_single(file: &Path, content_root: &Path) -> Result<AssetMetadata, ScanError> {
     let fs_meta = std::fs::metadata(file)?;
     let file_size = fs_meta.len();
@@ -99,6 +145,20 @@ fn scan_single(file: &Path, content_root: &Path) -> Result<AssetMetadata, ScanEr
         )?
     };
 
+    let blueprint_metrics = if blueprint::is_blueprint_asset(&asset_type) {
+        Some(blueprint::extract_blueprint_metrics(
+            &data,
+            hdr.export_offset,
+            hdr.export_count,
+            hdr.depends_offset,
+            &cls_names,
+            &dependencies,
+            &name_table,
+        ))
+    } else {
+        None
+    };
+
     let asset_path = AssetPath::from_fs_path(content_root, file)?;
 
     Ok(AssetMetadata {
@@ -108,5 +168,6 @@ fn scan_single(file: &Path, content_root: &Path) -> Result<AssetMetadata, ScanEr
         file_size,
         last_modified,
         dependencies,
+        blueprint_metrics,
     })
 }

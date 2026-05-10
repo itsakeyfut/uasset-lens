@@ -20,5 +20,6 @@ pub(crate) fn make_meta(
         file_size,
         last_modified: 0,
         dependencies: deps,
+        blueprint_metrics: None,
     }
 }
