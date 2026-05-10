@@ -43,7 +43,7 @@ fn parse_asset_record(
 }
 
 pub struct AssetDb {
-    pub(crate) conn: Connection,
+    conn: Connection,
 }
 
 impl AssetDb {
