@@ -8,6 +8,7 @@ members = [
     "crates/dead-asset-detector",
     "crates/impact-analyzer",
     "crates/redirector-analyzer",
+    "crates/bp-analyzer",
     "crates/cli",
     "apps/uasset-lens-cli",
 ]
