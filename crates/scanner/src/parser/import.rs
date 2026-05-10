@@ -4,6 +4,20 @@ use std::io::Cursor;
 
 use crate::ScanError;
 
+pub fn parse_import_table(
+    data: &[u8],
+    offset: u64,
+    count: usize,
+    name_table: &[String],
+) -> Result<Vec<AssetPath>, ScanError> {
+    let (_, deps) = parse_import_entries(data, offset, count, name_table)?;
+    Ok(deps)
+}
+
+// Parses the import table in a single pass, returning both:
+//   - class_names: ObjectName string for every entry (used by export parser for ClassIndex resolution)
+//   - deps: filtered /Game/ package-level paths (the asset's hard-reference dependencies)
+//
 // FObjectImport layout (UE5, empirically verified at 40 bytes/entry):
 //   ClassPackage (FName: i32 index + i32 number) = 8 bytes
 //   ClassName    (FName: i32 index + i32 number) = 8 bytes
@@ -12,55 +26,6 @@ use crate::ScanError;
 //   PackageName  (FName: i32 index + i32 number) = 8 bytes  [UE5 addition]
 //   bImportOptional (serialised as i32)          = 4 bytes
 // Note: the issue spec described this as 5×i32=20 bytes, but real fixtures show 40.
-pub fn parse_import_table(
-    data: &[u8],
-    offset: u64,
-    count: usize,
-    name_table: &[String],
-) -> Result<Vec<AssetPath>, ScanError> {
-    let mut cur = Cursor::new(data);
-    cur.set_position(offset);
-
-    let mut deps = Vec::new();
-
-    for _ in 0..count {
-        let _cp_idx = cur.read_i32::<LittleEndian>().map_err(map_io)?;
-        let _cp_num = cur.read_i32::<LittleEndian>().map_err(map_io)?;
-        let _cn_idx = cur.read_i32::<LittleEndian>().map_err(map_io)?;
-        let _cn_num = cur.read_i32::<LittleEndian>().map_err(map_io)?;
-        let outer_index = cur.read_i32::<LittleEndian>().map_err(map_io)?;
-        let on_idx = cur.read_i32::<LittleEndian>().map_err(map_io)?;
-        let _on_num = cur.read_i32::<LittleEndian>().map_err(map_io)?;
-        let _pn_idx = cur.read_i32::<LittleEndian>().map_err(map_io)?;
-        let _pn_num = cur.read_i32::<LittleEndian>().map_err(map_io)?;
-        let _import_optional = cur.read_i32::<LittleEndian>().map_err(map_io)?;
-
-        // Only package-level entries (OuterIndex == 0) carry the full package path
-        if outer_index != 0 {
-            continue;
-        }
-
-        let name = name_table
-            .get(on_idx as usize)
-            .map(String::as_str)
-            .unwrap_or("");
-
-        // Filter before allocating: discard /Script/ and /Engine/, keep only /Game/
-        if !name.starts_with("/Game/") {
-            continue;
-        }
-
-        if let Ok(path) = AssetPath::new(name) {
-            deps.push(path);
-        }
-    }
-
-    Ok(deps)
-}
-
-// Parses the import table in a single pass, returning both:
-//   - class_names: ObjectName string for every entry (used by export parser for ClassIndex resolution)
-//   - deps: filtered /Game/ package-level paths (the asset's hard-reference dependencies)
 pub(crate) fn parse_import_entries(
     data: &[u8],
     offset: u64,
