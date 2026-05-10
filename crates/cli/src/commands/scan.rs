@@ -48,8 +48,24 @@ pub fn handle_scan(
         .into_iter()
         .collect();
 
+    let config = crate::config::load_config(project_dir);
+    let excluded = config.scan.exclude_paths;
+
     let all_files: Vec<(PathBuf, u64)> = WalkDir::new(project_dir)
         .into_iter()
+        .filter_entry(|e| {
+            if e.file_type().is_dir()
+                && !excluded.is_empty()
+                && let Ok(rel) = e.path().strip_prefix(project_dir)
+            {
+                // normalize to forward slashes for cross-platform comparison
+                let rel_str = rel.to_string_lossy().replace('\\', "/");
+                if !rel_str.is_empty() && excluded.iter().any(|p| rel_str.starts_with(p.as_str())) {
+                    return false;
+                }
+            }
+            true
+        })
         .filter_map(|e| e.ok())
         .filter(|e| e.file_type().is_file())
         .filter(|e| {
@@ -242,6 +258,32 @@ mod tests {
             last_modified: mtime,
             dependencies: vec![],
         }
+    }
+
+    #[test]
+    fn handle_scan_should_not_index_files_under_excluded_path() {
+        let dir =
+            std::env::temp_dir().join(format!("uasset_lens_scan25_exclude_{}", std::process::id()));
+        let excluded_dir = dir.join("Content").join("Dev");
+        std::fs::create_dir_all(&excluded_dir).unwrap();
+
+        std::fs::write(
+            dir.join(".uasset-lens.toml"),
+            "[scan]\nexclude_paths = [\"Content/Dev/\"]\n",
+        )
+        .unwrap();
+        std::fs::write(excluded_dir.join("Dummy.uasset"), b"not a real uasset").unwrap();
+
+        let db_path = dir.join("test.db");
+        let _ = handle_scan(&dir, false, &db_path, &FormatKind::Text, false).unwrap();
+
+        let db = asset_db::AssetDb::open(&db_path).unwrap();
+        assert!(
+            db.all_assets().unwrap().is_empty(),
+            "excluded path files should not be indexed in the database"
+        );
+
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
