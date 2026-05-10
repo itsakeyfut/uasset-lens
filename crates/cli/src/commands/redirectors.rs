@@ -57,22 +57,8 @@ pub fn handle_redirectors(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use shared::{AssetPath, AssetType};
-
-    fn make_meta(
-        asset_path: &str,
-        file_path: std::path::PathBuf,
-        asset_type: AssetType,
-    ) -> scanner::AssetMetadata {
-        scanner::AssetMetadata {
-            asset_path: AssetPath::new(asset_path).unwrap(),
-            file_path,
-            asset_type,
-            file_size: 1024,
-            last_modified: 0,
-            dependencies: vec![],
-        }
-    }
+    use crate::commands::make_meta;
+    use shared::AssetType;
 
     #[test]
     fn handle_redirectors_should_return_err_when_db_does_not_exist() {
@@ -99,6 +85,8 @@ mod tests {
                 "/Game/BP_Player",
                 dir.join("BP_Player.uasset"),
                 AssetType::Blueprint,
+                1024,
+                vec![],
             )])
             .unwrap();
         }
@@ -121,6 +109,8 @@ mod tests {
                 "/Game/OldName",
                 dir.join("OldName.uasset"),
                 AssetType::ObjectRedirector,
+                1024,
+                vec![],
             )])
             .unwrap();
         }
@@ -161,11 +151,15 @@ mod tests {
                     "/Game/OldMesh",
                     dir.join("OldMesh.uasset"),
                     AssetType::ObjectRedirector,
+                    1024,
+                    vec![],
                 ),
                 make_meta(
                     "/Game/OldBP",
                     dir.join("OldBP.uasset"),
                     AssetType::ObjectRedirector,
+                    1024,
+                    vec![],
                 ),
             ])
             .unwrap();
