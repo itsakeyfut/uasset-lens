@@ -69,7 +69,7 @@ pub fn handle_dead_assets(
                     "  {}  ({}, {})",
                     entry.path,
                     entry.asset_type,
-                    format_size(entry.file_size)
+                    crate::format_size(entry.file_size)
                 );
             }
             if !entries.is_empty() {
@@ -80,18 +80,6 @@ pub fn handle_dead_assets(
     }
 
     if entries.is_empty() { Ok(0) } else { Ok(1) }
-}
-
-fn format_size(bytes: u64) -> String {
-    const MIB: u64 = 1024 * 1024;
-    const KIB: u64 = 1024;
-    if bytes >= MIB {
-        format!("{:.1} MB", bytes as f64 / MIB as f64)
-    } else if bytes >= KIB {
-        format!("{:.1} KB", bytes as f64 / KIB as f64)
-    } else {
-        format!("{} B", bytes)
-    }
 }
 
 #[cfg(test)]
@@ -304,16 +292,5 @@ mod tests {
         let result = handle_dead_assets(&dir, None, &db_path, &FormatKind::Json).unwrap();
         assert_eq!(result, 1, "JSON format exits 1 when dead assets are found");
         let _ = std::fs::remove_dir_all(&dir);
-    }
-
-    #[test]
-    fn format_size_should_format_bytes_as_human_readable() {
-        assert_eq!(format_size(0), "0 B");
-        assert_eq!(format_size(512), "512 B");
-        assert_eq!(format_size(1023), "1023 B");
-        assert_eq!(format_size(1024), "1.0 KB");
-        assert_eq!(format_size(2048), "2.0 KB");
-        assert_eq!(format_size(1024 * 1024), "1.0 MB");
-        assert_eq!(format_size(2 * 1024 * 1024), "2.0 MB");
     }
 }

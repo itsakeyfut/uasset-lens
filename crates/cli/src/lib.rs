@@ -147,6 +147,53 @@ fn dispatch(cli: &Cli) -> anyhow::Result<i32> {
             let db_path = resolve_db_path(project_dir, cli.db.as_deref());
             commands::redirectors::handle_redirectors(project_dir, &db_path, &cli.format)
         }
-        Commands::Find { .. } => todo!(),
+        Commands::Find {
+            project_dir,
+            asset_type,
+            larger_than,
+            smaller_than,
+            unreferenced,
+            path,
+        } => {
+            let db_path = resolve_db_path(project_dir, cli.db.as_deref());
+            commands::find::handle_find(
+                project_dir,
+                asset_type.as_deref(),
+                *larger_than,
+                *smaller_than,
+                *unreferenced,
+                path.as_deref(),
+                &db_path,
+                &cli.format,
+            )
+        }
+    }
+}
+
+pub(crate) fn format_size(bytes: u64) -> String {
+    const MIB: u64 = 1024 * 1024;
+    const KIB: u64 = 1024;
+    if bytes >= MIB {
+        format!("{:.1} MB", bytes as f64 / MIB as f64)
+    } else if bytes >= KIB {
+        format!("{:.1} KB", bytes as f64 / KIB as f64)
+    } else {
+        format!("{} B", bytes)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn format_size_should_format_bytes_as_human_readable() {
+        assert_eq!(format_size(0), "0 B");
+        assert_eq!(format_size(512), "512 B");
+        assert_eq!(format_size(1023), "1023 B");
+        assert_eq!(format_size(1024), "1.0 KB");
+        assert_eq!(format_size(2048), "2.0 KB");
+        assert_eq!(format_size(1024 * 1024), "1.0 MB");
+        assert_eq!(format_size(2 * 1024 * 1024), "2.0 MB");
     }
 }
