@@ -4,6 +4,7 @@ version.workspace = true
 edition.workspace = true
 
 [dependencies]
-asset-db = { path = "../asset-db" }
-scanner  = { path = "../scanner" }
-shared   = { path = "../shared" }
+asset-db    = { path = "../asset-db" }
+bp-analyzer = { path = "../bp-analyzer" }
+scanner     = { path = "../scanner" }
+shared      = { path = "../shared" }

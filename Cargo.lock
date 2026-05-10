@@ -401,6 +401,7 @@ name = "lint-engine"
 version = "0.1.0"
 dependencies = [
  "asset-db",
+ "bp-analyzer",
  "scanner",
  "shared",
 ]
