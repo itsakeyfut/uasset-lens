@@ -13,6 +13,11 @@ struct ImpactOutput {
     total: usize,
 }
 
+// Unlike other handlers that receive a resolved `db_path`, this handler takes
+// `asset_path` (a path to a specific asset, not a project dir) and resolves
+// both the target AssetPath and the DB location internally via
+// `resolve_target_and_db`. The resolution must walk up from the asset file to
+// find the project root, so it cannot be done uniformly at the dispatch level.
 pub fn handle_impact(
     asset_path: &Path,
     db_override: Option<&Path>,
