@@ -8,7 +8,8 @@ shared              = { path = "../shared" }
 scanner             = { path = "../scanner" }
 asset-db            = { path = "../asset-db" }
 dependency-graph    = { path = "../dependency-graph" }
-dead-asset-detector = { path = "../dead-asset-detector" }
+dead-asset-detector  = { path = "../dead-asset-detector" }
+redirector-analyzer  = { path = "../redirector-analyzer" }
 clap       = { workspace = true }
 anyhow     = { workspace = true }
 tracing    = { workspace = true }
