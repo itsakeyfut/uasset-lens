@@ -80,11 +80,19 @@ pub enum Commands {
     },
 }
 
-pub(crate) fn load_graph(db_path: &Path) -> anyhow::Result<dependency_graph::DependencyGraph> {
-    if !db_path.exists() {
-        anyhow::bail!("no scan data found.\nRun 'uasset-lens scan <project_dir>' first.");
-    }
-    let db = asset_db::AssetDb::open(db_path).context("Failed to open database")?;
+/// Opens an existing database, translating `DbError::NotFound` into a user-friendly CLI message.
+pub(crate) fn open_db(db_path: &Path) -> anyhow::Result<asset_db::AssetDb> {
+    asset_db::AssetDb::open_existing(db_path).map_err(|e| match e {
+        asset_db::DbError::NotFound(_) => {
+            anyhow::anyhow!("no scan data found.\nRun 'uasset-lens scan <project_dir>' first.")
+        }
+        other => anyhow::Error::from(other),
+    })
+}
+
+pub(crate) fn load_graph(
+    db: &asset_db::AssetDb,
+) -> anyhow::Result<dependency_graph::DependencyGraph> {
     let records = db
         .all_assets()
         .context("Failed to read assets from database")?;

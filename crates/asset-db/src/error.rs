@@ -1,3 +1,5 @@
+use std::path::PathBuf;
+
 #[derive(Debug, thiserror::Error)]
 pub enum DbError {
     #[error("sqlite error: {0}")]
@@ -8,4 +10,6 @@ pub enum DbError {
     InvalidAssetPath(#[from] shared::AssetPathError),
     #[error("invalid glob pattern: {0}")]
     Glob(#[from] globset::Error),
+    #[error("database not found: {0}")]
+    NotFound(PathBuf),
 }

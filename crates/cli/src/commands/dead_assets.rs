@@ -19,8 +19,8 @@ pub fn handle_dead_assets(
     db_path: &Path,
     format: &FormatKind,
 ) -> anyhow::Result<i32> {
-    let graph = crate::load_graph(db_path)?;
-    let db = asset_db::AssetDb::open(db_path).context("Failed to open database")?;
+    let db = crate::open_db(db_path)?;
+    let graph = crate::load_graph(&db)?;
 
     let dead_paths = dead_asset_detector::detect(&graph);
 

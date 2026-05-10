@@ -17,7 +17,8 @@ pub fn handle_graph(
     db_path: &Path,
     format: &FormatKind,
 ) -> anyhow::Result<i32> {
-    let graph = crate::load_graph(db_path)?;
+    let db = crate::open_db(db_path)?;
+    let graph = crate::load_graph(&db)?;
     let cycles = graph.find_cycles();
     let total_assets = graph.nodes().count();
     let total_edges = graph.edge_count();
