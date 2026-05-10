@@ -10,6 +10,7 @@ members = [
     "crates/redirector-analyzer",
     "crates/bp-analyzer",
     "crates/duplicate-detector",
+    "crates/lint-engine",
     "crates/cli",
     "apps/uasset-lens-cli",
 ]

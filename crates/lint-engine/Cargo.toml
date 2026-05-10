@@ -1,0 +1,9 @@
+[package]
+name    = "lint-engine"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+asset-db = { path = "../asset-db" }
+scanner  = { path = "../scanner" }
+shared   = { path = "../shared" }
