@@ -1,0 +1,10 @@
+[package]
+name    = "bp-analyzer"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+scanner = { path = "../scanner" }
+
+[dev-dependencies]
+shared = { path = "../shared" }
