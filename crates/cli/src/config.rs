@@ -7,6 +7,8 @@ pub struct ConfigFile {
     pub scan: ScanConfig,
     #[serde(default)]
     pub lint: LintConfig,
+    #[serde(default)]
+    pub budget: budget_tracker::BudgetConfig,
 }
 
 #[derive(Default, serde::Deserialize)]
@@ -162,6 +164,30 @@ mod tests {
         let bp_player = make_record("/Game/Blueprints/BP_Player", AssetType::Blueprint);
         assert!(rule.check(&t_rock, None).is_empty());
         assert!(rule.check(&bp_player, None).is_empty());
+    }
+
+    #[test]
+    fn load_config_should_parse_budget_limits_from_valid_toml() {
+        let dir =
+            std::env::temp_dir().join(format!("uasset_lens_cfg_budget_{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(
+            dir.join(".uasset-lens.toml"),
+            "[budget]\nTexture2D.max_size = 4194304\nSoundWave.max_size = 2097152\n",
+        )
+        .unwrap();
+
+        let config = load_config(&dir);
+        let _ = std::fs::remove_dir_all(&dir);
+
+        assert_eq!(
+            config.budget.limits.get("Texture2D").map(|b| b.max_size),
+            Some(4194304)
+        );
+        assert_eq!(
+            config.budget.limits.get("SoundWave").map(|b| b.max_size),
+            Some(2097152)
+        );
     }
 
     #[test]
