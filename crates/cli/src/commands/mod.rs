@@ -1,4 +1,5 @@
 pub mod blueprint;
+pub mod budget;
 pub mod dead_assets;
 pub mod find;
 pub mod graph;
