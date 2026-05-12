@@ -82,6 +82,8 @@ pub enum Commands {
     Blueprint { project_dir: PathBuf },
     /// Report assets exceeding configured per-type size budgets
     Budget { project_dir: PathBuf },
+    /// List same-name and texture duplicate asset groups
+    Duplicates { project_dir: PathBuf },
     /// Run all lint rules and report violations (exit 1 if any found)
     Lint { project_dir: PathBuf },
 }
@@ -188,6 +190,10 @@ fn dispatch(cli: &Cli) -> anyhow::Result<i32> {
         Commands::Budget { project_dir } => {
             let db_path = resolve_db_path(project_dir, cli.db.as_deref());
             commands::budget::handle_budget(project_dir, &db_path, &cli.format)
+        }
+        Commands::Duplicates { project_dir } => {
+            let db_path = resolve_db_path(project_dir, cli.db.as_deref());
+            commands::duplicates::handle_duplicates(project_dir, &db_path, &cli.format)
         }
         Commands::Lint { project_dir } => {
             let db_path = resolve_db_path(project_dir, cli.db.as_deref());

@@ -190,6 +190,7 @@ dependencies = [
  "clap",
  "dead-asset-detector",
  "dependency-graph",
+ "duplicate-detector",
  "lint-engine",
  "redirector-analyzer",
  "scanner",
