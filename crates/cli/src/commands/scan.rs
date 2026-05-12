@@ -258,6 +258,7 @@ mod tests {
             last_modified: mtime,
             dependencies: vec![],
             blueprint_metrics: None,
+            material_texture_samples: None,
         }
     }
 

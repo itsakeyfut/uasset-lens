@@ -21,5 +21,6 @@ pub(crate) fn make_meta(
         last_modified: 0,
         dependencies: deps,
         blueprint_metrics: None,
+        material_texture_samples: None,
     }
 }

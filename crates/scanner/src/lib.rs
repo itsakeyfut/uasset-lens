@@ -1,5 +1,6 @@
 mod blueprint;
 pub mod error;
+mod material;
 pub mod parser;
 
 pub use blueprint::BlueprintMetrics;
@@ -26,6 +27,7 @@ pub struct AssetMetadata {
     pub last_modified: u64,
     pub dependencies: Vec<AssetPath>,
     pub blueprint_metrics: Option<BlueprintMetrics>,
+    pub material_texture_samples: Option<u32>,
 }
 
 #[derive(Debug)]
@@ -94,6 +96,25 @@ mod tests {
     }
 
     #[test]
+    fn scan_files_should_set_material_texture_samples_for_material_asset() {
+        let fixture = PathBuf::from(format!("{FIXTURES_DIR}/valid/M_Basic.uasset"));
+        let content_root = PathBuf::from(format!("{FIXTURES_DIR}/valid"));
+        let result = scan_files(&[fixture], &content_root);
+
+        assert!(result.skipped.is_empty());
+        assert_eq!(result.assets.len(), 1);
+        let meta = &result.assets[0];
+        assert_eq!(meta.asset_type, AssetType::Material);
+        let count = meta
+            .material_texture_samples
+            .expect("Material should have material_texture_samples set");
+        assert!(
+            count > 0,
+            "M_Basic fixture must have at least one MaterialExpressionTextureSample export"
+        );
+    }
+
+    #[test]
     fn scan_files_should_set_no_blueprint_metrics_for_texture_asset() {
         let fixture = PathBuf::from(format!("{FIXTURES_DIR}/valid/T_Rock.uasset"));
         let content_root = PathBuf::from(format!("{FIXTURES_DIR}/valid"));
@@ -105,6 +126,10 @@ mod tests {
         assert!(
             meta.blueprint_metrics.is_none(),
             "Texture2D should not have blueprint metrics"
+        );
+        assert!(
+            meta.material_texture_samples.is_none(),
+            "Texture2D should not have material texture samples"
         );
     }
 }
@@ -159,6 +184,18 @@ fn scan_single(file: &Path, content_root: &Path) -> Result<AssetMetadata, ScanEr
         None
     };
 
+    let material_texture_samples = if material::is_material_asset(&asset_type) {
+        Some(material::extract_texture_sample_count(
+            &data,
+            hdr.export_offset,
+            hdr.export_count,
+            hdr.depends_offset,
+            &cls_names,
+        ))
+    } else {
+        None
+    };
+
     let asset_path = AssetPath::from_fs_path(content_root, file)?;
 
     Ok(AssetMetadata {
@@ -169,5 +206,6 @@ fn scan_single(file: &Path, content_root: &Path) -> Result<AssetMetadata, ScanEr
         last_modified,
         dependencies,
         blueprint_metrics,
+        material_texture_samples,
     })
 }

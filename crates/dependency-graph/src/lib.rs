@@ -108,6 +108,22 @@ impl DependencyGraph {
         ImpactResult { direct, transitive }
     }
 
+    pub fn dependencies_of(&self, path: &AssetPath) -> Vec<(AssetPath, AssetType)> {
+        let Some(&idx) = self.index.get(path) else {
+            return vec![];
+        };
+        self.graph
+            .neighbors_directed(idx, Direction::Outgoing)
+            .map(|i| {
+                let node = &self.graph[i];
+                (
+                    node.path.clone(),       // clone required: cannot move out of graph node
+                    node.asset_type.clone(), // clone required: cannot move out of graph node
+                )
+            })
+            .collect()
+    }
+
     pub fn find_cycles(&self) -> Vec<Vec<AssetPath>> {
         petgraph::algo::tarjan_scc(&self.graph)
             .into_iter()
@@ -352,6 +368,28 @@ mod tests {
             .chain(result.transitive.iter())
             .collect();
         assert!(!all_paths.iter().any(|p| p.as_str() == "/Game/A"));
+    }
+
+    #[test]
+    fn dependencies_of_should_return_direct_outgoing_neighbors() {
+        let graph = DependencyGraph::build(
+            vec![node("/Game/A"), node("/Game/B"), node("/Game/C")],
+            vec![
+                (ap("/Game/A"), ap("/Game/B")),
+                (ap("/Game/A"), ap("/Game/C")),
+            ],
+        );
+
+        let deps = graph.dependencies_of(&ap("/Game/A"));
+        assert_eq!(deps.len(), 2);
+        assert!(deps.iter().any(|(p, _)| p.as_str() == "/Game/B"));
+        assert!(deps.iter().any(|(p, _)| p.as_str() == "/Game/C"));
+    }
+
+    #[test]
+    fn dependencies_of_should_return_empty_for_unknown_path() {
+        let graph = DependencyGraph::build(vec![node("/Game/A")], vec![]);
+        assert!(graph.dependencies_of(&ap("/Game/NotInGraph")).is_empty());
     }
 
     #[test]

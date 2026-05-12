@@ -1,0 +1,9 @@
+[package]
+name    = "material-analyzer"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+dependency-graph = { path = "../dependency-graph" }
+scanner          = { path = "../scanner" }
+shared           = { path = "../shared" }
