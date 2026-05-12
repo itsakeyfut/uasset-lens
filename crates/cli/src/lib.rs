@@ -80,6 +80,8 @@ pub enum Commands {
     },
     /// Show a complexity ranking of Blueprint assets
     Blueprint { project_dir: PathBuf },
+    /// Report assets exceeding configured per-type size budgets
+    Budget { project_dir: PathBuf },
     /// Run all lint rules and report violations (exit 1 if any found)
     Lint { project_dir: PathBuf },
 }
@@ -182,6 +184,10 @@ fn dispatch(cli: &Cli) -> anyhow::Result<i32> {
         Commands::Blueprint { project_dir } => {
             let db_path = resolve_db_path(project_dir, cli.db.as_deref());
             commands::blueprint::handle_blueprint(project_dir, &db_path, &cli.format)
+        }
+        Commands::Budget { project_dir } => {
+            let db_path = resolve_db_path(project_dir, cli.db.as_deref());
+            commands::budget::handle_budget(project_dir, &db_path, &cli.format)
         }
         Commands::Lint { project_dir } => {
             let db_path = resolve_db_path(project_dir, cli.db.as_deref());
