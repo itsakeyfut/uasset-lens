@@ -5,7 +5,7 @@ use rusqlite::{Connection, types::Value};
 use shared::AssetPath;
 
 use crate::DbError;
-use crate::record::{AssetFilter, AssetRecord};
+use crate::record::{AssetFilter, AssetRecord, BlueprintRow};
 
 fn upsert_asset_conn(conn: &Connection, meta: &scanner::AssetMetadata) -> Result<i64, DbError> {
     let asset_type = serde_json::to_string(&meta.asset_type)?;
@@ -21,7 +21,26 @@ fn upsert_asset_conn(conn: &Connection, meta: &scanner::AssetMetadata) -> Result
             meta.last_modified as i64,
         ],
     )?;
-    Ok(conn.last_insert_rowid())
+    let id = conn.last_insert_rowid();
+
+    // INSERT OR REPLACE on assets cascade-deletes the old blueprint_metrics row;
+    // re-insert if the scan produced metrics for this asset.
+    if let Some(ref bm) = meta.blueprint_metrics {
+        conn.execute(
+            "INSERT INTO blueprint_metrics \
+             (asset_id, node_count, event_tick, cast_count, dep_depth) \
+             VALUES (?1, ?2, ?3, ?4, ?5)",
+            rusqlite::params![
+                id,
+                bm.node_count as i64,
+                bm.event_tick_count as i64,
+                bm.cast_count as i64,
+                bm.dependency_depth as i64,
+            ],
+        )?;
+    }
+
+    Ok(id)
 }
 
 fn parse_asset_record(
@@ -257,6 +276,38 @@ impl AssetDb {
         Ok(records)
     }
 
+    pub fn all_blueprint_metrics(&self) -> Result<Vec<BlueprintRow>, DbError> {
+        let mut stmt = self.conn.prepare(
+            "SELECT a.asset_path, a.asset_type, \
+                    bm.node_count, bm.event_tick, bm.cast_count, bm.dep_depth \
+             FROM blueprint_metrics bm \
+             JOIN assets a ON bm.asset_id = a.id",
+        )?;
+        stmt.query_map([], |row| {
+            Ok((
+                row.get::<_, String>(0)?,
+                row.get::<_, String>(1)?,
+                row.get::<_, i64>(2)?,
+                row.get::<_, i64>(3)?,
+                row.get::<_, i64>(4)?,
+                row.get::<_, i64>(5)?,
+            ))
+        })?
+        .collect::<Result<Vec<_>, _>>()?
+        .into_iter()
+        .map(|(ap, at, nc, et, cc, dd)| {
+            Ok(BlueprintRow {
+                asset_path: AssetPath::new(&ap)?,
+                asset_type: serde_json::from_str(&at)?,
+                node_count: nc as u32,
+                event_tick_count: et as u32,
+                cast_count: cc as u32,
+                dependency_depth: dd as u32,
+            })
+        })
+        .collect()
+    }
+
     fn init_schema(&self) -> Result<(), DbError> {
         self.conn.execute_batch(
             "PRAGMA foreign_keys = ON;
@@ -274,6 +325,14 @@ impl AssetDb {
                  from_id  INTEGER NOT NULL REFERENCES assets(id) ON DELETE CASCADE,
                  to_path  TEXT    NOT NULL,
                  PRIMARY KEY (from_id, to_path)
+             );
+
+             CREATE TABLE IF NOT EXISTS blueprint_metrics (
+                 asset_id   INTEGER PRIMARY KEY REFERENCES assets(id) ON DELETE CASCADE,
+                 node_count INTEGER NOT NULL,
+                 event_tick INTEGER NOT NULL,
+                 cast_count INTEGER NOT NULL,
+                 dep_depth  INTEGER NOT NULL
              );
 
              CREATE INDEX IF NOT EXISTS idx_assets_last_modified ON assets(last_modified);
@@ -730,5 +789,84 @@ mod tests {
         assert_eq!(edges.len(), 1);
         assert_eq!(edges[0].0.as_str(), "/Game/A");
         assert_eq!(edges[0].1.as_str(), "/Game/Dep");
+    }
+
+    #[test]
+    fn open_should_create_schema_with_blueprint_metrics_table() {
+        let db = AssetDb::open(Path::new(":memory:")).unwrap();
+        let mut stmt = db
+            .conn
+            .prepare("SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name")
+            .unwrap();
+        let names: Vec<String> = stmt
+            .query_map([], |row| row.get(0))
+            .unwrap()
+            .filter_map(|r| r.ok())
+            .collect();
+        assert!(
+            names.contains(&"blueprint_metrics".to_string()),
+            "blueprint_metrics table should be created by init_schema"
+        );
+    }
+
+    #[test]
+    fn upsert_asset_should_store_blueprint_metrics_when_present() {
+        let db = AssetDb::open(Path::new(":memory:")).unwrap();
+        let bm = scanner::BlueprintMetrics {
+            node_count: 42,
+            event_tick_count: 1,
+            cast_count: 3,
+            dependency_depth: 2,
+        };
+        let meta = scanner::AssetMetadata {
+            asset_path: AssetPath::new("/Game/BP_Test").unwrap(),
+            file_path: PathBuf::from("/proj/Content/BP_Test.uasset"),
+            asset_type: AssetType::Blueprint,
+            file_size: 1024,
+            last_modified: 100,
+            dependencies: vec![],
+            blueprint_metrics: Some(bm),
+            material_texture_samples: None,
+        };
+        db.upsert_asset(&meta).unwrap();
+
+        let rows = db.all_blueprint_metrics().unwrap();
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].asset_path.as_str(), "/Game/BP_Test");
+        assert_eq!(rows[0].node_count, 42);
+        assert_eq!(rows[0].event_tick_count, 1);
+        assert_eq!(rows[0].cast_count, 3);
+        assert_eq!(rows[0].dependency_depth, 2);
+    }
+
+    #[test]
+    fn all_blueprint_metrics_should_return_empty_when_no_blueprint_metrics_stored() {
+        let db = AssetDb::open(Path::new(":memory:")).unwrap();
+        db.upsert_asset(&make_meta(
+            "/Game/T_Rock",
+            "/proj/Content/T_Rock.uasset",
+            100,
+        ))
+        .unwrap();
+
+        let rows = db.all_blueprint_metrics().unwrap();
+        assert!(
+            rows.is_empty(),
+            "assets with no blueprint_metrics should not appear"
+        );
+    }
+
+    #[test]
+    fn upsert_asset_should_not_store_blueprint_metrics_when_absent() {
+        let db = AssetDb::open(Path::new(":memory:")).unwrap();
+        let meta = make_meta(
+            "/Game/BP_NoMetrics",
+            "/proj/Content/BP_NoMetrics.uasset",
+            100,
+        );
+        db.upsert_asset(&meta).unwrap();
+
+        let rows = db.all_blueprint_metrics().unwrap();
+        assert!(rows.is_empty());
     }
 }

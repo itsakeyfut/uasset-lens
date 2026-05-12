@@ -1,3 +1,4 @@
+pub mod blueprint;
 pub mod dead_assets;
 pub mod find;
 pub mod graph;
