@@ -12,6 +12,7 @@ members = [
     "crates/duplicate-detector",
     "crates/lint-engine",
     "crates/material-analyzer",
+    "crates/budget-tracker",
     "crates/cli",
     "apps/uasset-lens-cli",
 ]

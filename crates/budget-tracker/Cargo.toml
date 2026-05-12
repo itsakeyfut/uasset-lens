@@ -1,0 +1,9 @@
+[package]
+name    = "budget-tracker"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+asset-db = { path = "../asset-db" }
+shared   = { path = "../shared" }
+serde    = { workspace = true }

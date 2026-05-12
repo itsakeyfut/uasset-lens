@@ -104,6 +104,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "budget-tracker"
+version = "0.1.0"
+dependencies = [
+ "asset-db",
+ "serde",
+ "shared",
+]
+
+[[package]]
 name = "bumpalo"
 version = "3.20.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -177,6 +186,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "asset-db",
+ "budget-tracker",
  "clap",
  "dead-asset-detector",
  "dependency-graph",

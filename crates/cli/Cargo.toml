@@ -11,6 +11,7 @@ dependency-graph    = { path = "../dependency-graph" }
 dead-asset-detector  = { path = "../dead-asset-detector" }
 redirector-analyzer  = { path = "../redirector-analyzer" }
 lint-engine         = { path = "../lint-engine" }
+budget-tracker      = { path = "../budget-tracker" }
 clap       = { workspace = true }
 anyhow     = { workspace = true }
 tracing    = { workspace = true }
