@@ -78,6 +78,8 @@ pub enum Commands {
         #[arg(long)]
         path: Option<String>,
     },
+    /// Show a complexity ranking of Blueprint assets
+    Blueprint { project_dir: PathBuf },
 }
 
 /// Opens an existing database, translating `DbError::NotFound` into a user-friendly CLI message.
@@ -174,6 +176,10 @@ fn dispatch(cli: &Cli) -> anyhow::Result<i32> {
                 &db_path,
                 &cli.format,
             )
+        }
+        Commands::Blueprint { project_dir } => {
+            let db_path = resolve_db_path(project_dir, cli.db.as_deref());
+            commands::blueprint::handle_blueprint(project_dir, &db_path, &cli.format)
         }
     }
 }

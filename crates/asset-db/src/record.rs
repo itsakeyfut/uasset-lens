@@ -13,6 +13,16 @@ pub struct AssetRecord {
 }
 
 #[derive(Debug)]
+pub struct BlueprintRow {
+    pub asset_path: AssetPath,
+    pub asset_type: AssetType,
+    pub node_count: u32,
+    pub event_tick_count: u32,
+    pub cast_count: u32,
+    pub dependency_depth: u32,
+}
+
+#[derive(Debug)]
 pub struct AssetFilter {
     pub asset_type: Option<AssetType>,
     pub min_size: Option<u64>,

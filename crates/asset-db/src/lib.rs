@@ -4,4 +4,4 @@ mod record;
 
 pub use db::AssetDb;
 pub use error::DbError;
-pub use record::{AssetFilter, AssetRecord};
+pub use record::{AssetFilter, AssetRecord, BlueprintRow};
