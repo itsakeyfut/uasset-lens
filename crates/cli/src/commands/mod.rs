@@ -1,6 +1,7 @@
 pub mod blueprint;
 pub mod budget;
 pub mod dead_assets;
+pub mod duplicates;
 pub mod find;
 pub mod graph;
 pub mod impact;
