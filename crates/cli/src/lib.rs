@@ -80,6 +80,8 @@ pub enum Commands {
     },
     /// Show a complexity ranking of Blueprint assets
     Blueprint { project_dir: PathBuf },
+    /// Run all lint rules and report violations (exit 1 if any found)
+    Lint { project_dir: PathBuf },
 }
 
 /// Opens an existing database, translating `DbError::NotFound` into a user-friendly CLI message.
@@ -180,6 +182,10 @@ fn dispatch(cli: &Cli) -> anyhow::Result<i32> {
         Commands::Blueprint { project_dir } => {
             let db_path = resolve_db_path(project_dir, cli.db.as_deref());
             commands::blueprint::handle_blueprint(project_dir, &db_path, &cli.format)
+        }
+        Commands::Lint { project_dir } => {
+            let db_path = resolve_db_path(project_dir, cli.db.as_deref());
+            commands::lint::handle_lint(project_dir, &db_path, &cli.format)
         }
     }
 }
