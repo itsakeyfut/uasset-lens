@@ -298,6 +298,7 @@ mod tests {
             last_modified: mtime,
             dependencies: vec![],
             blueprint_metrics: None,
+            material_texture_samples: None,
         }
     }
 
@@ -452,6 +453,7 @@ mod tests {
             last_modified: 100,
             dependencies: vec![],
             blueprint_metrics: None,
+            material_texture_samples: None,
         }
     }
 
@@ -706,6 +708,7 @@ mod tests {
                 last_modified: 100,
                 dependencies: vec![AssetPath::new("/Game/Dep").unwrap()],
                 blueprint_metrics: None,
+                material_texture_samples: None,
             },
             scanner::AssetMetadata {
                 asset_path: AssetPath::new("/Game/B").unwrap(),
@@ -715,6 +718,7 @@ mod tests {
                 last_modified: 200,
                 dependencies: vec![],
                 blueprint_metrics: None,
+                material_texture_samples: None,
             },
         ];
         db.upsert_all(&assets).unwrap();

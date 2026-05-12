@@ -91,6 +91,7 @@ mod tests {
             last_modified: 0,
             dependencies: vec![],
             blueprint_metrics,
+            material_texture_samples: None,
         }
     }
 

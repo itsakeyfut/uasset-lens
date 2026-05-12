@@ -11,6 +11,7 @@ members = [
     "crates/bp-analyzer",
     "crates/duplicate-detector",
     "crates/lint-engine",
+    "crates/material-analyzer",
     "crates/cli",
     "apps/uasset-lens-cli",
 ]
