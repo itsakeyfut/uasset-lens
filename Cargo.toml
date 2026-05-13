@@ -13,6 +13,7 @@ members = [
     "crates/lint-engine",
     "crates/material-analyzer",
     "crates/budget-tracker",
+    "crates/watcher",
     "crates/cli",
     "apps/uasset-lens-cli",
 ]
@@ -39,6 +40,7 @@ petgraph   = "0.8.3"
 serde_json = "1.0.149"
 toml       = "1"
 globset    = "0.4"
+notify     = "6"
 
 [profile.dev]
 opt-level    = 0
