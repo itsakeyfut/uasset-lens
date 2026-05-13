@@ -1,0 +1,9 @@
+[package]
+name     = "watcher"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+notify    = { workspace = true }
+thiserror = { workspace = true }
+tracing   = { workspace = true }
