@@ -1,3 +1,6 @@
+mod session;
+pub use session::{WatchSession, WatchSessionError};
+
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::mpsc::{self, Receiver, Sender};
@@ -61,6 +64,12 @@ impl Watcher {
     /// Returns `None` when the watcher has been shut down (all senders dropped).
     pub fn next_batch(&self) -> Option<Vec<WatchEvent>> {
         self.rx.recv().ok()
+    }
+
+    /// Block until a debounced batch is available or `timeout` elapses.
+    /// Returns `None` on timeout or when the watcher has been shut down.
+    pub fn next_batch_timeout(&self, timeout: Duration) -> Option<Vec<WatchEvent>> {
+        self.rx.recv_timeout(timeout).ok()
     }
 }
 
