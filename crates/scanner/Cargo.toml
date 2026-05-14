@@ -3,6 +3,9 @@ name    = "scanner"
 version.workspace = true
 edition.workspace = true
 
+[features]
+test-support = []
+
 [dependencies]
 shared    = { path = "../shared" }
 byteorder = { workspace = true }

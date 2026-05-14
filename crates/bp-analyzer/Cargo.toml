@@ -7,4 +7,5 @@ edition.workspace = true
 scanner = { path = "../scanner" }
 
 [dev-dependencies]
-shared = { path = "../shared" }
+shared  = { path = "../shared" }
+scanner = { path = "../scanner", features = ["test-support"] }

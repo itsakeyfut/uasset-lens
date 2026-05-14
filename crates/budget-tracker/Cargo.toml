@@ -7,3 +7,6 @@ edition.workspace = true
 asset-db = { path = "../asset-db" }
 shared   = { path = "../shared" }
 serde    = { workspace = true }
+
+[dev-dependencies]
+asset-db = { path = "../asset-db", features = ["test-support"] }

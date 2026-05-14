@@ -63,38 +63,14 @@ pub fn detect_texture_duplicates(assets: &[AssetRecord]) -> Vec<DuplicateGroup> 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use asset_db::AssetRecord;
-    use shared::{AssetPath, AssetType};
-    use std::path::PathBuf;
-
-    fn make_record(asset_path: &str) -> AssetRecord {
-        AssetRecord {
-            id: 0,
-            asset_path: AssetPath::new(asset_path).unwrap(),
-            file_path: PathBuf::from(format!("{asset_path}.uasset")),
-            asset_type: AssetType::Texture2D,
-            file_size: 0,
-            last_modified: 0,
-        }
-    }
-
-    fn make_record_typed(asset_path: &str, asset_type: AssetType, file_size: u64) -> AssetRecord {
-        AssetRecord {
-            id: 0,
-            asset_path: AssetPath::new(asset_path).unwrap(),
-            file_path: PathBuf::from(format!("{asset_path}.uasset")),
-            asset_type,
-            file_size,
-            last_modified: 0,
-        }
-    }
+    use shared::AssetType;
 
     #[test]
     fn detect_by_name_should_return_empty_when_all_names_are_unique() {
         let assets = vec![
-            make_record("/Game/Characters/T_Rock"),
-            make_record("/Game/Environment/T_Grass"),
-            make_record("/Game/Props/T_Wood"),
+            asset_db::make_record("/Game/Characters/T_Rock", AssetType::Texture2D),
+            asset_db::make_record("/Game/Environment/T_Grass", AssetType::Texture2D),
+            asset_db::make_record("/Game/Props/T_Wood", AssetType::Texture2D),
         ];
         assert!(detect_by_name(&assets).is_empty());
     }
@@ -102,8 +78,8 @@ mod tests {
     #[test]
     fn detect_by_name_should_return_one_group_when_two_assets_share_a_name() {
         let assets = vec![
-            make_record("/Game/Characters/T_Rock"),
-            make_record("/Game/Environment/T_Rock"),
+            asset_db::make_record("/Game/Characters/T_Rock", AssetType::Texture2D),
+            asset_db::make_record("/Game/Environment/T_Rock", AssetType::Texture2D),
         ];
         let groups = detect_by_name(&assets);
         assert_eq!(groups.len(), 1);
@@ -114,9 +90,9 @@ mod tests {
     #[test]
     fn detect_by_name_should_return_one_group_with_three_entries_when_three_assets_share_a_name() {
         let assets = vec![
-            make_record("/Game/Characters/T_Rock"),
-            make_record("/Game/Environment/T_Rock"),
-            make_record("/Game/Props/T_Rock"),
+            asset_db::make_record("/Game/Characters/T_Rock", AssetType::Texture2D),
+            asset_db::make_record("/Game/Environment/T_Rock", AssetType::Texture2D),
+            asset_db::make_record("/Game/Props/T_Rock", AssetType::Texture2D),
         ];
         let groups = detect_by_name(&assets);
         assert_eq!(groups.len(), 1);
@@ -127,8 +103,14 @@ mod tests {
     #[test]
     fn detect_texture_duplicates_should_return_one_group_when_two_textures_share_name_and_size() {
         let assets = vec![
-            make_record_typed("/Game/Characters/T_Rock", AssetType::Texture2D, 4096),
-            make_record_typed("/Game/Environment/T_Rock", AssetType::Texture2D, 4096),
+            asset_db::AssetRecord {
+                file_size: 4096,
+                ..asset_db::make_record("/Game/Characters/T_Rock", AssetType::Texture2D)
+            },
+            asset_db::AssetRecord {
+                file_size: 4096,
+                ..asset_db::make_record("/Game/Environment/T_Rock", AssetType::Texture2D)
+            },
         ];
         let groups = detect_texture_duplicates(&assets);
         assert_eq!(groups.len(), 1);
@@ -139,8 +121,14 @@ mod tests {
     #[test]
     fn detect_texture_duplicates_should_not_group_textures_with_different_sizes() {
         let assets = vec![
-            make_record_typed("/Game/Characters/T_Rock", AssetType::Texture2D, 4096),
-            make_record_typed("/Game/Environment/T_Rock", AssetType::Texture2D, 8192),
+            asset_db::AssetRecord {
+                file_size: 4096,
+                ..asset_db::make_record("/Game/Characters/T_Rock", AssetType::Texture2D)
+            },
+            asset_db::AssetRecord {
+                file_size: 8192,
+                ..asset_db::make_record("/Game/Environment/T_Rock", AssetType::Texture2D)
+            },
         ];
         assert!(detect_texture_duplicates(&assets).is_empty());
     }
@@ -148,8 +136,14 @@ mod tests {
     #[test]
     fn detect_texture_duplicates_should_not_group_textures_with_different_names() {
         let assets = vec![
-            make_record_typed("/Game/Characters/T_Rock", AssetType::Texture2D, 4096),
-            make_record_typed("/Game/Environment/T_Grass", AssetType::Texture2D, 4096),
+            asset_db::AssetRecord {
+                file_size: 4096,
+                ..asset_db::make_record("/Game/Characters/T_Rock", AssetType::Texture2D)
+            },
+            asset_db::AssetRecord {
+                file_size: 4096,
+                ..asset_db::make_record("/Game/Environment/T_Grass", AssetType::Texture2D)
+            },
         ];
         assert!(detect_texture_duplicates(&assets).is_empty());
     }
@@ -157,8 +151,14 @@ mod tests {
     #[test]
     fn detect_texture_duplicates_should_exclude_non_texture_assets_with_matching_name_and_size() {
         let assets = vec![
-            make_record_typed("/Game/Characters/T_Rock", AssetType::Texture2D, 4096),
-            make_record_typed("/Game/Environment/T_Rock", AssetType::StaticMesh, 4096),
+            asset_db::AssetRecord {
+                file_size: 4096,
+                ..asset_db::make_record("/Game/Characters/T_Rock", AssetType::Texture2D)
+            },
+            asset_db::AssetRecord {
+                file_size: 4096,
+                ..asset_db::make_record("/Game/Environment/T_Rock", AssetType::StaticMesh)
+            },
         ];
         assert!(detect_texture_duplicates(&assets).is_empty());
     }
@@ -166,8 +166,14 @@ mod tests {
     #[test]
     fn detect_texture_duplicates_should_sort_assets_within_group_alphabetically() {
         let assets = vec![
-            make_record_typed("/Game/Props/T_Rock", AssetType::Texture2D, 4096),
-            make_record_typed("/Game/Characters/T_Rock", AssetType::Texture2D, 4096),
+            asset_db::AssetRecord {
+                file_size: 4096,
+                ..asset_db::make_record("/Game/Props/T_Rock", AssetType::Texture2D)
+            },
+            asset_db::AssetRecord {
+                file_size: 4096,
+                ..asset_db::make_record("/Game/Characters/T_Rock", AssetType::Texture2D)
+            },
         ];
         let groups = detect_texture_duplicates(&assets);
         assert_eq!(groups[0].assets[0].as_str(), "/Game/Characters/T_Rock");
@@ -177,9 +183,9 @@ mod tests {
     #[test]
     fn detect_by_name_should_sort_assets_within_group_alphabetically() {
         let assets = vec![
-            make_record("/Game/Props/T_Rock"),
-            make_record("/Game/Characters/T_Rock"),
-            make_record("/Game/Environment/T_Rock"),
+            asset_db::make_record("/Game/Props/T_Rock", AssetType::Texture2D),
+            asset_db::make_record("/Game/Characters/T_Rock", AssetType::Texture2D),
+            asset_db::make_record("/Game/Environment/T_Rock", AssetType::Texture2D),
         ];
         let groups = detect_by_name(&assets);
         assert_eq!(groups.len(), 1);

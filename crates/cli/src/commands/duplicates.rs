@@ -113,23 +113,6 @@ mod tests {
     use super::*;
     use shared::AssetType;
 
-    fn make_meta(
-        asset_path: &str,
-        asset_type: AssetType,
-        file_size: u64,
-    ) -> scanner::AssetMetadata {
-        scanner::AssetMetadata {
-            asset_path: shared::AssetPath::new(asset_path).unwrap(),
-            file_path: std::path::PathBuf::from(format!("{asset_path}.uasset")),
-            asset_type,
-            file_size,
-            last_modified: 0,
-            dependencies: vec![],
-            blueprint_metrics: None,
-            material_texture_samples: None,
-        }
-    }
-
     #[test]
     fn handle_duplicates_should_return_err_when_db_does_not_exist() {
         let path = std::env::temp_dir().join(format!(
@@ -165,8 +148,14 @@ mod tests {
         {
             let mut db = asset_db::AssetDb::open(&db_path).unwrap();
             db.upsert_all(&[
-                make_meta("/Game/A/T_Rock", AssetType::Texture2D, 1024),
-                make_meta("/Game/B/T_Grass", AssetType::Texture2D, 2048),
+                scanner::AssetMetadata {
+                    file_size: 1024,
+                    ..scanner::make_meta("/Game/A/T_Rock", AssetType::Texture2D)
+                },
+                scanner::AssetMetadata {
+                    file_size: 2048,
+                    ..scanner::make_meta("/Game/B/T_Grass", AssetType::Texture2D)
+                },
             ])
             .unwrap();
         }
@@ -187,8 +176,14 @@ mod tests {
         {
             let mut db = asset_db::AssetDb::open(&db_path).unwrap();
             db.upsert_all(&[
-                make_meta("/Game/Characters/T_Rock", AssetType::Texture2D, 1024),
-                make_meta("/Game/Environment/T_Rock", AssetType::Texture2D, 2048),
+                scanner::AssetMetadata {
+                    file_size: 1024,
+                    ..scanner::make_meta("/Game/Characters/T_Rock", AssetType::Texture2D)
+                },
+                scanner::AssetMetadata {
+                    file_size: 2048,
+                    ..scanner::make_meta("/Game/Environment/T_Rock", AssetType::Texture2D)
+                },
             ])
             .unwrap();
         }
@@ -209,8 +204,14 @@ mod tests {
         {
             let mut db = asset_db::AssetDb::open(&db_path).unwrap();
             db.upsert_all(&[
-                make_meta("/Game/Characters/T_Rock", AssetType::Texture2D, 4096),
-                make_meta("/Game/Environment/T_Rock", AssetType::Texture2D, 4096),
+                scanner::AssetMetadata {
+                    file_size: 4096,
+                    ..scanner::make_meta("/Game/Characters/T_Rock", AssetType::Texture2D)
+                },
+                scanner::AssetMetadata {
+                    file_size: 4096,
+                    ..scanner::make_meta("/Game/Environment/T_Rock", AssetType::Texture2D)
+                },
             ])
             .unwrap();
         }
@@ -231,8 +232,14 @@ mod tests {
         {
             let mut db = asset_db::AssetDb::open(&db_path).unwrap();
             db.upsert_all(&[
-                make_meta("/Game/Characters/T_Rock", AssetType::Texture2D, 1024),
-                make_meta("/Game/Environment/T_Rock", AssetType::Texture2D, 1024),
+                scanner::AssetMetadata {
+                    file_size: 1024,
+                    ..scanner::make_meta("/Game/Characters/T_Rock", AssetType::Texture2D)
+                },
+                scanner::AssetMetadata {
+                    file_size: 1024,
+                    ..scanner::make_meta("/Game/Environment/T_Rock", AssetType::Texture2D)
+                },
             ])
             .unwrap();
         }
@@ -254,8 +261,14 @@ mod tests {
             let mut db = asset_db::AssetDb::open(&db_path).unwrap();
             // Same name AND same size → should appear as texture-dup only, not also same-name
             db.upsert_all(&[
-                make_meta("/Game/Characters/T_Rock", AssetType::Texture2D, 4096),
-                make_meta("/Game/Environment/T_Rock", AssetType::Texture2D, 4096),
+                scanner::AssetMetadata {
+                    file_size: 4096,
+                    ..scanner::make_meta("/Game/Characters/T_Rock", AssetType::Texture2D)
+                },
+                scanner::AssetMetadata {
+                    file_size: 4096,
+                    ..scanner::make_meta("/Game/Environment/T_Rock", AssetType::Texture2D)
+                },
             ])
             .unwrap();
         }
