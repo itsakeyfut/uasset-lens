@@ -8,6 +8,7 @@ pub mod impact;
 pub mod lint;
 pub mod redirectors;
 pub mod scan;
+pub mod watch;
 
 #[cfg(test)]
 pub(crate) fn make_meta(

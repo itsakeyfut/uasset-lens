@@ -13,6 +13,8 @@ duplicate-detector  = { path = "../duplicate-detector" }
 redirector-analyzer  = { path = "../redirector-analyzer" }
 lint-engine         = { path = "../lint-engine" }
 budget-tracker      = { path = "../budget-tracker" }
+watcher    = { path = "../watcher" }
+ctrlc      = { workspace = true }
 clap       = { workspace = true }
 anyhow     = { workspace = true }
 tracing    = { workspace = true }
