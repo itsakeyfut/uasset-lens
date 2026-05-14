@@ -86,6 +86,8 @@ pub enum Commands {
     Duplicates { project_dir: PathBuf },
     /// Run all lint rules and report violations (exit 1 if any found)
     Lint { project_dir: PathBuf },
+    /// Watch the project directory and print new problems as files change
+    Watch { project_dir: PathBuf },
 }
 
 /// Opens an existing database, translating `DbError::NotFound` into a user-friendly CLI message.
@@ -198,6 +200,10 @@ fn dispatch(cli: &Cli) -> anyhow::Result<i32> {
         Commands::Lint { project_dir } => {
             let db_path = resolve_db_path(project_dir, cli.db.as_deref());
             commands::lint::handle_lint(project_dir, &db_path, &cli.format)
+        }
+        Commands::Watch { project_dir } => {
+            let db_path = resolve_db_path(project_dir, cli.db.as_deref());
+            commands::watch::handle_watch(project_dir, &db_path)
         }
     }
 }
