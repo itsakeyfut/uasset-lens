@@ -3,6 +3,11 @@ pub mod error;
 mod material;
 pub mod parser;
 
+#[cfg(any(test, feature = "test-support"))]
+pub mod test_support;
+#[cfg(any(test, feature = "test-support"))]
+pub use test_support::make_meta;
+
 pub use blueprint::BlueprintMetrics;
 pub use error::ScanError;
 pub use parser::properties::{ParsedProperty, parse_properties};

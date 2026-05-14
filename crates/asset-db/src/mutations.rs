@@ -96,23 +96,14 @@ mod tests {
     use shared::{AssetPath, AssetType};
     use std::path::{Path, PathBuf};
 
-    fn make_meta(asset_path: &str, file_path: &str, mtime: u64) -> scanner::AssetMetadata {
-        scanner::AssetMetadata {
-            asset_path: AssetPath::new(asset_path).unwrap(),
-            file_path: PathBuf::from(file_path),
-            asset_type: AssetType::Blueprint,
-            file_size: 1024,
-            last_modified: mtime,
-            dependencies: vec![],
-            blueprint_metrics: None,
-            material_texture_samples: None,
-        }
-    }
-
     #[test]
     fn upsert_then_delete_should_cascade_remove_dependencies() {
         let db = AssetDb::open(Path::new(":memory:")).unwrap();
-        let meta = make_meta("/Game/BP_Test", "/proj/Content/BP_Test.uasset", 100);
+        let meta = scanner::AssetMetadata {
+            file_path: PathBuf::from("/proj/Content/BP_Test.uasset"),
+            last_modified: 100,
+            ..scanner::make_meta("/Game/BP_Test", AssetType::Blueprint)
+        };
         let id = db.upsert_asset(&meta).unwrap();
 
         let deps = vec![AssetPath::new("/Game/Dep").unwrap()];
@@ -156,24 +147,17 @@ mod tests {
         let mut db = AssetDb::open(Path::new(":memory:")).unwrap();
         let assets = vec![
             scanner::AssetMetadata {
-                asset_path: AssetPath::new("/Game/A").unwrap(),
                 file_path: PathBuf::from("/proj/Content/A.uasset"),
-                asset_type: AssetType::Blueprint,
                 file_size: 1024,
                 last_modified: 100,
                 dependencies: vec![AssetPath::new("/Game/Dep").unwrap()],
-                blueprint_metrics: None,
-                material_texture_samples: None,
+                ..scanner::make_meta("/Game/A", AssetType::Blueprint)
             },
             scanner::AssetMetadata {
-                asset_path: AssetPath::new("/Game/B").unwrap(),
                 file_path: PathBuf::from("/proj/Content/B.uasset"),
-                asset_type: AssetType::Texture2D,
                 file_size: 2048,
                 last_modified: 200,
-                dependencies: vec![],
-                blueprint_metrics: None,
-                material_texture_samples: None,
+                ..scanner::make_meta("/Game/B", AssetType::Texture2D)
             },
         ];
         db.upsert_all(&assets).unwrap();
@@ -197,14 +181,11 @@ mod tests {
             dependency_depth: 2,
         };
         let meta = scanner::AssetMetadata {
-            asset_path: AssetPath::new("/Game/BP_Test").unwrap(),
             file_path: PathBuf::from("/proj/Content/BP_Test.uasset"),
-            asset_type: AssetType::Blueprint,
             file_size: 1024,
             last_modified: 100,
-            dependencies: vec![],
             blueprint_metrics: Some(bm),
-            material_texture_samples: None,
+            ..scanner::make_meta("/Game/BP_Test", AssetType::Blueprint)
         };
         db.upsert_asset(&meta).unwrap();
 
@@ -220,11 +201,11 @@ mod tests {
     #[test]
     fn upsert_asset_should_not_store_blueprint_metrics_when_absent() {
         let db = AssetDb::open(Path::new(":memory:")).unwrap();
-        let meta = make_meta(
-            "/Game/BP_NoMetrics",
-            "/proj/Content/BP_NoMetrics.uasset",
-            100,
-        );
+        let meta = scanner::AssetMetadata {
+            file_path: PathBuf::from("/proj/Content/BP_NoMetrics.uasset"),
+            last_modified: 100,
+            ..scanner::make_meta("/Game/BP_NoMetrics", AssetType::Blueprint)
+        };
         db.upsert_asset(&meta).unwrap();
 
         let rows = db.all_blueprint_metrics().unwrap();

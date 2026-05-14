@@ -212,14 +212,9 @@ mod tests {
 
     fn make_meta(asset_path: &str, file_path: &str, mtime: u64) -> scanner::AssetMetadata {
         scanner::AssetMetadata {
-            asset_path: AssetPath::new(asset_path).unwrap(),
             file_path: PathBuf::from(file_path),
-            asset_type: AssetType::Blueprint,
-            file_size: 1024,
             last_modified: mtime,
-            dependencies: vec![],
-            blueprint_metrics: None,
-            material_texture_samples: None,
+            ..scanner::make_meta(asset_path, AssetType::Blueprint)
         }
     }
 
@@ -230,14 +225,9 @@ mod tests {
         asset_type: AssetType,
     ) -> scanner::AssetMetadata {
         scanner::AssetMetadata {
-            asset_path: AssetPath::new(asset_path).unwrap(),
             file_path: PathBuf::from(file_path),
-            asset_type,
             file_size,
-            last_modified: 100,
-            dependencies: vec![],
-            blueprint_metrics: None,
-            material_texture_samples: None,
+            ..scanner::make_meta(asset_path, asset_type)
         }
     }
 

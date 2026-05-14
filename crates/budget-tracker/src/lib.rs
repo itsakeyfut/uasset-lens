@@ -52,18 +52,6 @@ pub fn check_budget(assets: &[AssetRecord], config: &BudgetConfig) -> BudgetRepo
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::path::PathBuf;
-
-    fn make_record(asset_path: &str, asset_type: AssetType, file_size: u64) -> AssetRecord {
-        AssetRecord {
-            id: 0,
-            asset_path: AssetPath::new(asset_path).unwrap(),
-            file_path: PathBuf::from("dummy.uasset"),
-            asset_type,
-            file_size,
-            last_modified: 0,
-        }
-    }
 
     fn budget(max_size: u64) -> AssetBudget {
         AssetBudget { max_size }
@@ -74,7 +62,10 @@ mod tests {
         let config = BudgetConfig {
             limits: [("Texture2D".to_owned(), budget(4096))].into(),
         };
-        let assets = vec![make_record("/Game/T_Rock", AssetType::Texture2D, 4096)];
+        let assets = vec![asset_db::AssetRecord {
+            file_size: 4096,
+            ..asset_db::make_record("/Game/T_Rock", AssetType::Texture2D)
+        }];
 
         let report = check_budget(&assets, &config);
 
@@ -86,7 +77,10 @@ mod tests {
         let config = BudgetConfig {
             limits: [("Texture2D".to_owned(), budget(4096))].into(),
         };
-        let assets = vec![make_record("/Game/T_Large", AssetType::Texture2D, 4097)];
+        let assets = vec![asset_db::AssetRecord {
+            file_size: 4097,
+            ..asset_db::make_record("/Game/T_Large", AssetType::Texture2D)
+        }];
 
         let report = check_budget(&assets, &config);
 
@@ -102,11 +96,10 @@ mod tests {
         let config = BudgetConfig {
             limits: [("Texture2D".to_owned(), budget(4096))].into(),
         };
-        let assets = vec![make_record(
-            "/Game/SM_Rock",
-            AssetType::StaticMesh,
-            1_000_000,
-        )];
+        let assets = vec![asset_db::AssetRecord {
+            file_size: 1_000_000,
+            ..asset_db::make_record("/Game/SM_Rock", AssetType::StaticMesh)
+        }];
 
         let report = check_budget(&assets, &config);
 
@@ -123,10 +116,22 @@ mod tests {
             .into(),
         };
         let assets = vec![
-            make_record("/Game/T_OK", AssetType::Texture2D, 4096),
-            make_record("/Game/T_Big", AssetType::Texture2D, 5000),
-            make_record("/Game/SW_OK", AssetType::SoundWave, 2048),
-            make_record("/Game/SW_Big", AssetType::SoundWave, 3000),
+            asset_db::AssetRecord {
+                file_size: 4096,
+                ..asset_db::make_record("/Game/T_OK", AssetType::Texture2D)
+            },
+            asset_db::AssetRecord {
+                file_size: 5000,
+                ..asset_db::make_record("/Game/T_Big", AssetType::Texture2D)
+            },
+            asset_db::AssetRecord {
+                file_size: 2048,
+                ..asset_db::make_record("/Game/SW_OK", AssetType::SoundWave)
+            },
+            asset_db::AssetRecord {
+                file_size: 3000,
+                ..asset_db::make_record("/Game/SW_Big", AssetType::SoundWave)
+            },
         ];
 
         let report = check_budget(&assets, &config);

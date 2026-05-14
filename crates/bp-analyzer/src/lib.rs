@@ -76,24 +76,7 @@ pub fn is_complex(metrics: &BlueprintMetrics, thresholds: &ComplexityThresholds)
 #[cfg(test)]
 mod tests {
     use super::*;
-    use shared::{AssetPath, AssetType};
-    use std::path::PathBuf;
-
-    fn make_meta(
-        asset_type: AssetType,
-        blueprint_metrics: Option<BlueprintMetrics>,
-    ) -> AssetMetadata {
-        AssetMetadata {
-            asset_path: AssetPath::new("/Game/Test").unwrap(),
-            file_path: PathBuf::from("Test.uasset"),
-            asset_type,
-            file_size: 0,
-            last_modified: 0,
-            dependencies: vec![],
-            blueprint_metrics,
-            material_texture_samples: None,
-        }
-    }
+    use shared::AssetType;
 
     fn below_threshold_metrics() -> BlueprintMetrics {
         BlueprintMetrics {
@@ -107,13 +90,16 @@ mod tests {
     #[test]
     fn analyze_should_return_some_for_blueprint_asset() {
         let metrics = below_threshold_metrics();
-        let meta = make_meta(AssetType::Blueprint, Some(metrics.clone()));
+        let meta = AssetMetadata {
+            blueprint_metrics: Some(metrics.clone()),
+            ..scanner::make_meta("/Game/Test", AssetType::Blueprint)
+        };
         assert_eq!(analyze(&meta), Some(metrics));
     }
 
     #[test]
     fn analyze_should_return_none_for_non_blueprint_asset() {
-        let meta = make_meta(AssetType::Texture2D, None);
+        let meta = scanner::make_meta("/Game/Test", AssetType::Texture2D);
         assert!(analyze(&meta).is_none());
     }
 

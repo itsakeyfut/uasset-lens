@@ -6,3 +6,6 @@ edition.workspace = true
 [dependencies]
 asset-db = { path = "../asset-db" }
 shared   = { path = "../shared" }
+
+[dev-dependencies]
+asset-db = { path = "../asset-db", features = ["test-support"] }
