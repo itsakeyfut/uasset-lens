@@ -97,17 +97,11 @@ fn class_name_to_asset_type(name: &str) -> Option<AssetType> {
 
 #[cfg(test)]
 mod tests {
+    use super::super::test_utils::*;
     use super::*;
     use crate::parser::{
         header::parse_header, import::parse_import_entries, name_table::parse_name_table,
     };
-    use std::fs;
-
-    const FIXTURES_DIR: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../../tests/fixtures");
-
-    fn read_fixture(name: &str) -> Vec<u8> {
-        fs::read(format!("{FIXTURES_DIR}/{name}")).unwrap()
-    }
 
     #[test]
     fn parse_export_table_should_return_blueprint_for_bp_simple_fixture() {

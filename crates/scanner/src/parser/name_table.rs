@@ -1,6 +1,7 @@
 use byteorder::{LittleEndian, ReadBytesExt};
 use std::io::{Cursor, Read};
 
+use super::map_io;
 use crate::ScanError;
 
 pub fn parse_name_table(data: &[u8], offset: u64, count: usize) -> Result<Vec<String>, ScanError> {
@@ -40,24 +41,10 @@ pub fn parse_name_table(data: &[u8], offset: u64, count: usize) -> Result<Vec<St
     Ok(names)
 }
 
-fn map_io(e: std::io::Error) -> ScanError {
-    if e.kind() == std::io::ErrorKind::UnexpectedEof {
-        ScanError::UnexpectedEof
-    } else {
-        ScanError::Io(e)
-    }
-}
-
 #[cfg(test)]
 mod tests {
+    use super::super::test_utils::*;
     use super::*;
-    use std::fs;
-
-    const FIXTURES_DIR: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../../tests/fixtures");
-
-    fn read_fixture(name: &str) -> Vec<u8> {
-        fs::read(format!("{FIXTURES_DIR}/{name}")).unwrap()
-    }
 
     // Builds a minimal name table binary:
     // entries is &[&str] — each becomes a UTF-8 FString with a zero hash suffix.

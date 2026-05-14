@@ -2,6 +2,7 @@ use byteorder::{LittleEndian, ReadBytesExt};
 use shared::FPackageVersion;
 use std::io::Cursor;
 
+use super::map_io;
 use crate::ScanError;
 
 const UE_MAGIC: u32 = 0x9E2A83C1;
@@ -125,24 +126,10 @@ fn skip_fstring(cur: &mut Cursor<&[u8]>) -> Result<(), ScanError> {
     Ok(())
 }
 
-fn map_io(e: std::io::Error) -> ScanError {
-    if e.kind() == std::io::ErrorKind::UnexpectedEof {
-        ScanError::UnexpectedEof
-    } else {
-        ScanError::Io(e)
-    }
-}
-
 #[cfg(test)]
 mod tests {
+    use super::super::test_utils::*;
     use super::*;
-    use std::fs;
-
-    const FIXTURES_DIR: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../../tests/fixtures");
-
-    fn read_fixture(name: &str) -> Vec<u8> {
-        fs::read(format!("{FIXTURES_DIR}/{name}")).unwrap()
-    }
 
     #[test]
     fn parse_header_should_return_invalid_magic_for_bad_magic_bin() {
