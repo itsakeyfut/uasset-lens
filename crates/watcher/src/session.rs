@@ -223,7 +223,7 @@ mod tests {
         let t_rock = PathBuf::from(FIXTURES_DIR).join("T_Rock.uasset");
 
         // Seed the DB with T_Rock so there is something to delete.
-        let scan = scanner::scan_files(&[t_rock.clone()], &PathBuf::from(FIXTURES_DIR));
+        let scan = scanner::scan_files(std::slice::from_ref(&t_rock), &PathBuf::from(FIXTURES_DIR));
         session.db.upsert_all(&scan.assets).unwrap();
         assert_eq!(
             session.db.all_assets().unwrap().len(),

@@ -68,72 +68,6 @@ pub fn scan_files(files: &[PathBuf], content_root: &Path) -> ScanResult {
     ScanResult { assets, skipped }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    const FIXTURES_DIR: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../../tests/fixtures");
-
-    #[test]
-    fn scan_files_should_set_blueprint_metrics_for_blueprint_asset() {
-        let fixture = PathBuf::from(format!("{FIXTURES_DIR}/valid/BP_Simple.uasset"));
-        let content_root = PathBuf::from(format!("{FIXTURES_DIR}/valid"));
-        let result = scan_files(&[fixture], &content_root);
-
-        assert!(result.skipped.is_empty());
-        assert_eq!(result.assets.len(), 1);
-        let meta = &result.assets[0];
-        assert_eq!(meta.asset_type, AssetType::Blueprint);
-
-        let metrics = meta
-            .blueprint_metrics
-            .as_ref()
-            .expect("Blueprint should have metrics");
-        assert!(
-            metrics.node_count > 0,
-            "Blueprint fixture must have at least one K2Node export"
-        );
-    }
-
-    #[test]
-    fn scan_files_should_set_material_texture_samples_for_material_asset() {
-        let fixture = PathBuf::from(format!("{FIXTURES_DIR}/valid/M_Basic.uasset"));
-        let content_root = PathBuf::from(format!("{FIXTURES_DIR}/valid"));
-        let result = scan_files(&[fixture], &content_root);
-
-        assert!(result.skipped.is_empty());
-        assert_eq!(result.assets.len(), 1);
-        let meta = &result.assets[0];
-        assert_eq!(meta.asset_type, AssetType::Material);
-        let count = meta
-            .material_texture_samples
-            .expect("Material should have material_texture_samples set");
-        assert!(
-            count > 0,
-            "M_Basic fixture must have at least one MaterialExpressionTextureSample export"
-        );
-    }
-
-    #[test]
-    fn scan_files_should_set_no_blueprint_metrics_for_texture_asset() {
-        let fixture = PathBuf::from(format!("{FIXTURES_DIR}/valid/T_Rock.uasset"));
-        let content_root = PathBuf::from(format!("{FIXTURES_DIR}/valid"));
-        let result = scan_files(&[fixture], &content_root);
-
-        assert!(result.skipped.is_empty());
-        assert_eq!(result.assets.len(), 1);
-        let meta = &result.assets[0];
-        assert!(
-            meta.blueprint_metrics.is_none(),
-            "Texture2D should not have blueprint metrics"
-        );
-        assert!(
-            meta.material_texture_samples.is_none(),
-            "Texture2D should not have material texture samples"
-        );
-    }
-}
-
 fn scan_single(file: &Path, content_root: &Path) -> Result<AssetMetadata, ScanError> {
     let fs_meta = std::fs::metadata(file)?;
     let file_size = fs_meta.len();
@@ -208,4 +142,70 @@ fn scan_single(file: &Path, content_root: &Path) -> Result<AssetMetadata, ScanEr
         blueprint_metrics,
         material_texture_samples,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const FIXTURES_DIR: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../../tests/fixtures");
+
+    #[test]
+    fn scan_files_should_set_blueprint_metrics_for_blueprint_asset() {
+        let fixture = PathBuf::from(format!("{FIXTURES_DIR}/valid/BP_Simple.uasset"));
+        let content_root = PathBuf::from(format!("{FIXTURES_DIR}/valid"));
+        let result = scan_files(&[fixture], &content_root);
+
+        assert!(result.skipped.is_empty());
+        assert_eq!(result.assets.len(), 1);
+        let meta = &result.assets[0];
+        assert_eq!(meta.asset_type, AssetType::Blueprint);
+
+        let metrics = meta
+            .blueprint_metrics
+            .as_ref()
+            .expect("Blueprint should have metrics");
+        assert!(
+            metrics.node_count > 0,
+            "Blueprint fixture must have at least one K2Node export"
+        );
+    }
+
+    #[test]
+    fn scan_files_should_set_material_texture_samples_for_material_asset() {
+        let fixture = PathBuf::from(format!("{FIXTURES_DIR}/valid/M_Basic.uasset"));
+        let content_root = PathBuf::from(format!("{FIXTURES_DIR}/valid"));
+        let result = scan_files(&[fixture], &content_root);
+
+        assert!(result.skipped.is_empty());
+        assert_eq!(result.assets.len(), 1);
+        let meta = &result.assets[0];
+        assert_eq!(meta.asset_type, AssetType::Material);
+        let count = meta
+            .material_texture_samples
+            .expect("Material should have material_texture_samples set");
+        assert!(
+            count > 0,
+            "M_Basic fixture must have at least one MaterialExpressionTextureSample export"
+        );
+    }
+
+    #[test]
+    fn scan_files_should_set_no_blueprint_metrics_for_texture_asset() {
+        let fixture = PathBuf::from(format!("{FIXTURES_DIR}/valid/T_Rock.uasset"));
+        let content_root = PathBuf::from(format!("{FIXTURES_DIR}/valid"));
+        let result = scan_files(&[fixture], &content_root);
+
+        assert!(result.skipped.is_empty());
+        assert_eq!(result.assets.len(), 1);
+        let meta = &result.assets[0];
+        assert!(
+            meta.blueprint_metrics.is_none(),
+            "Texture2D should not have blueprint metrics"
+        );
+        assert!(
+            meta.material_texture_samples.is_none(),
+            "Texture2D should not have material texture samples"
+        );
+    }
 }
