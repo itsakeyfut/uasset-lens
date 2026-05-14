@@ -1,0 +1,11 @@
+[package]
+name     = "git-diff"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+shared    = { path = "../shared" }
+scanner   = { path = "../scanner" }
+thiserror = { workspace = true }
+tracing   = { workspace = true }
+tempfile  = { workspace = true }
