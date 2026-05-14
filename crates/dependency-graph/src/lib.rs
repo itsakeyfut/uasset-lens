@@ -23,11 +23,12 @@ pub struct DependencyGraph {
 
 impl DependencyGraph {
     pub fn build(
-        nodes: impl IntoIterator<Item = AssetNode>,
+        nodes: Vec<AssetNode>,
         edges: impl IntoIterator<Item = (AssetPath, AssetPath)>,
     ) -> Self {
-        let mut graph = DiGraph::new();
-        let mut index: HashMap<AssetPath, NodeIndex> = HashMap::new();
+        let node_count = nodes.len();
+        let mut graph = DiGraph::with_capacity(node_count, 0);
+        let mut index: HashMap<AssetPath, NodeIndex> = HashMap::with_capacity(node_count);
 
         for node in nodes {
             let path = node.path.clone(); // clone required: path is moved into graph node
