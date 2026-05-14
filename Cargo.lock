@@ -982,7 +982,12 @@ dependencies = [
 name = "watcher"
 version = "0.1.0"
 dependencies = [
+ "asset-db",
+ "dead-asset-detector",
+ "dependency-graph",
  "notify",
+ "scanner",
+ "shared",
  "thiserror",
  "tracing",
 ]
