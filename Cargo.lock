@@ -213,6 +213,7 @@ dependencies = [
  "dead-asset-detector",
  "dependency-graph",
  "duplicate-detector",
+ "impact-analyzer",
  "lint-engine",
  "redirector-analyzer",
  "scanner",
@@ -482,6 +483,7 @@ name = "impact-analyzer"
 version = "0.1.0"
 dependencies = [
  "dependency-graph",
+ "shared",
 ]
 
 [[package]]

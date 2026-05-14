@@ -31,7 +31,7 @@ pub fn handle_impact(
         anyhow::bail!("asset not found in scan data: {}", target.as_str());
     }
 
-    let result = graph.find_impact(&target);
+    let result = impact_analyzer::detect(&graph, &target);
     let total = result.direct.len() + result.transitive.len();
 
     match format {

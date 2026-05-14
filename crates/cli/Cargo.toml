@@ -9,6 +9,7 @@ scanner             = { path = "../scanner" }
 asset-db            = { path = "../asset-db" }
 dependency-graph    = { path = "../dependency-graph" }
 dead-asset-detector  = { path = "../dead-asset-detector" }
+impact-analyzer      = { path = "../impact-analyzer" }
 duplicate-detector  = { path = "../duplicate-detector" }
 redirector-analyzer  = { path = "../redirector-analyzer" }
 lint-engine         = { path = "../lint-engine" }
