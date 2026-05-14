@@ -1,0 +1,121 @@
+use std::collections::HashMap;
+
+use asset_db::AssetRecord;
+use scanner::BlueprintMetrics;
+use shared::AssetType;
+
+use crate::{LintRule, LintViolation, Severity};
+
+#[derive(Debug, Clone)]
+pub struct NamingPrefixRule {
+    pub prefixes: HashMap<AssetType, String>,
+}
+
+impl Default for NamingPrefixRule {
+    fn default() -> Self {
+        let mut prefixes = HashMap::new();
+        prefixes.insert(AssetType::Texture2D, "T_".to_owned());
+        prefixes.insert(AssetType::Material, "M_".to_owned());
+        prefixes.insert(AssetType::StaticMesh, "SM_".to_owned());
+        prefixes.insert(AssetType::Blueprint, "BP_".to_owned());
+        prefixes.insert(AssetType::SkeletalMesh, "SK_".to_owned());
+        prefixes.insert(AssetType::AnimBlueprint, "ABP_".to_owned());
+        prefixes.insert(AssetType::UserWidget, "WBP_".to_owned());
+        prefixes.insert(AssetType::SoundWave, "S_".to_owned());
+        Self { prefixes }
+    }
+}
+
+impl LintRule for NamingPrefixRule {
+    fn rule_id(&self) -> &'static str {
+        "naming/prefix"
+    }
+
+    fn check(
+        &self,
+        asset: &AssetRecord,
+        _metrics: Option<&BlueprintMetrics>,
+    ) -> Vec<LintViolation> {
+        if matches!(asset.asset_type, AssetType::Unknown(_)) {
+            return vec![];
+        }
+        let Some(expected_prefix) = self.prefixes.get(&asset.asset_type) else {
+            return vec![];
+        };
+        let path = asset.asset_path.as_str();
+        // AssetPath always starts with '/', so rsplit always yields at least one element
+        let name = path.rsplit('/').next().unwrap_or(path);
+        if name.starts_with(expected_prefix.as_str()) {
+            return vec![];
+        }
+        vec![LintViolation {
+            severity: Severity::Warning,
+            rule_id: "naming/prefix",
+            message: format!("asset `{name}` should start with prefix `{expected_prefix}`"),
+            asset_path: asset.asset_path.clone(), // clone required: cannot move out of shared reference
+        }]
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use shared::{AssetPath, AssetType};
+    use std::path::PathBuf;
+
+    fn make_record(asset_path: &str) -> AssetRecord {
+        AssetRecord {
+            id: 0,
+            asset_path: AssetPath::new(asset_path).unwrap(),
+            file_path: PathBuf::from(format!("{asset_path}.uasset")),
+            asset_type: AssetType::Texture2D,
+            file_size: 0,
+            last_modified: 0,
+        }
+    }
+
+    fn make_record_typed(asset_path: &str, asset_type: AssetType) -> AssetRecord {
+        AssetRecord {
+            id: 0,
+            asset_path: AssetPath::new(asset_path).unwrap(),
+            file_path: PathBuf::from(format!("{asset_path}.uasset")),
+            asset_type,
+            file_size: 0,
+            last_modified: 0,
+        }
+    }
+
+    #[test]
+    fn naming_prefix_rule_should_not_emit_violation_for_correctly_prefixed_texture() {
+        let rule = NamingPrefixRule::default();
+        let asset = make_record("/Game/Textures/T_Rock");
+        assert!(rule.check(&asset, None).is_empty());
+    }
+
+    #[test]
+    fn naming_prefix_rule_should_emit_violation_for_texture_without_prefix() {
+        let rule = NamingPrefixRule::default();
+        let asset = make_record("/Game/Textures/Rock");
+        let violations = rule.check(&asset, None);
+        assert_eq!(violations.len(), 1);
+        assert_eq!(violations[0].rule_id, "naming/prefix");
+        assert_eq!(violations[0].severity, Severity::Warning);
+    }
+
+    #[test]
+    fn naming_prefix_rule_should_skip_unknown_asset_type() {
+        let rule = NamingPrefixRule::default();
+        let asset = make_record_typed(
+            "/Game/Misc/SomeAsset",
+            AssetType::Unknown("SomeClass".to_owned()),
+        );
+        assert!(rule.check(&asset, None).is_empty());
+    }
+
+    #[test]
+    fn naming_prefix_rule_should_not_emit_violation_for_type_not_in_prefix_map() {
+        let rule = NamingPrefixRule::default();
+        let asset = make_record_typed("/Game/Maps/MyLevel", AssetType::World);
+        assert!(rule.check(&asset, None).is_empty());
+    }
+}
