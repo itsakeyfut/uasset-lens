@@ -17,11 +17,7 @@ pub fn handle_lint(project_dir: &Path, db_path: &Path, format: &FormatKind) -> a
     let config = crate::config::load_config(project_dir);
     let db = crate::open_db(db_path)?;
 
-    let engine = lint_engine::LintEngine::new(vec![
-        Box::new(config.lint.build_naming_prefix_rule()),
-        Box::new(lint_engine::TextureSizeRule::default()),
-        Box::new(config.lint.build_blueprint_complexity_rule()),
-    ]);
+    let engine = lint_engine::LintEngine::new(crate::lint_builder::build_lint_rules(&config.lint));
 
     let assets = db
         .all_assets()

@@ -1,5 +1,6 @@
 mod commands;
 pub mod config;
+pub(crate) mod lint_builder;
 mod paths;
 
 use std::path::{Path, PathBuf};
