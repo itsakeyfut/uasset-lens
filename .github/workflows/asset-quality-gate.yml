@@ -1,0 +1,36 @@
+name: Asset Quality Gate
+
+on: [push, pull_request]
+
+jobs:
+  asset-lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Cargo registry
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-
+
+      - name: Build uasset-lens
+        run: cargo build --release -p uasset-lens-cli
+
+      - name: Scan assets
+        run: ./target/release/uasset-lens scan ./tests/fixtures/valid
+
+      # Exits 1 when circular dependencies are found → pipeline fails
+      - name: Check circular dependencies
+        run: ./target/release/uasset-lens graph --cycles-only ./tests/fixtures/valid
+
+      # Exits 1 when lint violations are found → pipeline fails
+      - name: Lint assets
+        run: ./target/release/uasset-lens lint ./tests/fixtures/valid
