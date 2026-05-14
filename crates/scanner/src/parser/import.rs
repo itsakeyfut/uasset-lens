@@ -2,6 +2,7 @@ use byteorder::{LittleEndian, ReadBytesExt};
 use shared::AssetPath;
 use std::io::Cursor;
 
+use super::map_io;
 use crate::ScanError;
 
 pub fn parse_import_table(
@@ -69,25 +70,11 @@ pub(crate) fn parse_import_entries(
     Ok((class_names, deps))
 }
 
-fn map_io(e: std::io::Error) -> ScanError {
-    if e.kind() == std::io::ErrorKind::UnexpectedEof {
-        ScanError::UnexpectedEof
-    } else {
-        ScanError::Io(e)
-    }
-}
-
 #[cfg(test)]
 mod tests {
+    use super::super::test_utils::*;
     use super::*;
     use crate::parser::name_table::parse_name_table;
-    use std::fs;
-
-    const FIXTURES_DIR: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../../tests/fixtures");
-
-    fn read_fixture(name: &str) -> Vec<u8> {
-        fs::read(format!("{FIXTURES_DIR}/{name}")).unwrap()
-    }
 
     // Builds a single 40-byte FObjectImport entry with the given ObjectName index and
     // OuterIndex; all other fields are zero.
