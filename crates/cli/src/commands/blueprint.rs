@@ -24,7 +24,7 @@ pub fn handle_blueprint(
         .all_blueprint_metrics()
         .context("Failed to read blueprint metrics from database")?;
 
-    rows.sort_by(|a, b| b.node_count.cmp(&a.node_count));
+    rows.sort_by_key(|r| std::cmp::Reverse(r.node_count));
 
     let entries: Vec<BlueprintEntry> = rows
         .iter()
@@ -172,7 +172,7 @@ mod tests {
         let db = make_db_with_blueprints(&db_path);
 
         let mut rows = db.all_blueprint_metrics().unwrap();
-        rows.sort_by(|a, b| b.node_count.cmp(&a.node_count));
+        rows.sort_by_key(|r| std::cmp::Reverse(r.node_count));
 
         assert_eq!(rows.len(), 2);
         assert_eq!(rows[0].asset_path.as_str(), "/Game/BP_Boss");
