@@ -1,0 +1,41 @@
+# Template — copy this file to .github/workflows/asset-quality-gate.yml in your Unreal project.
+# Replace every occurrence of ./YourProject with your actual project directory name.
+
+name: Asset Quality Gate
+
+on: [push, pull_request]
+
+jobs:
+  asset-lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          lfs: true   # required if .uasset files are stored in Git LFS
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Cargo registry
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-
+
+      - name: Install uasset-lens
+        run: cargo install uasset-lens
+
+      - name: Scan assets
+        run: uasset-lens scan ./YourProject
+
+      # Exits 1 when circular dependencies are found → pipeline fails
+      - name: Check circular dependencies
+        run: uasset-lens graph --cycles-only ./YourProject
+
+      # Exits 1 when lint violations are found → pipeline fails
+      - name: Lint assets
+        run: uasset-lens lint ./YourProject
