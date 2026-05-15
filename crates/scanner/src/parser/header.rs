@@ -80,6 +80,9 @@ pub fn parse_header(data: &[u8]) -> Result<FPackageFileSummary, ScanError> {
         return Err(ScanError::InvalidData("negative name_count".into()));
     }
     let name_offset = cur.read_i32::<LittleEndian>().map_err(map_io)?;
+    if name_offset < 0 {
+        return Err(ScanError::InvalidData("negative name_offset".into()));
+    }
 
     // SoftObjectPath list — added in UE5 version 1008
     if file_version_ue5 >= VER_UE5_ADD_SOFTOBJECTPATH_LIST {
@@ -100,13 +103,22 @@ pub fn parse_header(data: &[u8]) -> Result<FPackageFileSummary, ScanError> {
         return Err(ScanError::InvalidData("negative export_count".into()));
     }
     let export_offset = cur.read_i32::<LittleEndian>().map_err(map_io)?;
+    if export_offset < 0 {
+        return Err(ScanError::InvalidData("negative export_offset".into()));
+    }
     let import_count = cur.read_i32::<LittleEndian>().map_err(map_io)?;
     if import_count < 0 {
         return Err(ScanError::InvalidData("negative import_count".into()));
     }
     let import_offset = cur.read_i32::<LittleEndian>().map_err(map_io)?;
+    if import_offset < 0 {
+        return Err(ScanError::InvalidData("negative import_offset".into()));
+    }
 
     let depends_offset = cur.read_i32::<LittleEndian>().map_err(map_io)?;
+    if depends_offset < 0 {
+        return Err(ScanError::InvalidData("negative depends_offset".into()));
+    }
 
     Ok(FPackageFileSummary {
         version,
@@ -225,6 +237,17 @@ mod tests {
         let mut data = read_fixture("valid/BP_Simple.uasset");
         // name_count is the i32 at byte offset 272 (see parse_header_should_succeed_for_bp_simple_fixture)
         data[272..276].copy_from_slice(&(-1i32).to_le_bytes());
+        assert!(matches!(
+            parse_header(&data),
+            Err(ScanError::InvalidData(_))
+        ));
+    }
+
+    #[test]
+    fn parse_header_should_return_invalid_data_when_name_offset_is_negative() {
+        let mut data = read_fixture("valid/BP_Simple.uasset");
+        // name_offset is the i32 at byte offset 276 (immediately after name_count at 272)
+        data[276..280].copy_from_slice(&(-1i32).to_le_bytes());
         assert!(matches!(
             parse_header(&data),
             Err(ScanError::InvalidData(_))
