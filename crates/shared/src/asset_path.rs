@@ -35,8 +35,22 @@ impl AssetPath {
     }
 
     pub fn from_fs_path(content_root: &Path, file_path: &Path) -> Result<Self, AssetPathError> {
-        let relative = file_path
-            .strip_prefix(content_root)
+        let canonical_root = content_root
+            .canonicalize()
+            .map_err(|_| AssetPathError::NotUnderContentRoot)?;
+        // Resolve symlinks to verify the real file lives under content_root.
+        // For files that no longer exist on disk (stale assets being cleaned up),
+        // canonicalize the parent directory instead so the prefix still aligns with
+        // canonical_root on all platforms (e.g. Windows \\?\ extended paths).
+        let canonical_file = file_path.canonicalize().unwrap_or_else(|_| {
+            file_path
+                .parent()
+                .and_then(|p| p.canonicalize().ok())
+                .map(|p| p.join(file_path.file_name().unwrap_or_default()))
+                .unwrap_or_else(|| file_path.to_path_buf())
+        });
+        let relative = canonical_file
+            .strip_prefix(&canonical_root)
             .map_err(|_| AssetPathError::NotUnderContentRoot)?;
 
         let without_ext = relative.with_extension("");
@@ -70,7 +84,6 @@ impl AssetPath {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::path::PathBuf;
 
     #[test]
     fn new_should_return_error_for_empty_string() {
@@ -101,20 +114,54 @@ mod tests {
 
     #[test]
     fn from_fs_path_should_convert_uasset_path_to_game_path() {
-        let content_root = PathBuf::from("/Project/Content");
-        let file_path = PathBuf::from("/Project/Content/Characters/BP_Player.uasset");
+        let dir = std::env::temp_dir().join(format!("uasset_from_fs_{}", std::process::id()));
+        let content_root = dir.join("Content");
+        let chars_dir = content_root.join("Characters");
+        std::fs::create_dir_all(&chars_dir).unwrap();
+        let file_path = chars_dir.join("BP_Player.uasset");
+        std::fs::write(&file_path, b"").unwrap();
+
         let path = AssetPath::from_fs_path(&content_root, &file_path).unwrap();
+        let _ = std::fs::remove_dir_all(&dir);
         assert_eq!(path.as_str(), "/Game/Characters/BP_Player");
     }
 
     #[test]
     fn from_fs_path_should_return_error_when_not_under_content_root() {
-        let content_root = PathBuf::from("/Project/Content");
-        let file_path = PathBuf::from("/Other/Characters/BP_Player.uasset");
-        assert_eq!(
-            AssetPath::from_fs_path(&content_root, &file_path),
-            Err(AssetPathError::NotUnderContentRoot)
-        );
+        let dir = std::env::temp_dir().join(format!("uasset_outside_{}", std::process::id()));
+        let content_root = dir.join("Content");
+        let other_dir = dir.join("Other").join("Characters");
+        std::fs::create_dir_all(&content_root).unwrap();
+        std::fs::create_dir_all(&other_dir).unwrap();
+        let file_path = other_dir.join("BP_Player.uasset");
+        std::fs::write(&file_path, b"").unwrap();
+
+        let result = AssetPath::from_fs_path(&content_root, &file_path);
+        let _ = std::fs::remove_dir_all(&dir);
+        assert_eq!(result, Err(AssetPathError::NotUnderContentRoot));
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn from_fs_path_should_return_error_for_symlink_outside_content_root() {
+        use std::os::unix::fs::symlink;
+
+        let dir = std::env::temp_dir().join(format!("uasset_symlink_{}", std::process::id()));
+        let content_root = dir.join("Content");
+        let outside_dir = dir.join("Outside");
+        std::fs::create_dir_all(&content_root).unwrap();
+        std::fs::create_dir_all(&outside_dir).unwrap();
+
+        let real_file = outside_dir.join("Secret.uasset");
+        std::fs::write(&real_file, b"").unwrap();
+
+        // Symlink inside content_root whose target resolves to outside content_root
+        let link_path = content_root.join("FakeAsset.uasset");
+        symlink(&real_file, &link_path).unwrap();
+
+        let result = AssetPath::from_fs_path(&content_root, &link_path);
+        let _ = std::fs::remove_dir_all(&dir);
+        assert_eq!(result, Err(AssetPathError::NotUnderContentRoot));
     }
 
     #[test]
