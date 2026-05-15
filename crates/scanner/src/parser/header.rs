@@ -76,6 +76,9 @@ pub fn parse_header(data: &[u8]) -> Result<FPackageFileSummary, ScanError> {
 
     // NameTable location
     let name_count = cur.read_i32::<LittleEndian>().map_err(map_io)?;
+    if name_count < 0 {
+        return Err(ScanError::InvalidData("negative name_count".into()));
+    }
     let name_offset = cur.read_i32::<LittleEndian>().map_err(map_io)?;
 
     // SoftObjectPath list — added in UE5 version 1008
@@ -93,8 +96,14 @@ pub fn parse_header(data: &[u8]) -> Result<FPackageFileSummary, ScanError> {
 
     // Export and Import table locations
     let export_count = cur.read_i32::<LittleEndian>().map_err(map_io)?;
+    if export_count < 0 {
+        return Err(ScanError::InvalidData("negative export_count".into()));
+    }
     let export_offset = cur.read_i32::<LittleEndian>().map_err(map_io)?;
     let import_count = cur.read_i32::<LittleEndian>().map_err(map_io)?;
+    if import_count < 0 {
+        return Err(ScanError::InvalidData("negative import_count".into()));
+    }
     let import_offset = cur.read_i32::<LittleEndian>().map_err(map_io)?;
 
     let depends_offset = cur.read_i32::<LittleEndian>().map_err(map_io)?;
@@ -209,5 +218,28 @@ mod tests {
         assert!(header.name_offset < data.len() as u64);
         assert!(header.import_offset < data.len() as u64);
         assert!(header.export_offset < data.len() as u64);
+    }
+
+    #[test]
+    fn parse_header_should_return_invalid_data_when_name_count_is_negative() {
+        let mut data = read_fixture("valid/BP_Simple.uasset");
+        // name_count is the i32 at byte offset 272 (see parse_header_should_succeed_for_bp_simple_fixture)
+        data[272..276].copy_from_slice(&(-1i32).to_le_bytes());
+        assert!(matches!(
+            parse_header(&data),
+            Err(ScanError::InvalidData(_))
+        ));
+    }
+
+    #[test]
+    fn parse_header_should_return_invalid_data_when_export_count_is_negative() {
+        let mut data = read_fixture("valid/BP_Simple.uasset");
+        // export_count is at byte offset 333; identified by the unique 20-byte sequence
+        // [export_count=12, export_offset=4133, import_count=22, import_offset=3253, depends_offset=5477]
+        data[333..337].copy_from_slice(&(-1i32).to_le_bytes());
+        assert!(matches!(
+            parse_header(&data),
+            Err(ScanError::InvalidData(_))
+        ));
     }
 }
