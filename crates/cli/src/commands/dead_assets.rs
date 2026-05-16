@@ -22,6 +22,7 @@ struct DeadAssetsOutput {
 pub fn handle_dead_assets(
     _project_dir: &Path,
     asset_type_filter: Option<&str>,
+    sort_by_size: bool,
     db_path: &Path,
     format: &FormatKind,
 ) -> anyhow::Result<i32> {
@@ -35,7 +36,7 @@ pub fn handle_dead_assets(
         .map(|n| (&n.path, n.asset_type.to_string()))
         .collect();
 
-    let entries: Vec<DeadAssetEntry> = dead_paths
+    let mut entries: Vec<DeadAssetEntry> = dead_paths
         .iter()
         .filter(|path| {
             asset_type_filter
@@ -60,6 +61,10 @@ pub fn handle_dead_assets(
             }
         })
         .collect();
+
+    if sort_by_size {
+        entries.sort_unstable_by_key(|e| std::cmp::Reverse(e.file_size));
+    }
 
     let count = entries.len();
     let total_size_bytes: u64 = entries.iter().map(|e| e.file_size).sum();
@@ -166,7 +171,8 @@ mod tests {
         ));
         let _ = std::fs::remove_file(&db_path);
 
-        let result = handle_dead_assets(Path::new("/proj"), None, &db_path, &FormatKind::Text);
+        let result =
+            handle_dead_assets(Path::new("/proj"), None, false, &db_path, &FormatKind::Text);
         assert!(result.is_err(), "missing DB should return an error");
     }
 
@@ -178,7 +184,7 @@ mod tests {
         let db_path = dir.join("test.db");
         asset_db::AssetDb::open(&db_path).unwrap();
 
-        let result = handle_dead_assets(&dir, None, &db_path, &FormatKind::Text).unwrap();
+        let result = handle_dead_assets(&dir, None, false, &db_path, &FormatKind::Text).unwrap();
         assert_eq!(result, 0);
         let _ = std::fs::remove_dir_all(&dir);
     }
@@ -212,7 +218,7 @@ mod tests {
             .unwrap();
         }
 
-        let result = handle_dead_assets(&dir, None, &db_path, &FormatKind::Text).unwrap();
+        let result = handle_dead_assets(&dir, None, false, &db_path, &FormatKind::Text).unwrap();
         assert_eq!(result, 0, "all nodes in a cycle have in_degree >= 1");
         let _ = std::fs::remove_dir_all(&dir);
     }
@@ -236,7 +242,7 @@ mod tests {
             .unwrap();
         }
 
-        let result = handle_dead_assets(&dir, None, &db_path, &FormatKind::Text).unwrap();
+        let result = handle_dead_assets(&dir, None, false, &db_path, &FormatKind::Text).unwrap();
         assert_eq!(result, 1, "/Game/Orphan has no incoming edges");
         let _ = std::fs::remove_dir_all(&dir);
     }
@@ -263,7 +269,8 @@ mod tests {
         }
 
         let result =
-            handle_dead_assets(&dir, Some("Texture2D"), &db_path, &FormatKind::Text).unwrap();
+            handle_dead_assets(&dir, Some("Texture2D"), false, &db_path, &FormatKind::Text)
+                .unwrap();
         assert_eq!(
             result, 0,
             "dead asset is Blueprint, filter is Texture2D — no match"
@@ -302,7 +309,8 @@ mod tests {
         }
 
         let result =
-            handle_dead_assets(&dir, Some("Texture2D"), &db_path, &FormatKind::Text).unwrap();
+            handle_dead_assets(&dir, Some("Texture2D"), false, &db_path, &FormatKind::Text)
+                .unwrap();
         assert_eq!(result, 1, "Texture2D dead asset matches the filter");
         let _ = std::fs::remove_dir_all(&dir);
     }
@@ -317,7 +325,7 @@ mod tests {
         let db_path = dir.join("test.db");
         asset_db::AssetDb::open(&db_path).unwrap();
 
-        let result = handle_dead_assets(&dir, None, &db_path, &FormatKind::Json).unwrap();
+        let result = handle_dead_assets(&dir, None, false, &db_path, &FormatKind::Json).unwrap();
         assert_eq!(result, 0);
         let _ = std::fs::remove_dir_all(&dir);
     }
@@ -343,8 +351,75 @@ mod tests {
             .unwrap();
         }
 
-        let result = handle_dead_assets(&dir, None, &db_path, &FormatKind::Json).unwrap();
+        let result = handle_dead_assets(&dir, None, false, &db_path, &FormatKind::Json).unwrap();
         assert_eq!(result, 1, "JSON format exits 1 when dead assets are found");
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn handle_dead_assets_sort_by_size_should_return_1_when_dead_assets_exist() {
+        let dir = std::env::temp_dir().join(format!(
+            "uasset_lens_dead22_sort_size_{}",
+            std::process::id()
+        ));
+        std::fs::create_dir_all(&dir).unwrap();
+        let db_path = dir.join("test.db");
+
+        {
+            let mut db = asset_db::AssetDb::open(&db_path).unwrap();
+            db.upsert_all(&[
+                make_meta(
+                    "/Game/Small",
+                    dir.join("Small.uasset"),
+                    AssetType::Blueprint,
+                    1024,
+                    vec![],
+                ),
+                make_meta(
+                    "/Game/Large",
+                    dir.join("Large.uasset"),
+                    AssetType::Blueprint,
+                    8192,
+                    vec![],
+                ),
+                make_meta(
+                    "/Game/Medium",
+                    dir.join("Medium.uasset"),
+                    AssetType::Blueprint,
+                    4096,
+                    vec![],
+                ),
+            ])
+            .unwrap();
+        }
+
+        let result = handle_dead_assets(&dir, None, true, &db_path, &FormatKind::Text).unwrap();
+        assert_eq!(result, 1, "dead assets found when sort_by_size is true");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn entries_sort_by_size_should_order_largest_first() {
+        let mut entries = [
+            DeadAssetEntry {
+                path: "/Game/Small".to_owned(),
+                asset_type: "Blueprint".to_owned(),
+                file_size: 1024,
+            },
+            DeadAssetEntry {
+                path: "/Game/Large".to_owned(),
+                asset_type: "Blueprint".to_owned(),
+                file_size: 8192,
+            },
+            DeadAssetEntry {
+                path: "/Game/Medium".to_owned(),
+                asset_type: "Blueprint".to_owned(),
+                file_size: 4096,
+            },
+        ];
+        entries.sort_unstable_by_key(|e| std::cmp::Reverse(e.file_size));
+        assert_eq!(entries[0].file_size, 8192);
+        assert_eq!(entries[1].file_size, 4096);
+        assert_eq!(entries[2].file_size, 1024);
     }
 }
