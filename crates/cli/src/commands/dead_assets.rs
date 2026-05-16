@@ -13,6 +13,12 @@ struct DeadAssetEntry {
     file_size: u64,
 }
 
+#[derive(serde::Serialize)]
+struct DeadAssetsOutput {
+    assets: Vec<DeadAssetEntry>,
+    total_size_bytes: u64,
+}
+
 pub fn handle_dead_assets(
     _project_dir: &Path,
     asset_type_filter: Option<&str>,
@@ -55,11 +61,18 @@ pub fn handle_dead_assets(
         })
         .collect();
 
+    let count = entries.len();
+    let total_size_bytes: u64 = entries.iter().map(|e| e.file_size).sum();
+
     match format {
         FormatKind::Json => {
+            let output = DeadAssetsOutput {
+                assets: entries,
+                total_size_bytes,
+            };
             println!(
                 "{}",
-                serde_json::to_string_pretty(&entries)
+                serde_json::to_string_pretty(&output)
                     .context("Failed to serialize dead assets output to JSON")?
             );
         }
@@ -72,14 +85,26 @@ pub fn handle_dead_assets(
                     crate::format_size(entry.file_size)
                 );
             }
-            if !entries.is_empty() {
+            if count > 0 {
                 println!();
             }
-            println!("  Dead Assets ({} found)", entries.len());
+            println!("  {}", format_dead_summary(count, total_size_bytes));
         }
     }
 
-    if entries.is_empty() { Ok(0) } else { Ok(1) }
+    if count == 0 { Ok(0) } else { Ok(1) }
+}
+
+fn format_dead_summary(count: usize, total_bytes: u64) -> String {
+    if count == 0 {
+        "Dead Assets (0 found)".to_owned()
+    } else {
+        format!(
+            "Dead Assets ({} found, {} wasted)",
+            count,
+            crate::format_size(total_bytes)
+        )
+    }
 }
 
 #[cfg(test)]
@@ -87,6 +112,51 @@ mod tests {
     use super::*;
     use crate::commands::make_meta;
     use shared::{AssetPath, AssetType};
+
+    #[test]
+    fn format_dead_summary_should_show_count_only_when_zero() {
+        assert_eq!(format_dead_summary(0, 0), "Dead Assets (0 found)");
+    }
+
+    #[test]
+    fn format_dead_summary_should_include_size_when_assets_found() {
+        assert_eq!(
+            format_dead_summary(3, 1024 * 1024),
+            "Dead Assets (3 found, 1.0 MB wasted)"
+        );
+    }
+
+    #[test]
+    fn dead_assets_output_should_serialize_total_size_bytes_field() {
+        let output = DeadAssetsOutput {
+            assets: vec![],
+            total_size_bytes: 347_200_000,
+        };
+        let json = serde_json::to_string(&output).unwrap();
+        assert!(
+            json.contains("\"total_size_bytes\""),
+            "JSON must contain total_size_bytes key"
+        );
+        assert!(
+            json.contains("347200000"),
+            "JSON must contain the correct total_size_bytes value"
+        );
+    }
+
+    #[test]
+    fn dead_assets_output_should_serialize_assets_array() {
+        let output = DeadAssetsOutput {
+            assets: vec![DeadAssetEntry {
+                path: "/Game/A".to_owned(),
+                asset_type: "Blueprint".to_owned(),
+                file_size: 4096,
+            }],
+            total_size_bytes: 4096,
+        };
+        let json = serde_json::to_string(&output).unwrap();
+        assert!(json.contains("\"assets\""), "JSON must contain assets key");
+        assert!(json.contains("/Game/A"));
+    }
 
     #[test]
     fn handle_dead_assets_should_return_err_when_db_does_not_exist() {
