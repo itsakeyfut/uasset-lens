@@ -55,6 +55,9 @@ pub enum Commands {
         /// Filter by asset type (e.g. Texture2D, Blueprint)
         #[arg(long = "type")]
         asset_type: Option<String>,
+        /// Sort results by file size, largest first
+        #[arg(long)]
+        sort_by_size: bool,
     },
     /// Show which assets would break if the target asset were deleted or renamed
     Impact { asset_path: PathBuf },
@@ -150,11 +153,13 @@ fn dispatch(cli: &Cli) -> anyhow::Result<i32> {
         Commands::DeadAssets {
             project_dir,
             asset_type,
+            sort_by_size,
         } => {
             let db_path = resolve_db_path(project_dir, cli.db.as_deref());
             commands::dead_assets::handle_dead_assets(
                 project_dir,
                 asset_type.as_deref(),
+                *sort_by_size,
                 &db_path,
                 &cli.format,
             )
