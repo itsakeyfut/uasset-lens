@@ -2,7 +2,7 @@ use std::collections::{HashMap, HashSet, VecDeque};
 
 use petgraph::Direction;
 use petgraph::graph::{DiGraph, NodeIndex};
-use shared::{AssetPath, AssetType};
+use shared::{AssetPath, AssetType, is_ofpa_path};
 
 pub struct AssetNode {
     pub path: AssetPath,
@@ -129,6 +129,13 @@ impl DependencyGraph {
         petgraph::algo::tarjan_scc(&self.graph)
             .into_iter()
             .filter(|scc| scc.len() >= 2)
+            .filter(|scc| {
+                // OFPA (One File Per Actor) assets are loaded internally by the engine and
+                // form apparent cycles with their owning map; suppress any SCC that contains
+                // at least one OFPA path to avoid false-positive cycle reports.
+                !scc.iter()
+                    .any(|&idx| is_ofpa_path(self.graph[idx].path.as_str()))
+            })
             .map(|scc| {
                 scc.into_iter()
                     .map(|idx| self.graph[idx].path.clone()) // clone required: AssetPath is not Copy
@@ -475,6 +482,103 @@ mod tests {
         assert!(
             graph.find_cycles().is_empty(),
             "self-loop should not be reported as a cycle"
+        );
+    }
+
+    #[test]
+    fn find_cycles_should_exclude_scc_containing_external_actors_path() {
+        let graph = DependencyGraph::build(
+            vec![
+                node("/Game/Maps/MyMap"),
+                node("/Game/Maps/__ExternalActors__/MyMap/SomeActor"),
+            ],
+            vec![
+                (
+                    ap("/Game/Maps/MyMap"),
+                    ap("/Game/Maps/__ExternalActors__/MyMap/SomeActor"),
+                ),
+                (
+                    ap("/Game/Maps/__ExternalActors__/MyMap/SomeActor"),
+                    ap("/Game/Maps/MyMap"),
+                ),
+            ],
+        );
+
+        assert!(
+            graph.find_cycles().is_empty(),
+            "OFPA ExternalActors cycle should be suppressed"
+        );
+    }
+
+    #[test]
+    fn find_cycles_should_exclude_scc_containing_external_objects_path() {
+        let graph = DependencyGraph::build(
+            vec![
+                node("/Game/Maps/MyMap"),
+                node("/Game/Maps/__ExternalObjects__/MyMap/SomeObject"),
+            ],
+            vec![
+                (
+                    ap("/Game/Maps/MyMap"),
+                    ap("/Game/Maps/__ExternalObjects__/MyMap/SomeObject"),
+                ),
+                (
+                    ap("/Game/Maps/__ExternalObjects__/MyMap/SomeObject"),
+                    ap("/Game/Maps/MyMap"),
+                ),
+            ],
+        );
+
+        assert!(
+            graph.find_cycles().is_empty(),
+            "OFPA ExternalObjects cycle should be suppressed"
+        );
+    }
+
+    #[test]
+    fn find_cycles_should_still_report_genuine_cycle_without_ofpa_paths() {
+        let graph = DependencyGraph::build(
+            vec![node("/Game/A"), node("/Game/B")],
+            vec![
+                (ap("/Game/A"), ap("/Game/B")),
+                (ap("/Game/B"), ap("/Game/A")),
+            ],
+        );
+
+        let cycles = graph.find_cycles();
+        assert_eq!(
+            cycles.len(),
+            1,
+            "genuine cycle without OFPA should be reported"
+        );
+        assert_eq!(cycles[0].len(), 2);
+    }
+
+    #[test]
+    fn find_cycles_should_exclude_mixed_ofpa_and_normal_scc() {
+        // any() suppresses the whole SCC if at least one node is OFPA, even if others are normal assets.
+        let graph = DependencyGraph::build(
+            vec![
+                node("/Game/Maps/MyMap"),
+                node("/Game/Maps/__ExternalActors__/MyMap/SomeActor"),
+                node("/Game/BP_NormalBlueprint"),
+            ],
+            vec![
+                (
+                    ap("/Game/Maps/MyMap"),
+                    ap("/Game/Maps/__ExternalActors__/MyMap/SomeActor"),
+                ),
+                (
+                    ap("/Game/Maps/__ExternalActors__/MyMap/SomeActor"),
+                    ap("/Game/BP_NormalBlueprint"),
+                ),
+                (ap("/Game/BP_NormalBlueprint"), ap("/Game/Maps/MyMap")),
+            ],
+        );
+
+        assert!(
+            graph.find_cycles().is_empty(),
+            "mixed OFPA+normal SCC should be suppressed"
         );
     }
 }
