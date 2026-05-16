@@ -96,6 +96,8 @@ pub fn handle_scan(
         .collect();
     stale.sort(); // deterministic output order
 
+    let total_file_count = all_files.len();
+
     let paths_to_scan: Vec<PathBuf> = if full_scan {
         all_files.into_iter().map(|(p, _)| p).collect()
     } else {
@@ -104,9 +106,13 @@ pub fn handle_scan(
     };
 
     eprintln!(
-        "Scanning {}... ({} files)",
-        content_root.display(),
-        paths_to_scan.len()
+        "{}",
+        scan_header(
+            &content_root,
+            full_scan,
+            total_file_count,
+            paths_to_scan.len()
+        )
     );
 
     let result = scanner::scan_files(&paths_to_scan, &content_root);
@@ -240,6 +246,18 @@ pub fn handle_scan(
     if removed_count > 0 { Ok(1) } else { Ok(0) }
 }
 
+fn scan_header(content_root: &Path, full_scan: bool, total: usize, changed: usize) -> String {
+    if !full_scan && changed == 0 {
+        format!(
+            "Scanning {}... ({} assets up to date, 0 changed)",
+            content_root.display(),
+            total
+        )
+    } else {
+        format!("Scanning {}... ({} files)", content_root.display(), changed)
+    }
+}
+
 fn sym(plain: &'static str, colored: &'static str, use_color: bool) -> &'static str {
     if use_color { colored } else { plain }
 }
@@ -248,6 +266,33 @@ fn sym(plain: &'static str, colored: &'static str, use_color: bool) -> &'static 
 mod tests {
     use super::*;
     use shared::{AssetPath, AssetType};
+
+    #[test]
+    fn scan_header_should_show_files_when_changes_exist() {
+        let root = Path::new("/proj/Content");
+        assert_eq!(
+            scan_header(root, false, 100, 5),
+            "Scanning /proj/Content... (5 files)"
+        );
+    }
+
+    #[test]
+    fn scan_header_should_show_up_to_date_when_no_changes_and_not_full_scan() {
+        let root = Path::new("/proj/Content");
+        assert_eq!(
+            scan_header(root, false, 881, 0),
+            "Scanning /proj/Content... (881 assets up to date, 0 changed)"
+        );
+    }
+
+    #[test]
+    fn scan_header_should_show_files_when_full_scan_even_if_changed_is_zero() {
+        let root = Path::new("/proj/Content");
+        assert_eq!(
+            scan_header(root, true, 100, 100),
+            "Scanning /proj/Content... (100 files)"
+        );
+    }
 
     fn make_meta(asset_path: &str, file_path: PathBuf, mtime: u64) -> scanner::AssetMetadata {
         scanner::AssetMetadata {
