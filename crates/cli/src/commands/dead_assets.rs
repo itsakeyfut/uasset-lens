@@ -400,7 +400,7 @@ mod tests {
 
     #[test]
     fn entries_sort_by_size_should_order_largest_first() {
-        let mut entries = vec![
+        let mut entries = [
             DeadAssetEntry {
                 path: "/Game/Small".to_owned(),
                 asset_type: "Blueprint".to_owned(),
