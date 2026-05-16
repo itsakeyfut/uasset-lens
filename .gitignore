@@ -1,4 +1,7 @@
+justfile
+
 docs/purpose.md
+docs/plan.md
 
 SESSION.md
 
@@ -7,3 +10,5 @@ CLAUDE.md
 
 target/
 .uasset-lens/
+
+ref/

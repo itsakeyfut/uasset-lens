@@ -1,7 +1,39 @@
 # uasset-lens
 
-Unreal Engine 5 asset static analyzer — a fast, CLI-first tool for auditing asset health,
-detecting circular dependencies, finding dead assets, and enforcing quality gates in CI.
+**Enforce asset quality gates in CI — without opening the Unreal Editor.**
+
+uasset-lens is a fast, CLI-first static analyzer for Unreal Engine 5 `.uasset` / `.umap`
+files. It reads the binary format directly, so it runs in seconds on any CI server with no
+editor process, no project compile, and no GPU required.
+
+---
+
+## Why uasset-lens?
+
+Unreal Engine's built-in tools (Reference Viewer, Size Map, Data Validation) are powerful,
+but they share a fundamental limitation: **they require the editor to be running**. This
+makes them unsuitable for CI pipelines, PR automation, and long-term trend tracking.
+
+uasset-lens fills three gaps that UE leaves open:
+
+### 1. Quality tracking over time
+
+UE shows you the current state. It cannot tell you that Blueprint complexity increased in
+today's PR, or that total texture size has grown 20% over the past month. uasset-lens
+gives assets the same kind of static-analysis feedback loop that linters give code.
+
+### 2. Editor-free, CI-native execution
+
+A large UE project takes 2–5 minutes to open in the editor. uasset-lens scans 1,000
+assets in under 5 seconds by parsing `.uasset` binaries directly. It runs on any machine
+with no GPU, no project build, and no editor license — including GitHub Actions runners.
+
+### 3. Soft-reference visibility
+
+UE's Reference Viewer only follows hard references. Assets loaded via `DataTable` rows,
+`AnimMontage` slots, or `TSoftObjectPtr` fields appear as unreferenced, causing false
+positives in dead-asset detection and incomplete dependency graphs. uasset-lens tracks
+these soft references explicitly.
 
 ---
 
