@@ -55,7 +55,7 @@ impl AssetDb {
             tx.execute("DELETE FROM dependencies WHERE from_id = ?1", [id])?;
             for dep in &meta.dependencies {
                 tx.execute(
-                    "INSERT INTO dependencies (from_id, to_path) VALUES (?1, ?2)",
+                    "INSERT OR IGNORE INTO dependencies (from_id, to_path) VALUES (?1, ?2)",
                     rusqlite::params![id, dep.as_str()],
                 )?;
             }
@@ -80,9 +80,11 @@ impl AssetDb {
     ) -> Result<(), DbError> {
         self.conn
             .execute("DELETE FROM dependencies WHERE from_id = ?1", [from_id])?;
+        // OR IGNORE: a single .uasset can reference the same package via multiple
+        // import entries; duplicate edges are silently skipped.
         let mut stmt = self
             .conn
-            .prepare("INSERT INTO dependencies (from_id, to_path) VALUES (?1, ?2)")?;
+            .prepare("INSERT OR IGNORE INTO dependencies (from_id, to_path) VALUES (?1, ?2)")?;
         for path in to_paths {
             stmt.execute(rusqlite::params![from_id, path.as_str()])?;
         }
