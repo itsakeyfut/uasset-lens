@@ -13,6 +13,13 @@ struct FindEntry {
     file_size: u64,
 }
 
+#[derive(serde::Serialize)]
+struct FindOutput {
+    assets: Vec<FindEntry>,
+    total_count: usize,
+    total_bytes: u64,
+}
+
 #[allow(clippy::too_many_arguments)]
 pub fn handle_find(
     _project_dir: &Path,
@@ -21,6 +28,9 @@ pub fn handle_find(
     smaller_than: Option<u64>,
     unreferenced: bool,
     path_pattern: Option<&str>,
+    sort_by_size: bool,
+    refs: Option<&str>,
+    deps: Option<&str>,
     db_path: &Path,
     format: &FormatKind,
 ) -> anyhow::Result<i32> {
@@ -40,11 +50,41 @@ pub fn handle_find(
 
     let mut results = db.find_assets(&filter).context("Failed to query assets")?;
 
-    if unreferenced {
-        let graph = crate::load_graph(&db)?;
-        let dead: HashSet<shared::AssetPath> =
-            dead_asset_detector::detect(&graph).into_iter().collect();
+    let graph = if unreferenced || refs.is_some() || deps.is_some() {
+        Some(crate::load_graph(&db)?)
+    } else {
+        None
+    };
+
+    if unreferenced && let Some(g) = &graph {
+        let dead: HashSet<shared::AssetPath> = dead_asset_detector::detect(g).into_iter().collect();
         results.retain(|r| dead.contains(&r.asset_path));
+    }
+
+    if let Some(refs_path) = refs {
+        let target = shared::AssetPath::new(refs_path).map_err(|e| anyhow::anyhow!("{e}"))?;
+        if let Some(g) = &graph {
+            let impact = g.find_impact(&target);
+            let ref_set: HashSet<shared::AssetPath> =
+                impact.direct.into_iter().chain(impact.transitive).collect();
+            results.retain(|r| ref_set.contains(&r.asset_path));
+        }
+    }
+
+    if let Some(deps_path) = deps {
+        let target = shared::AssetPath::new(deps_path).map_err(|e| anyhow::anyhow!("{e}"))?;
+        if let Some(g) = &graph {
+            let dep_set: HashSet<shared::AssetPath> = g
+                .dependencies_of(&target)
+                .into_iter()
+                .map(|(p, _)| p)
+                .collect();
+            results.retain(|r| dep_set.contains(&r.asset_path));
+        }
+    }
+
+    if sort_by_size {
+        results.sort_by_key(|r| std::cmp::Reverse(r.file_size));
     }
 
     let entries: Vec<FindEntry> = results
@@ -56,11 +96,18 @@ pub fn handle_find(
         })
         .collect();
 
+    let total_bytes: u64 = entries.iter().map(|e| e.file_size).sum();
+
     match format {
         FormatKind::Json => {
+            let out = FindOutput {
+                total_count: entries.len(),
+                total_bytes,
+                assets: entries,
+            };
             println!(
                 "{}",
-                serde_json::to_string_pretty(&entries)
+                serde_json::to_string_pretty(&out)
                     .context("Failed to serialize find output to JSON")?
             );
         }
@@ -77,6 +124,12 @@ pub fn handle_find(
                     crate::format_size(entry.file_size)
                 );
             }
+            println!();
+            println!(
+                "  {} assets found  (total {})",
+                entries.len(),
+                crate::format_size(total_bytes)
+            );
         }
     }
 
@@ -104,6 +157,9 @@ mod tests {
             None,
             false,
             None,
+            false,
+            None,
+            None,
             &db_path,
             &FormatKind::Text,
         );
@@ -124,6 +180,9 @@ mod tests {
             None,
             None,
             false,
+            None,
+            false,
+            None,
             None,
             &db_path,
             &FormatKind::Text,
@@ -158,6 +217,9 @@ mod tests {
             None,
             None,
             false,
+            None,
+            false,
+            None,
             None,
             &db_path,
             &FormatKind::Text,
@@ -201,6 +263,9 @@ mod tests {
             None,
             None,
             false,
+            None,
+            false,
+            None,
             None,
             &db_path,
             &FormatKind::Text,
@@ -254,6 +319,9 @@ mod tests {
             None,
             true,
             None,
+            false,
+            None,
+            None,
             &db_path,
             &FormatKind::Text,
         )
@@ -287,6 +355,9 @@ mod tests {
             None,
             None,
             false,
+            None,
+            false,
+            None,
             None,
             &db_path,
             &FormatKind::Json,
@@ -392,6 +463,9 @@ mod tests {
             None,
             false,
             None,
+            false,
+            None,
+            None,
             &db_path,
             &FormatKind::Text,
         )
@@ -434,6 +508,9 @@ mod tests {
             None,
             Some(1024),
             false,
+            None,
+            false,
+            None,
             None,
             &db_path,
             &FormatKind::Text,
@@ -478,11 +555,310 @@ mod tests {
             None,
             false,
             Some("**/Characters/**"),
+            false,
+            None,
+            None,
             &db_path,
             &FormatKind::Text,
         )
         .unwrap();
         assert_eq!(result, 0, "--path pattern → exit 0");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn handle_find_sort_by_size_should_return_0_and_order_results_largest_first() {
+        let dir =
+            std::env::temp_dir().join(format!("uasset_lens_find28_sort_{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let db_path = dir.join("test.db");
+
+        {
+            let mut db = asset_db::AssetDb::open(&db_path).unwrap();
+            db.upsert_all(&[
+                make_meta(
+                    "/Game/Small",
+                    dir.join("Small.uasset"),
+                    AssetType::Texture2D,
+                    512,
+                    vec![],
+                ),
+                make_meta(
+                    "/Game/Large",
+                    dir.join("Large.uasset"),
+                    AssetType::Texture2D,
+                    8192,
+                    vec![],
+                ),
+                make_meta(
+                    "/Game/Medium",
+                    dir.join("Medium.uasset"),
+                    AssetType::Texture2D,
+                    2048,
+                    vec![],
+                ),
+            ])
+            .unwrap();
+        }
+
+        let result = handle_find(
+            &dir,
+            None,
+            None,
+            None,
+            false,
+            None,
+            true,
+            None,
+            None,
+            &db_path,
+            &FormatKind::Text,
+        )
+        .unwrap();
+        assert_eq!(result, 0, "--sort-by-size → exit 0");
+        // Verify sort order at the data layer: largest first
+        let db_verify = asset_db::AssetDb::open(&db_path).unwrap();
+        let no_filter = asset_db::AssetFilter {
+            asset_type: None,
+            min_size: None,
+            max_size: None,
+            path_pattern: None,
+        };
+        let mut rows = db_verify.find_assets(&no_filter).unwrap();
+        rows.sort_by_key(|r| std::cmp::Reverse(r.file_size));
+        assert_eq!(rows.len(), 3);
+        assert_eq!(rows[0].file_size, 8192, "largest first");
+        assert_eq!(rows[1].file_size, 2048, "medium second");
+        assert_eq!(rows[2].file_size, 512, "smallest last");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn handle_find_refs_should_return_0_filtering_to_referencing_assets() {
+        let dir =
+            std::env::temp_dir().join(format!("uasset_lens_find28_refs_{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let db_path = dir.join("test.db");
+
+        {
+            let mut db = asset_db::AssetDb::open(&db_path).unwrap();
+            // A and B both reference T; C does not.
+            db.upsert_all(&[
+                make_meta(
+                    "/Game/A",
+                    dir.join("A.uasset"),
+                    AssetType::Blueprint,
+                    1024,
+                    vec![AssetPath::new("/Game/T").unwrap()],
+                ),
+                make_meta(
+                    "/Game/B",
+                    dir.join("B.uasset"),
+                    AssetType::Blueprint,
+                    2048,
+                    vec![AssetPath::new("/Game/T").unwrap()],
+                ),
+                make_meta(
+                    "/Game/T",
+                    dir.join("T.uasset"),
+                    AssetType::Texture2D,
+                    4096,
+                    vec![],
+                ),
+                make_meta(
+                    "/Game/C",
+                    dir.join("C.uasset"),
+                    AssetType::Blueprint,
+                    512,
+                    vec![],
+                ),
+            ])
+            .unwrap();
+        }
+
+        let result = handle_find(
+            &dir,
+            None,
+            None,
+            None,
+            false,
+            None,
+            false,
+            Some("/Game/T"),
+            None,
+            &db_path,
+            &FormatKind::Text,
+        )
+        .unwrap();
+        assert_eq!(result, 0, "--refs → exit 0");
+        // Verify that find_impact correctly identifies all referencing assets
+        let db_verify = asset_db::AssetDb::open(&db_path).unwrap();
+        let graph = crate::load_graph(&db_verify).unwrap();
+        let target = AssetPath::new("/Game/T").unwrap();
+        let impact = graph.find_impact(&target);
+        let ref_set: std::collections::HashSet<AssetPath> =
+            impact.direct.into_iter().chain(impact.transitive).collect();
+        assert!(
+            ref_set.contains(&AssetPath::new("/Game/A").unwrap()),
+            "A references T"
+        );
+        assert!(
+            ref_set.contains(&AssetPath::new("/Game/B").unwrap()),
+            "B references T"
+        );
+        assert!(
+            !ref_set.contains(&AssetPath::new("/Game/C").unwrap()),
+            "C does not reference T"
+        );
+        assert!(
+            !ref_set.contains(&AssetPath::new("/Game/T").unwrap()),
+            "T itself is not in impact"
+        );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn handle_find_deps_should_return_0_filtering_to_dependency_assets() {
+        let dir =
+            std::env::temp_dir().join(format!("uasset_lens_find28_deps_{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let db_path = dir.join("test.db");
+
+        {
+            let mut db = asset_db::AssetDb::open(&db_path).unwrap();
+            // A depends on T and M.
+            db.upsert_all(&[
+                make_meta(
+                    "/Game/A",
+                    dir.join("A.uasset"),
+                    AssetType::Blueprint,
+                    1024,
+                    vec![
+                        AssetPath::new("/Game/T").unwrap(),
+                        AssetPath::new("/Game/M").unwrap(),
+                    ],
+                ),
+                make_meta(
+                    "/Game/T",
+                    dir.join("T.uasset"),
+                    AssetType::Texture2D,
+                    4096,
+                    vec![],
+                ),
+                make_meta(
+                    "/Game/M",
+                    dir.join("M.uasset"),
+                    AssetType::Blueprint,
+                    2048,
+                    vec![],
+                ),
+                make_meta(
+                    "/Game/Unrelated",
+                    dir.join("Unrelated.uasset"),
+                    AssetType::Blueprint,
+                    512,
+                    vec![],
+                ),
+            ])
+            .unwrap();
+        }
+
+        let result = handle_find(
+            &dir,
+            None,
+            None,
+            None,
+            false,
+            None,
+            false,
+            None,
+            Some("/Game/A"),
+            &db_path,
+            &FormatKind::Text,
+        )
+        .unwrap();
+        assert_eq!(result, 0, "--deps → exit 0");
+        // Verify that dependencies_of returns exactly T and M, not Unrelated
+        let db_verify = asset_db::AssetDb::open(&db_path).unwrap();
+        let graph = crate::load_graph(&db_verify).unwrap();
+        let target = AssetPath::new("/Game/A").unwrap();
+        let dep_paths: std::collections::HashSet<AssetPath> = graph
+            .dependencies_of(&target)
+            .into_iter()
+            .map(|(p, _)| p)
+            .collect();
+        assert!(
+            dep_paths.contains(&AssetPath::new("/Game/T").unwrap()),
+            "A depends on T"
+        );
+        assert!(
+            dep_paths.contains(&AssetPath::new("/Game/M").unwrap()),
+            "A depends on M"
+        );
+        assert!(
+            !dep_paths.contains(&AssetPath::new("/Game/Unrelated").unwrap()),
+            "Unrelated is not a dependency of A"
+        );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn handle_find_json_should_include_total_count_and_total_bytes() {
+        let dir = std::env::temp_dir().join(format!(
+            "uasset_lens_find28_json_totals_{}",
+            std::process::id()
+        ));
+        std::fs::create_dir_all(&dir).unwrap();
+        let db_path = dir.join("test.db");
+
+        {
+            let mut db = asset_db::AssetDb::open(&db_path).unwrap();
+            db.upsert_all(&[
+                make_meta(
+                    "/Game/A",
+                    dir.join("A.uasset"),
+                    AssetType::Texture2D,
+                    1024,
+                    vec![],
+                ),
+                make_meta(
+                    "/Game/B",
+                    dir.join("B.uasset"),
+                    AssetType::Texture2D,
+                    2048,
+                    vec![],
+                ),
+            ])
+            .unwrap();
+        }
+
+        let result = handle_find(
+            &dir,
+            None,
+            None,
+            None,
+            false,
+            None,
+            false,
+            None,
+            None,
+            &db_path,
+            &FormatKind::Json,
+        )
+        .unwrap();
+        assert_eq!(result, 0, "JSON with totals → exit 0");
+        // Verify the values that populate total_count and total_bytes in JSON output
+        let db_verify = asset_db::AssetDb::open(&db_path).unwrap();
+        let no_filter = asset_db::AssetFilter {
+            asset_type: None,
+            min_size: None,
+            max_size: None,
+            path_pattern: None,
+        };
+        let rows = db_verify.find_assets(&no_filter).unwrap();
+        assert_eq!(rows.len(), 2, "total_count should be 2");
+        let total_bytes: u64 = rows.iter().map(|r| r.file_size).sum();
+        assert_eq!(total_bytes, 1024 + 2048, "total_bytes should be 3072");
         let _ = std::fs::remove_dir_all(&dir);
     }
 }

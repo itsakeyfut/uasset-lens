@@ -112,6 +112,15 @@ pub enum Commands {
         /// Filter by glob path pattern (e.g. "**/Characters/**")
         #[arg(long)]
         path: Option<String>,
+        /// Sort results by file size, largest first
+        #[arg(long)]
+        sort_by_size: bool,
+        /// Show only assets that reference this game path (direct + transitive)
+        #[arg(long)]
+        refs: Option<String>,
+        /// Show only assets that this game path directly depends on
+        #[arg(long)]
+        deps: Option<String>,
     },
     /// Show a complexity ranking of Blueprint assets
     Blueprint { project_dir: PathBuf },
@@ -284,6 +293,9 @@ fn dispatch(cli: &Cli) -> anyhow::Result<i32> {
             smaller_than,
             unreferenced,
             path,
+            sort_by_size,
+            refs,
+            deps,
         } => {
             let db_path = resolve_db_path(project_dir, cli.db.as_deref());
             commands::find::handle_find(
@@ -293,6 +305,9 @@ fn dispatch(cli: &Cli) -> anyhow::Result<i32> {
                 *smaller_than,
                 *unreferenced,
                 path.as_deref(),
+                *sort_by_size,
+                refs.as_deref(),
+                deps.as_deref(),
                 &db_path,
                 &cli.format,
             )
