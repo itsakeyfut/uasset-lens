@@ -1,4 +1,4 @@
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::io::{self, IsTerminal, Write};
 use std::path::{Path, PathBuf};
 use std::time::UNIX_EPOCH;
@@ -23,9 +23,36 @@ struct SkippedEntry {
     reason: String,
 }
 
+#[derive(serde::Serialize)]
+struct BpRegressionEntry {
+    path: String,
+    old_node_count: u32,
+    new_node_count: u32,
+    old_event_tick_count: u32,
+    new_event_tick_count: u32,
+}
+
+#[derive(serde::Serialize)]
+struct SizeIncreaseEntry {
+    path: String,
+    old_size: u64,
+    new_size: u64,
+    pct_increase: u64,
+}
+
+#[derive(serde::Serialize)]
+struct ScanDiffOutput {
+    prev_scanned_at: Option<u64>,
+    new_assets: Vec<String>,
+    deleted_assets: Vec<String>,
+    regressions: Vec<BpRegressionEntry>,
+    size_increases: Vec<SizeIncreaseEntry>,
+}
+
 pub fn handle_scan(
     project_dir: &Path,
     full_scan: bool,
+    diff: bool,
     db_path: &Path,
     format: &FormatKind,
     yes: bool,
@@ -50,6 +77,25 @@ pub fn handle_scan(
 
     let config = crate::config::load_config(project_dir);
     let excluded = config.scan.exclude_paths;
+
+    // Capture per-asset metrics before upsert so we can compute the diff afterwards.
+    let (old_bp, old_sizes) = if diff {
+        let bp: HashMap<shared::AssetPath, (u32, u32)> = db
+            .all_blueprint_metrics()
+            .context("Failed to read blueprint metrics from database")?
+            .into_iter()
+            .map(|r| (r.asset_path, (r.node_count, r.event_tick_count)))
+            .collect();
+        let sizes: HashMap<shared::AssetPath, u64> = db
+            .all_assets()
+            .context("Failed to read assets from database")?
+            .into_iter()
+            .map(|r| (r.asset_path, r.file_size))
+            .collect();
+        (bp, sizes)
+    } else {
+        (HashMap::new(), HashMap::new())
+    };
 
     let all_files: Vec<(PathBuf, u64)> = WalkDir::new(project_dir)
         .into_iter()
@@ -202,6 +248,111 @@ pub fn handle_scan(
         .context("Failed to record scan snapshot")?;
     let assets_total = db_files.len() + new_count - removed_count;
 
+    if diff {
+        // snaps[0] = current, snaps[1] = previous (DESC order)
+        let prev_scanned_at = db
+            .recent_snapshots(2)
+            .context("Failed to read scan history")?
+            .into_iter()
+            .nth(1)
+            .map(|s| s.scanned_at);
+
+        let threshold = config.diff.size_increase_threshold_pct;
+
+        let regressions = compute_regressions(result.assets.iter(), &old_bp);
+        let size_increases = compute_size_increases(result.assets.iter(), &old_sizes, threshold);
+
+        let new_asset_paths: Vec<String> = result
+            .assets
+            .iter()
+            .filter(|a| !db_files.contains(&a.file_path))
+            .map(|a| a.asset_path.as_str().to_owned())
+            .collect();
+
+        let deleted_asset_paths: Vec<String> = stale
+            .iter()
+            .filter_map(|p| shared::AssetPath::from_fs_path(&content_root, p).ok())
+            .map(|ap| ap.as_str().to_owned())
+            .collect();
+
+        let has_regressions = !regressions.is_empty();
+
+        match format {
+            FormatKind::Json => {
+                let out = ScanDiffOutput {
+                    prev_scanned_at,
+                    new_assets: new_asset_paths,
+                    deleted_assets: deleted_asset_paths,
+                    regressions,
+                    size_increases,
+                };
+                println!(
+                    "{}",
+                    serde_json::to_string_pretty(&out)
+                        .context("Failed to serialize diff output to JSON")?
+                );
+            }
+            FormatKind::Text => {
+                println!();
+                match prev_scanned_at {
+                    Some(ts) => println!("Diff vs previous scan ({}):", format_utc(ts)),
+                    None => println!("Diff: (no previous scan to compare against)"),
+                }
+                if !new_asset_paths.is_empty() {
+                    println!("  + {} new asset(s):", new_asset_paths.len());
+                    for p in &new_asset_paths {
+                        println!("      {p}");
+                    }
+                }
+                if !deleted_asset_paths.is_empty() {
+                    println!("  - {} deleted asset(s):", deleted_asset_paths.len());
+                    for p in &deleted_asset_paths {
+                        println!("      {p}");
+                    }
+                }
+                if !regressions.is_empty() {
+                    println!(
+                        "  {} {} blueprint(s) regressed (node count increased):",
+                        sym("!", "\x1b[31m!\x1b[0m", use_color),
+                        regressions.len()
+                    );
+                    for r in &regressions {
+                        let node_delta = r.new_node_count - r.old_node_count;
+                        let tick_delta =
+                            r.new_event_tick_count as i64 - r.old_event_tick_count as i64;
+                        let tick_suffix = if tick_delta > 0 {
+                            format!("  [EventTick +{tick_delta}]")
+                        } else {
+                            String::new()
+                        };
+                        println!(
+                            "      {}  {} → {} nodes  (+{node_delta}){tick_suffix}",
+                            r.path, r.old_node_count, r.new_node_count
+                        );
+                    }
+                }
+                if !size_increases.is_empty() {
+                    println!(
+                        "  ^ {} asset(s) grew by ≥{}%:",
+                        size_increases.len(),
+                        threshold
+                    );
+                    for s in &size_increases {
+                        println!(
+                            "      {}  {} → {} (+{}%)",
+                            s.path,
+                            crate::format_size(s.old_size),
+                            crate::format_size(s.new_size),
+                            s.pct_increase
+                        );
+                    }
+                }
+            }
+        }
+
+        return if has_regressions { Ok(1) } else { Ok(0) };
+    }
+
     match format {
         FormatKind::Json => {
             let skipped_entries: Vec<SkippedEntry> = result
@@ -264,6 +415,107 @@ fn sym(plain: &'static str, colored: &'static str, use_color: bool) -> &'static 
     if use_color { colored } else { plain }
 }
 
+fn compute_regressions<'a>(
+    assets: impl Iterator<Item = &'a scanner::AssetMetadata>,
+    old_bp: &HashMap<shared::AssetPath, (u32, u32)>,
+) -> Vec<BpRegressionEntry> {
+    let mut v: Vec<BpRegressionEntry> = assets
+        .filter_map(|a| {
+            let bm = a.blueprint_metrics.as_ref()?;
+            let &(old_nodes, old_tick) = old_bp.get(&a.asset_path)?;
+            if bm.node_count > old_nodes {
+                Some(BpRegressionEntry {
+                    path: a.asset_path.as_str().to_owned(),
+                    old_node_count: old_nodes,
+                    new_node_count: bm.node_count,
+                    old_event_tick_count: old_tick,
+                    new_event_tick_count: bm.event_tick_count,
+                })
+            } else {
+                None
+            }
+        })
+        .collect();
+    v.sort_by(|a, b| a.path.cmp(&b.path));
+    v
+}
+
+fn compute_size_increases<'a>(
+    assets: impl Iterator<Item = &'a scanner::AssetMetadata>,
+    old_sizes: &HashMap<shared::AssetPath, u64>,
+    threshold: u64,
+) -> Vec<SizeIncreaseEntry> {
+    let mut v: Vec<SizeIncreaseEntry> = assets
+        .filter_map(|a| {
+            let &old_size = old_sizes.get(&a.asset_path)?;
+            if old_size == 0 {
+                return None;
+            }
+            let new_size = a.file_size;
+            let pct = new_size.saturating_sub(old_size).saturating_mul(100) / old_size;
+            if pct >= threshold {
+                Some(SizeIncreaseEntry {
+                    path: a.asset_path.as_str().to_owned(),
+                    old_size,
+                    new_size,
+                    pct_increase: pct,
+                })
+            } else {
+                None
+            }
+        })
+        .collect();
+    v.sort_by(|a, b| a.path.cmp(&b.path));
+    v
+}
+
+fn format_utc(unix_secs: u64) -> String {
+    let s = unix_secs % 60;
+    let m = (unix_secs / 60) % 60;
+    let h = (unix_secs / 3600) % 24;
+    let mut rem_days = unix_secs / 86400;
+
+    let mut year = 1970u64;
+    loop {
+        let dy = if is_leap_year(year) { 366u64 } else { 365u64 };
+        if rem_days < dy {
+            break;
+        }
+        rem_days -= dy;
+        year += 1;
+    }
+
+    let month_lengths: [u64; 12] = [
+        31,
+        if is_leap_year(year) { 29 } else { 28 },
+        31,
+        30,
+        31,
+        30,
+        31,
+        31,
+        30,
+        31,
+        30,
+        31,
+    ];
+    let mut month = 1u64;
+    for &ml in &month_lengths {
+        if rem_days < ml {
+            break;
+        }
+        rem_days -= ml;
+        month += 1;
+    }
+    let day = rem_days + 1;
+
+    format!("{year:04}-{month:02}-{day:02} {h:02}:{m:02}:{s:02} UTC")
+}
+
+fn is_leap_year(y: u64) -> bool {
+    (y.is_multiple_of(4) && !y.is_multiple_of(100)) || y.is_multiple_of(400)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -317,7 +569,7 @@ mod tests {
         std::fs::create_dir_all(&dir).unwrap();
         let db_path = dir.join("test.db");
 
-        let result = handle_scan(&dir, false, &db_path, &FormatKind::Text, false).unwrap();
+        let result = handle_scan(&dir, false, false, &db_path, &FormatKind::Text, false).unwrap();
         assert_eq!(result, 0);
 
         let db = asset_db::AssetDb::open(&db_path).unwrap();
@@ -342,7 +594,7 @@ mod tests {
         std::fs::write(excluded_dir.join("Dummy.uasset"), b"not a real uasset").unwrap();
 
         let db_path = dir.join("test.db");
-        let _ = handle_scan(&dir, false, &db_path, &FormatKind::Text, false).unwrap();
+        let _ = handle_scan(&dir, false, false, &db_path, &FormatKind::Text, false).unwrap();
 
         let db = asset_db::AssetDb::open(&db_path).unwrap();
         assert!(
@@ -360,7 +612,7 @@ mod tests {
         std::fs::create_dir_all(&dir).unwrap();
         let db_path = dir.join("test.db");
 
-        let result = handle_scan(&dir, false, &db_path, &FormatKind::Text, false).unwrap();
+        let result = handle_scan(&dir, false, false, &db_path, &FormatKind::Text, false).unwrap();
 
         assert_eq!(result, 0);
         let _ = std::fs::remove_dir_all(&dir);
@@ -380,7 +632,7 @@ mod tests {
                 .unwrap();
         }
 
-        let result = handle_scan(&dir, false, &db_path, &FormatKind::Text, true).unwrap();
+        let result = handle_scan(&dir, false, false, &db_path, &FormatKind::Text, true).unwrap();
 
         assert_eq!(
             result, 1,
@@ -411,7 +663,7 @@ mod tests {
 
         // yes=false + empty stdin (EOF in test context) → read_line returns "" →
         // trim() is "" → not "y" → confirmed=false → record preserved → exit code 0.
-        let result = handle_scan(&dir, false, &db_path, &FormatKind::Text, false).unwrap();
+        let result = handle_scan(&dir, false, false, &db_path, &FormatKind::Text, false).unwrap();
 
         assert_eq!(
             result, 0,
@@ -426,5 +678,238 @@ mod tests {
         );
 
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn handle_scan_diff_should_return_0_when_no_previous_scan() {
+        let dir = std::env::temp_dir().join(format!(
+            "uasset_lens_scan_diff_noprev_{}",
+            std::process::id()
+        ));
+        std::fs::create_dir_all(&dir).unwrap();
+        let db_path = dir.join("test.db");
+
+        let result = handle_scan(&dir, false, true, &db_path, &FormatKind::Text, false).unwrap();
+
+        assert_eq!(
+            result, 0,
+            "first diff scan with no previous snapshot exits 0"
+        );
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn handle_scan_diff_should_return_0_when_no_regressions() {
+        let dir = std::env::temp_dir().join(format!(
+            "uasset_lens_scan_diff_noreg_{}",
+            std::process::id()
+        ));
+        std::fs::create_dir_all(&dir).unwrap();
+        let db_path = dir.join("test.db");
+
+        // First scan to populate scan_history
+        handle_scan(&dir, false, false, &db_path, &FormatKind::Text, false).unwrap();
+
+        // Second scan with --diff; no .uasset files → no scanned assets → no regressions
+        let result = handle_scan(&dir, false, true, &db_path, &FormatKind::Text, false).unwrap();
+
+        assert_eq!(result, 0, "diff scan with no regressions exits 0");
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn handle_scan_diff_json_should_include_diff_fields() {
+        let dir =
+            std::env::temp_dir().join(format!("uasset_lens_scan_diff_json_{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let db_path = dir.join("test.db");
+
+        handle_scan(&dir, false, false, &db_path, &FormatKind::Text, false).unwrap();
+
+        let result = handle_scan(&dir, false, true, &db_path, &FormatKind::Json, false).unwrap();
+
+        assert_eq!(result, 0);
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn handle_scan_diff_should_return_0_with_configurable_threshold() {
+        let dir = std::env::temp_dir().join(format!(
+            "uasset_lens_scan_diff_thresh_{}",
+            std::process::id()
+        ));
+        std::fs::create_dir_all(&dir).unwrap();
+
+        // Write config with non-default threshold
+        std::fs::write(
+            dir.join(".uasset-lens.toml"),
+            "[diff]\nsize_increase_threshold_pct = 25\n",
+        )
+        .unwrap();
+
+        let db_path = dir.join("test.db");
+        handle_scan(&dir, false, false, &db_path, &FormatKind::Text, false).unwrap();
+
+        let result = handle_scan(&dir, false, true, &db_path, &FormatKind::Text, false).unwrap();
+
+        assert_eq!(
+            result, 0,
+            "diff with custom threshold exits 0 when no regressions"
+        );
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    fn make_bp_meta(
+        asset_path: &str,
+        node_count: u32,
+        event_tick_count: u32,
+    ) -> scanner::AssetMetadata {
+        let bm = scanner::BlueprintMetrics {
+            node_count,
+            event_tick_count,
+            cast_count: 0,
+            dependency_depth: 0,
+        };
+        scanner::AssetMetadata {
+            file_path: PathBuf::from(format!("/proj/Content/{}.uasset", asset_path)),
+            file_size: 1024,
+            last_modified: 0,
+            blueprint_metrics: Some(bm),
+            ..scanner::make_meta(asset_path, AssetType::Blueprint)
+        }
+    }
+
+    #[test]
+    fn compute_regressions_should_detect_node_count_increase() {
+        let mut old_bp = HashMap::new();
+        old_bp.insert(AssetPath::new("/Game/BP_A").unwrap(), (10u32, 0u32));
+        let meta = make_bp_meta("/Game/BP_A", 50, 2);
+
+        let result = compute_regressions(std::iter::once(&meta), &old_bp);
+
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0].old_node_count, 10);
+        assert_eq!(result[0].new_node_count, 50);
+        assert_eq!(result[0].old_event_tick_count, 0);
+        assert_eq!(result[0].new_event_tick_count, 2);
+    }
+
+    #[test]
+    fn compute_regressions_should_not_flag_unchanged_node_count() {
+        let mut old_bp = HashMap::new();
+        old_bp.insert(AssetPath::new("/Game/BP_A").unwrap(), (10u32, 0u32));
+        let meta = make_bp_meta("/Game/BP_A", 10, 0);
+
+        let result = compute_regressions(std::iter::once(&meta), &old_bp);
+
+        assert!(result.is_empty());
+    }
+
+    #[test]
+    fn compute_regressions_should_not_flag_node_count_decrease() {
+        let mut old_bp = HashMap::new();
+        old_bp.insert(AssetPath::new("/Game/BP_A").unwrap(), (50u32, 0u32));
+        let meta = make_bp_meta("/Game/BP_A", 10, 0);
+
+        let result = compute_regressions(std::iter::once(&meta), &old_bp);
+
+        assert!(result.is_empty());
+    }
+
+    #[test]
+    fn compute_regressions_should_not_flag_new_asset_with_no_previous_record() {
+        let old_bp: HashMap<AssetPath, (u32, u32)> = HashMap::new();
+        let meta = make_bp_meta("/Game/BP_New", 42, 0);
+
+        let result = compute_regressions(std::iter::once(&meta), &old_bp);
+
+        assert!(result.is_empty());
+    }
+
+    #[test]
+    fn compute_regressions_should_sort_results_by_path() {
+        let mut old_bp = HashMap::new();
+        old_bp.insert(AssetPath::new("/Game/Z_BP").unwrap(), (1u32, 0u32));
+        old_bp.insert(AssetPath::new("/Game/A_BP").unwrap(), (1u32, 0u32));
+        let meta_z = make_bp_meta("/Game/Z_BP", 99, 0);
+        let meta_a = make_bp_meta("/Game/A_BP", 99, 0);
+
+        let result = compute_regressions([&meta_z, &meta_a].into_iter(), &old_bp);
+
+        assert_eq!(result.len(), 2);
+        assert!(result[0].path < result[1].path);
+    }
+
+    #[test]
+    fn compute_size_increases_should_detect_increase_above_threshold() {
+        let mut old_sizes = HashMap::new();
+        old_sizes.insert(AssetPath::new("/Game/T_Rock").unwrap(), 1000u64);
+        let meta = scanner::AssetMetadata {
+            file_path: PathBuf::from("/proj/Content/T_Rock.uasset"),
+            file_size: 1200,
+            last_modified: 0,
+            ..scanner::make_meta("/Game/T_Rock", AssetType::Texture2D)
+        };
+
+        let result = compute_size_increases(std::iter::once(&meta), &old_sizes, 10);
+
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0].old_size, 1000);
+        assert_eq!(result[0].new_size, 1200);
+        assert_eq!(result[0].pct_increase, 20);
+    }
+
+    #[test]
+    fn compute_size_increases_should_ignore_increase_below_threshold() {
+        let mut old_sizes = HashMap::new();
+        old_sizes.insert(AssetPath::new("/Game/T_Rock").unwrap(), 1000u64);
+        let meta = scanner::AssetMetadata {
+            file_path: PathBuf::from("/proj/Content/T_Rock.uasset"),
+            file_size: 1050,
+            last_modified: 0,
+            ..scanner::make_meta("/Game/T_Rock", AssetType::Texture2D)
+        };
+
+        let result = compute_size_increases(std::iter::once(&meta), &old_sizes, 10);
+
+        assert!(result.is_empty());
+    }
+
+    #[test]
+    fn compute_size_increases_should_ignore_asset_with_no_previous_size() {
+        let old_sizes: HashMap<AssetPath, u64> = HashMap::new();
+        let meta = scanner::AssetMetadata {
+            file_path: PathBuf::from("/proj/Content/T_New.uasset"),
+            file_size: 5000,
+            last_modified: 0,
+            ..scanner::make_meta("/Game/T_New", AssetType::Texture2D)
+        };
+
+        let result = compute_size_increases(std::iter::once(&meta), &old_sizes, 10);
+
+        assert!(result.is_empty());
+    }
+
+    #[test]
+    fn format_utc_should_format_epoch_zero_as_unix_origin() {
+        assert_eq!(format_utc(0), "1970-01-01 00:00:00 UTC");
+    }
+
+    #[test]
+    fn format_utc_should_format_one_day_correctly() {
+        assert_eq!(format_utc(86400), "1970-01-02 00:00:00 UTC");
+    }
+
+    #[test]
+    fn format_utc_should_handle_leap_year_correctly() {
+        // 1972 is a leap year; 1972-02-29 exists
+        // days from 1970-01-01 to 1972-02-29:
+        //   1970: 365, 1971: 365, then 31 (Jan) + 29 (Feb day 29) - 1 = 59 days into 1972
+        //   total = 365 + 365 + 59 = 789 days → epoch 789 * 86400 = 68169600
+        assert_eq!(format_utc(68_169_600), "1972-02-29 00:00:00 UTC");
     }
 }

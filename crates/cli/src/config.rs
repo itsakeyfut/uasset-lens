@@ -9,6 +9,8 @@ pub struct ConfigFile {
     pub lint: LintConfig,
     #[serde(default)]
     pub budget: budget_tracker::BudgetConfig,
+    #[serde(default)]
+    pub diff: DiffConfig,
 }
 
 #[derive(Default, serde::Deserialize)]
@@ -24,6 +26,24 @@ pub struct LintConfig {
     pub blueprint_max_nodes: Option<u32>,
     pub blueprint_max_event_tick: Option<u32>,
     pub blueprint_max_cast_count: Option<u32>,
+}
+
+#[derive(serde::Deserialize)]
+pub struct DiffConfig {
+    #[serde(default = "default_size_increase_threshold_pct")]
+    pub size_increase_threshold_pct: u64,
+}
+
+impl Default for DiffConfig {
+    fn default() -> Self {
+        Self {
+            size_increase_threshold_pct: default_size_increase_threshold_pct(),
+        }
+    }
+}
+
+fn default_size_increase_threshold_pct() -> u64 {
+    10
 }
 
 pub fn load_config(project_dir: &Path) -> ConfigFile {
@@ -79,6 +99,32 @@ mod tests {
         let _ = std::fs::remove_dir_all(&dir);
 
         assert!(config.scan.exclude_paths.is_empty());
+    }
+
+    #[test]
+    fn load_config_should_parse_diff_threshold_from_valid_toml() {
+        let dir = std::env::temp_dir().join(format!("uasset_lens_cfg_diff_{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(
+            dir.join(".uasset-lens.toml"),
+            "[diff]\nsize_increase_threshold_pct = 25\n",
+        )
+        .unwrap();
+
+        let config = load_config(&dir);
+        let _ = std::fs::remove_dir_all(&dir);
+
+        assert_eq!(config.diff.size_increase_threshold_pct, 25);
+    }
+
+    #[test]
+    fn load_config_should_use_default_diff_threshold_when_not_set() {
+        let dir =
+            std::env::temp_dir().join(format!("uasset_lens_cfg_diff_dflt_{}", std::process::id()));
+
+        let config = load_config(&dir);
+
+        assert_eq!(config.diff.size_increase_threshold_pct, 10);
     }
 
     #[test]

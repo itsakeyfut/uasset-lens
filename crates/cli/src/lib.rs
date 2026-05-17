@@ -47,6 +47,9 @@ pub enum Commands {
         /// Re-scan all files regardless of modification time
         #[arg(long)]
         full_scan: bool,
+        /// Show a diff of changes compared to the previous scan
+        #[arg(long)]
+        diff: bool,
     },
     /// Show the dependency graph summary and detect circular dependencies
     Graph {
@@ -237,9 +240,17 @@ fn dispatch(cli: &Cli) -> anyhow::Result<i32> {
         Commands::Scan {
             project_dir,
             full_scan,
+            diff,
         } => {
             let db_path = resolve_db_path(project_dir, cli.db.as_deref());
-            commands::scan::handle_scan(project_dir, *full_scan, &db_path, &cli.format, cli.yes)
+            commands::scan::handle_scan(
+                project_dir,
+                *full_scan,
+                *diff,
+                &db_path,
+                &cli.format,
+                cli.yes,
+            )
         }
         Commands::Graph {
             project_dir,
