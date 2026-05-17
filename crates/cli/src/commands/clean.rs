@@ -200,8 +200,8 @@ pub fn handle_clean(
                 _ => {}
             }
 
-            print!("  Delete? [y / N / a(ll) / s(kip type) / q(uit)] > ");
-            io::stdout().flush().context("Failed to flush stdout")?;
+            eprint!("  Delete? [y / N / a(ll) / s(kip type) / q(uit)] > ");
+            io::stderr().flush().context("Failed to flush stderr")?;
 
             let mut answer = String::new();
             io::stdin()
@@ -519,8 +519,10 @@ mod tests {
         let uasset = make_uasset(&dir, "Orphan");
         let uexp = dir.join("Orphan.uexp");
         let ubulk = dir.join("Orphan.ubulk");
+        let uptnl = dir.join("Orphan.uptnl");
         std::fs::write(&uexp, b"fake").unwrap();
         std::fs::write(&ubulk, b"fake").unwrap();
+        std::fs::write(&uptnl, b"fake").unwrap();
 
         {
             let mut db = asset_db::AssetDb::open(&db_path).unwrap();
@@ -547,6 +549,7 @@ mod tests {
         .unwrap();
         assert!(!uexp.exists(), ".uexp sidecar should be deleted");
         assert!(!ubulk.exists(), ".ubulk sidecar should be deleted");
+        assert!(!uptnl.exists(), ".uptnl sidecar should be deleted");
         let _ = std::fs::remove_dir_all(&dir);
     }
 
@@ -728,7 +731,7 @@ mod tests {
             .unwrap();
         }
 
-        // DryRunOutput is the exact type handle_clean serializes in --dry-run --format json.
+        // stdout capture requires writer injection; verify schema via struct serialization instead
         let json = serde_json::to_string(&DryRunOutput {
             targets: vec![CleanTarget {
                 path: "/Game/Orphan".to_owned(),
