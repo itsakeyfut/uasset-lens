@@ -109,6 +109,16 @@ impl DependencyGraph {
         ImpactResult { direct, transitive }
     }
 
+    pub fn reverse_deps_of(&self, path: &AssetPath) -> Vec<AssetPath> {
+        let Some(&idx) = self.index.get(path) else {
+            return vec![];
+        };
+        self.graph
+            .neighbors_directed(idx, Direction::Incoming)
+            .map(|i| self.graph[i].path.clone()) // clone required: AssetPath is not Copy
+            .collect()
+    }
+
     pub fn dependencies_of(&self, path: &AssetPath) -> Vec<(AssetPath, AssetType)> {
         let Some(&idx) = self.index.get(path) else {
             return vec![];
@@ -376,6 +386,42 @@ mod tests {
             .chain(result.transitive.iter())
             .collect();
         assert!(!all_paths.iter().any(|p| p.as_str() == "/Game/A"));
+    }
+
+    #[test]
+    fn reverse_deps_of_should_return_direct_incoming_neighbors() {
+        // A→B and C→B: both A and C directly reference B
+        let graph = DependencyGraph::build(
+            vec![node("/Game/A"), node("/Game/B"), node("/Game/C")],
+            vec![
+                (ap("/Game/A"), ap("/Game/B")),
+                (ap("/Game/C"), ap("/Game/B")),
+            ],
+        );
+
+        let rev = graph.reverse_deps_of(&ap("/Game/B"));
+        assert_eq!(rev.len(), 2);
+        assert!(rev.iter().any(|p| p.as_str() == "/Game/A"));
+        assert!(rev.iter().any(|p| p.as_str() == "/Game/C"));
+    }
+
+    #[test]
+    fn reverse_deps_of_should_return_empty_for_node_with_no_incoming_edges() {
+        let graph = DependencyGraph::build(
+            vec![node("/Game/A"), node("/Game/B")],
+            vec![(ap("/Game/A"), ap("/Game/B"))],
+        );
+
+        assert!(
+            graph.reverse_deps_of(&ap("/Game/A")).is_empty(),
+            "/Game/A has no incoming edges"
+        );
+    }
+
+    #[test]
+    fn reverse_deps_of_should_return_empty_for_unknown_path() {
+        let graph = DependencyGraph::build(vec![node("/Game/A")], vec![]);
+        assert!(graph.reverse_deps_of(&ap("/Game/NotInGraph")).is_empty());
     }
 
     #[test]

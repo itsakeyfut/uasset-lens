@@ -86,7 +86,12 @@ pub enum Commands {
         size_only: bool,
     },
     /// Show which assets would break if the target asset were deleted or renamed
-    Impact { asset_path: PathBuf },
+    Impact {
+        asset_path: PathBuf,
+        /// Show the full propagation tree instead of flat lists
+        #[arg(long)]
+        tree: bool,
+    },
     /// List all ObjectRedirector assets in the project
     Redirectors { project_dir: PathBuf },
     /// Search and filter assets by type, size, or path pattern
@@ -265,8 +270,8 @@ fn dispatch(cli: &Cli) -> anyhow::Result<i32> {
             *size_only,
             &cli.format,
         ),
-        Commands::Impact { asset_path } => {
-            commands::impact::handle_impact(asset_path, cli.db.as_deref(), &cli.format)
+        Commands::Impact { asset_path, tree } => {
+            commands::impact::handle_impact(asset_path, cli.db.as_deref(), *tree, &cli.format)
         }
         Commands::Redirectors { project_dir } => {
             let db_path = resolve_db_path(project_dir, cli.db.as_deref());
