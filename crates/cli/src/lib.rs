@@ -134,6 +134,23 @@ pub enum Commands {
         #[arg(long, value_delimiter = ',')]
         skip: Vec<String>,
     },
+    /// Delete confirmed dead assets from disk
+    #[command(name = "clean")]
+    Clean {
+        project_dir: PathBuf,
+        /// List deletion targets without deleting and exit 0
+        #[arg(long)]
+        dry_run: bool,
+        /// Exclude assets smaller than this many bytes
+        #[arg(long)]
+        min_size: Option<u64>,
+        /// Exclude assets whose path contains this substring (repeatable)
+        #[arg(long = "exclude")]
+        exclude_patterns: Vec<String>,
+        /// Filter by glob path pattern (e.g. "**/Characters/**")
+        #[arg(long)]
+        path: Option<String>,
+    },
     /// Watch the project directory and print new problems as files change
     Watch { project_dir: PathBuf },
 }
@@ -279,6 +296,25 @@ fn dispatch(cli: &Cli) -> anyhow::Result<i32> {
         } => {
             let db_path = resolve_db_path(project_dir, cli.db.as_deref());
             commands::check::handle_check(project_dir, only, skip, &db_path, &cli.format)
+        }
+        Commands::Clean {
+            project_dir,
+            dry_run,
+            min_size,
+            exclude_patterns,
+            path,
+        } => {
+            let db_path = resolve_db_path(project_dir, cli.db.as_deref());
+            commands::clean::handle_clean(
+                project_dir,
+                cli.yes,
+                *dry_run,
+                *min_size,
+                exclude_patterns,
+                path.as_deref(),
+                &db_path,
+                &cli.format,
+            )
         }
         Commands::Watch { project_dir } => {
             let db_path = resolve_db_path(project_dir, cli.db.as_deref());
