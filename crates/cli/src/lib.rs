@@ -153,6 +153,18 @@ pub enum Commands {
     },
     /// Watch the project directory and print new problems as files change
     Watch { project_dir: PathBuf },
+    /// Convert between filesystem paths and UE game paths
+    #[command(name = "path")]
+    Path {
+        /// The path to convert (filesystem path or /Game/... game path)
+        input: String,
+        /// Convert a game path to a filesystem path
+        #[arg(long)]
+        to_file: bool,
+        /// Content root directory (auto-detected if not provided)
+        #[arg(long)]
+        content_root: Option<PathBuf>,
+    },
     /// Generate shell completion scripts
     #[command(name = "completions")]
     Completions {
@@ -331,6 +343,16 @@ fn dispatch(cli: &Cli) -> anyhow::Result<i32> {
             let db_path = resolve_db_path(project_dir, cli.db.as_deref());
             commands::watch::handle_watch(project_dir, &db_path)
         }
+        Commands::Path {
+            input,
+            to_file,
+            content_root,
+        } => commands::path_conv::handle_path_conv(
+            input,
+            *to_file,
+            content_root.as_deref(),
+            &cli.format,
+        ),
         // Intercepted before dispatch in apps/uasset-lens-cli/src/main.rs
         Commands::Completions { .. } => {
             unreachable!("completions is handled at the binary entry point before dispatch")
