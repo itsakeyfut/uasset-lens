@@ -22,6 +22,7 @@ use parser::export::parse_export_table;
 use parser::header::parse_header;
 use parser::import::parse_import_entries;
 use parser::name_table::parse_name_table;
+use parser::soft_object_paths::parse_soft_object_paths;
 
 #[derive(Debug)]
 pub struct AssetMetadata {
@@ -31,6 +32,7 @@ pub struct AssetMetadata {
     pub file_size: u64,
     pub last_modified: u64,
     pub dependencies: Vec<AssetPath>,
+    pub soft_dependencies: Vec<AssetPath>,
     pub blueprint_metrics: Option<BlueprintMetrics>,
     pub material_texture_samples: Option<u32>,
 }
@@ -97,6 +99,13 @@ fn scan_single(file: &Path, content_root: &Path) -> Result<AssetMetadata, ScanEr
     let (cls_names, dependencies) =
         parse_import_entries(&data, hdr.import_offset, hdr.import_count, &name_table)?;
 
+    let soft_dependencies = parse_soft_object_paths(
+        &data,
+        hdr.soft_object_path_offset,
+        hdr.soft_object_path_count,
+        &name_table,
+    )?;
+
     let asset_type = if is_umap {
         AssetType::World
     } else {
@@ -144,6 +153,7 @@ fn scan_single(file: &Path, content_root: &Path) -> Result<AssetMetadata, ScanEr
         file_size,
         last_modified,
         dependencies,
+        soft_dependencies,
         blueprint_metrics,
         material_texture_samples,
     })

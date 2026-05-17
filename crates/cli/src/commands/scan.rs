@@ -302,6 +302,7 @@ mod tests {
             file_size: 1024,
             last_modified: mtime,
             dependencies: vec![],
+            soft_dependencies: vec![],
             blueprint_metrics: None,
             material_texture_samples: None,
         }

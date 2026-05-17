@@ -2,7 +2,7 @@ use byteorder::{LittleEndian, ReadBytesExt};
 use shared::FPackageVersion;
 use std::io::Cursor;
 
-use super::map_io;
+use super::{map_io, skip_fstring};
 use crate::ScanError;
 
 const UE_MAGIC: u32 = 0x9E2A83C1;
@@ -15,6 +15,8 @@ pub struct FPackageFileSummary {
     pub version: FPackageVersion,
     pub name_count: usize,
     pub name_offset: u64,
+    pub soft_object_path_count: usize,
+    pub soft_object_path_offset: u64,
     pub export_count: usize,
     pub export_offset: u64,
     pub import_count: usize,
@@ -85,10 +87,19 @@ pub fn parse_header(data: &[u8]) -> Result<FPackageFileSummary, ScanError> {
     }
 
     // SoftObjectPath list — added in UE5 version 1008
-    if file_version_ue5 >= VER_UE5_ADD_SOFTOBJECTPATH_LIST {
-        let _so_count = cur.read_i32::<LittleEndian>().map_err(map_io)?;
-        let _so_offset = cur.read_i32::<LittleEndian>().map_err(map_io)?;
-    }
+    let (soft_object_path_count, soft_object_path_offset) =
+        if file_version_ue5 >= VER_UE5_ADD_SOFTOBJECTPATH_LIST {
+            let so_count = cur.read_i32::<LittleEndian>().map_err(map_io)?;
+            let so_offset = cur.read_i32::<LittleEndian>().map_err(map_io)?;
+            if so_count < 0 || so_offset < 0 {
+                return Err(ScanError::InvalidData(
+                    "negative soft_object_path count or offset".into(),
+                ));
+            }
+            (so_count as usize, so_offset as u64)
+        } else {
+            (0, 0)
+        };
 
     // LocalizationId (FString)
     skip_fstring(&mut cur)?;
@@ -124,27 +135,14 @@ pub fn parse_header(data: &[u8]) -> Result<FPackageFileSummary, ScanError> {
         version,
         name_count: name_count as usize,
         name_offset: name_offset as u64,
+        soft_object_path_count,
+        soft_object_path_offset,
         export_count: export_count as usize,
         export_offset: export_offset as u64,
         import_count: import_count as usize,
         import_offset: import_offset as u64,
         depends_offset: depends_offset as u64,
     })
-}
-
-fn skip_fstring(cur: &mut Cursor<&[u8]>) -> Result<(), ScanError> {
-    let len = cur.read_i32::<LittleEndian>().map_err(map_io)?;
-    let byte_count: u64 = if len == 0 {
-        0
-    } else if len < 0 {
-        // UTF-16LE: each char is 2 bytes (negative length encodes char count)
-        (-len as u64) * 2
-    } else {
-        // UTF-8/ASCII including null terminator
-        len as u64
-    };
-    cur.set_position(cur.position() + byte_count);
-    Ok(())
 }
 
 #[cfg(test)]
@@ -180,6 +178,10 @@ mod tests {
         assert_eq!(header.import_count, 22);
         assert_eq!(header.import_offset, 3253);
         assert_eq!(header.depends_offset, 5477);
+        assert!(
+            header.soft_object_path_count == 0
+                || header.soft_object_path_offset < data.len() as u64
+        );
     }
 
     #[test]
@@ -190,6 +192,10 @@ mod tests {
         assert!(header.name_offset < data.len() as u64);
         assert!(header.import_offset < data.len() as u64);
         assert!(header.export_offset < data.len() as u64);
+        assert!(
+            header.soft_object_path_count == 0
+                || header.soft_object_path_offset < data.len() as u64
+        );
     }
 
     #[test]
@@ -200,6 +206,10 @@ mod tests {
         assert!(header.name_offset < data.len() as u64);
         assert!(header.import_offset < data.len() as u64);
         assert!(header.export_offset < data.len() as u64);
+        assert!(
+            header.soft_object_path_count == 0
+                || header.soft_object_path_offset < data.len() as u64
+        );
     }
 
     #[test]
@@ -210,6 +220,10 @@ mod tests {
         assert!(header.name_offset < data.len() as u64);
         assert!(header.import_offset < data.len() as u64);
         assert!(header.export_offset < data.len() as u64);
+        assert!(
+            header.soft_object_path_count == 0
+                || header.soft_object_path_offset < data.len() as u64
+        );
     }
 
     #[test]
@@ -220,6 +234,10 @@ mod tests {
         assert!(header.name_offset < data.len() as u64);
         assert!(header.import_offset < data.len() as u64);
         assert!(header.export_offset < data.len() as u64);
+        assert!(
+            header.soft_object_path_count == 0
+                || header.soft_object_path_offset < data.len() as u64
+        );
     }
 
     #[test]
@@ -230,6 +248,10 @@ mod tests {
         assert!(header.name_offset < data.len() as u64);
         assert!(header.import_offset < data.len() as u64);
         assert!(header.export_offset < data.len() as u64);
+        assert!(
+            header.soft_object_path_count == 0
+                || header.soft_object_path_offset < data.len() as u64
+        );
     }
 
     #[test]

@@ -55,7 +55,15 @@ impl AssetDb {
             tx.execute("DELETE FROM dependencies WHERE from_id = ?1", [id])?;
             for dep in &meta.dependencies {
                 tx.execute(
-                    "INSERT OR IGNORE INTO dependencies (from_id, to_path) VALUES (?1, ?2)",
+                    "INSERT OR IGNORE INTO dependencies (from_id, to_path, is_soft) VALUES (?1, ?2, 0)",
+                    rusqlite::params![id, dep.as_str()],
+                )?;
+            }
+            // OR IGNORE: if the same path is already a hard dep (is_soft=0), the soft insert
+            // is skipped. The hard reference is the stronger claim so is_soft=0 is correct.
+            for dep in &meta.soft_dependencies {
+                tx.execute(
+                    "INSERT OR IGNORE INTO dependencies (from_id, to_path, is_soft) VALUES (?1, ?2, 1)",
                     rusqlite::params![id, dep.as_str()],
                 )?;
             }
@@ -82,9 +90,9 @@ impl AssetDb {
             .execute("DELETE FROM dependencies WHERE from_id = ?1", [from_id])?;
         // OR IGNORE: a single .uasset can reference the same package via multiple
         // import entries; duplicate edges are silently skipped.
-        let mut stmt = self
-            .conn
-            .prepare("INSERT OR IGNORE INTO dependencies (from_id, to_path) VALUES (?1, ?2)")?;
+        let mut stmt = self.conn.prepare(
+            "INSERT OR IGNORE INTO dependencies (from_id, to_path, is_soft) VALUES (?1, ?2, 0)",
+        )?;
         for path in to_paths {
             stmt.execute(rusqlite::params![from_id, path.as_str()])?;
         }

@@ -174,6 +174,7 @@ mod tests {
             file_size: 0,
             last_modified: 0,
             dependencies,
+            soft_dependencies: vec![],
             blueprint_metrics,
             material_texture_samples: None,
         }

@@ -118,6 +118,7 @@ mod tests {
             file_size: 1024,
             last_modified: 0,
             dependencies: vec![],
+            soft_dependencies: vec![],
             blueprint_metrics: None,
             material_texture_samples: None,
         }
@@ -222,6 +223,7 @@ mod tests {
                 file_size: 4096,
                 last_modified: 0,
                 dependencies: vec![],
+                soft_dependencies: vec![],
                 blueprint_metrics: Some(scanner::BlueprintMetrics {
                     node_count: 201,
                     event_tick_count: 0,
