@@ -25,6 +25,7 @@ pub(crate) fn make_meta(
         file_size,
         last_modified: 0,
         dependencies: deps,
+        soft_dependencies: vec![],
         blueprint_metrics: None,
         material_texture_samples: None,
     }

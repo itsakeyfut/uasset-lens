@@ -18,6 +18,7 @@ impl AssetDb {
              CREATE TABLE IF NOT EXISTS dependencies (
                  from_id  INTEGER NOT NULL REFERENCES assets(id) ON DELETE CASCADE,
                  to_path  TEXT    NOT NULL,
+                 is_soft  BOOLEAN NOT NULL DEFAULT 0,
                  PRIMARY KEY (from_id, to_path)
              );
 
@@ -83,6 +84,21 @@ mod tests {
         assert!(
             names.contains(&"blueprint_metrics".to_string()),
             "blueprint_metrics table should be created by init_schema"
+        );
+    }
+
+    #[test]
+    fn open_should_create_dependencies_table_with_is_soft_column() {
+        let db = AssetDb::open(Path::new(":memory:")).unwrap();
+        let mut stmt = db.conn.prepare("PRAGMA table_info(dependencies)").unwrap();
+        let col_names: Vec<String> = stmt
+            .query_map([], |row| row.get::<_, String>(1))
+            .unwrap()
+            .filter_map(|r| r.ok())
+            .collect();
+        assert!(
+            col_names.contains(&"is_soft".to_string()),
+            "dependencies table must have is_soft column"
         );
     }
 }

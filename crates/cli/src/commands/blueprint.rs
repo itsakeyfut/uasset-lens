@@ -99,6 +99,7 @@ mod tests {
                 file_size: 4096,
                 last_modified: 100,
                 dependencies: vec![],
+                soft_dependencies: vec![],
                 blueprint_metrics: Some(scanner::BlueprintMetrics {
                     node_count: 412,
                     event_tick_count: 3,
@@ -114,6 +115,7 @@ mod tests {
                 file_size: 2048,
                 last_modified: 100,
                 dependencies: vec![],
+                soft_dependencies: vec![],
                 blueprint_metrics: Some(scanner::BlueprintMetrics {
                     node_count: 312,
                     event_tick_count: 1,

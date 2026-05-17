@@ -86,6 +86,7 @@ mod tests {
             file_size: 0,
             last_modified: 0,
             dependencies: vec![],
+            soft_dependencies: vec![],
             blueprint_metrics: None,
             material_texture_samples: texture_samples,
         }
