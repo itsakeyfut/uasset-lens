@@ -9,6 +9,7 @@ pub mod impact;
 pub mod lint;
 pub mod redirectors;
 pub mod scan;
+pub mod stats;
 pub mod watch;
 
 #[cfg(test)]
