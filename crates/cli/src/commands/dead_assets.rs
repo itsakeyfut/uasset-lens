@@ -3,7 +3,7 @@ use std::path::Path;
 
 use anyhow::Context;
 
-use crate::FormatKind;
+use crate::{FormatKind, GroupMode};
 
 #[derive(serde::Serialize)]
 struct DeadAssetEntry {
@@ -19,12 +19,48 @@ struct DeadAssetsOutput {
     total_size_bytes: u64,
 }
 
+#[derive(serde::Serialize)]
+struct GroupEntry {
+    group: String,
+    count: usize,
+    total_size_bytes: u64,
+}
+
+fn dir_key(path: &str) -> &str {
+    let mut slash_count = 0;
+    let mut last_cut = path.len();
+    for (i, c) in path.char_indices() {
+        if c == '/' {
+            slash_count += 1;
+            if slash_count == 4 {
+                return &path[..i + 1];
+            }
+            if slash_count == 3 {
+                last_cut = i + 1;
+            }
+        }
+    }
+    // Trailing-slash consistency: 3-slash paths get the same treatment as 4+ slash paths.
+    if slash_count >= 3 {
+        &path[..last_cut]
+    } else {
+        path
+    }
+}
+
+fn digit_count(n: usize) -> usize {
+    if n == 0 { 1 } else { n.ilog10() as usize + 1 }
+}
+
+// Each arg maps to a distinct CLI flag; a wrapper struct adds indirection at a single call site.
+#[allow(clippy::too_many_arguments)]
 pub fn handle_dead_assets(
     _project_dir: &Path,
     asset_type_filter: Option<&str>,
     sort_by_size: bool,
     min_size: Option<u64>,
     exclude_patterns: &[String],
+    group: Option<&GroupMode>,
     db_path: &Path,
     format: &FormatKind,
 ) -> anyhow::Result<i32> {
@@ -78,6 +114,61 @@ pub fn handle_dead_assets(
 
     let count = entries.len();
     let total_size_bytes: u64 = entries.iter().map(|e| e.file_size).sum();
+
+    if let Some(mode) = group {
+        let mut map: HashMap<String, (usize, u64)> = HashMap::new();
+        for e in &entries {
+            let key = match mode {
+                GroupMode::Type => e.asset_type.clone(),
+                GroupMode::Dir => dir_key(&e.path).to_owned(),
+            };
+            let (cnt, size) = map.entry(key).or_default();
+            *cnt += 1;
+            *size += e.file_size;
+        }
+        let mut groups: Vec<GroupEntry> = map
+            .into_iter()
+            .map(|(group, (cnt, total))| GroupEntry {
+                group,
+                count: cnt,
+                total_size_bytes: total,
+            })
+            .collect();
+        groups.sort_unstable_by_key(|g| std::cmp::Reverse(g.total_size_bytes));
+
+        match format {
+            FormatKind::Json => {
+                println!(
+                    "{}",
+                    serde_json::to_string_pretty(&groups)
+                        .context("Failed to serialize grouped output to JSON")?
+                );
+            }
+            FormatKind::Text => {
+                let max_name = groups.iter().map(|g| g.group.len()).max().unwrap_or(1);
+                let max_cnt = groups
+                    .iter()
+                    .map(|g| digit_count(g.count))
+                    .max()
+                    .unwrap_or(1);
+                for g in &groups {
+                    println!(
+                        "  {:<name$}  ({:>cnt$} assets, {})",
+                        g.group,
+                        g.count,
+                        crate::format_size(g.total_size_bytes),
+                        name = max_name,
+                        cnt = max_cnt,
+                    );
+                }
+                if count > 0 {
+                    println!();
+                }
+                println!("  {}", format_dead_summary(count, total_size_bytes));
+            }
+        }
+        return if count == 0 { Ok(0) } else { Ok(1) };
+    }
 
     match format {
         FormatKind::Json => {
@@ -187,6 +278,7 @@ mod tests {
             false,
             None,
             &[],
+            None,
             &db_path,
             &FormatKind::Text,
         );
@@ -201,8 +293,17 @@ mod tests {
         let db_path = dir.join("test.db");
         asset_db::AssetDb::open(&db_path).unwrap();
 
-        let result =
-            handle_dead_assets(&dir, None, false, None, &[], &db_path, &FormatKind::Text).unwrap();
+        let result = handle_dead_assets(
+            &dir,
+            None,
+            false,
+            None,
+            &[],
+            None,
+            &db_path,
+            &FormatKind::Text,
+        )
+        .unwrap();
         assert_eq!(result, 0);
         let _ = std::fs::remove_dir_all(&dir);
     }
@@ -236,8 +337,17 @@ mod tests {
             .unwrap();
         }
 
-        let result =
-            handle_dead_assets(&dir, None, false, None, &[], &db_path, &FormatKind::Text).unwrap();
+        let result = handle_dead_assets(
+            &dir,
+            None,
+            false,
+            None,
+            &[],
+            None,
+            &db_path,
+            &FormatKind::Text,
+        )
+        .unwrap();
         assert_eq!(result, 0, "all nodes in a cycle have in_degree >= 1");
         let _ = std::fs::remove_dir_all(&dir);
     }
@@ -261,8 +371,17 @@ mod tests {
             .unwrap();
         }
 
-        let result =
-            handle_dead_assets(&dir, None, false, None, &[], &db_path, &FormatKind::Text).unwrap();
+        let result = handle_dead_assets(
+            &dir,
+            None,
+            false,
+            None,
+            &[],
+            None,
+            &db_path,
+            &FormatKind::Text,
+        )
+        .unwrap();
         assert_eq!(result, 1, "/Game/Orphan has no incoming edges");
         let _ = std::fs::remove_dir_all(&dir);
     }
@@ -294,6 +413,7 @@ mod tests {
             false,
             None,
             &[],
+            None,
             &db_path,
             &FormatKind::Text,
         )
@@ -341,6 +461,7 @@ mod tests {
             false,
             None,
             &[],
+            None,
             &db_path,
             &FormatKind::Text,
         )
@@ -359,8 +480,17 @@ mod tests {
         let db_path = dir.join("test.db");
         asset_db::AssetDb::open(&db_path).unwrap();
 
-        let result =
-            handle_dead_assets(&dir, None, false, None, &[], &db_path, &FormatKind::Json).unwrap();
+        let result = handle_dead_assets(
+            &dir,
+            None,
+            false,
+            None,
+            &[],
+            None,
+            &db_path,
+            &FormatKind::Json,
+        )
+        .unwrap();
         assert_eq!(result, 0);
         let _ = std::fs::remove_dir_all(&dir);
     }
@@ -386,8 +516,17 @@ mod tests {
             .unwrap();
         }
 
-        let result =
-            handle_dead_assets(&dir, None, false, None, &[], &db_path, &FormatKind::Json).unwrap();
+        let result = handle_dead_assets(
+            &dir,
+            None,
+            false,
+            None,
+            &[],
+            None,
+            &db_path,
+            &FormatKind::Json,
+        )
+        .unwrap();
         assert_eq!(result, 1, "JSON format exits 1 when dead assets are found");
         let _ = std::fs::remove_dir_all(&dir);
     }
@@ -429,8 +568,17 @@ mod tests {
             .unwrap();
         }
 
-        let result =
-            handle_dead_assets(&dir, None, true, None, &[], &db_path, &FormatKind::Text).unwrap();
+        let result = handle_dead_assets(
+            &dir,
+            None,
+            true,
+            None,
+            &[],
+            None,
+            &db_path,
+            &FormatKind::Text,
+        )
+        .unwrap();
         assert_eq!(result, 1, "dead assets found when sort_by_size is true");
         let _ = std::fs::remove_dir_all(&dir);
     }
@@ -496,6 +644,7 @@ mod tests {
             false,
             Some(1024),
             &[],
+            None,
             &db_path,
             &FormatKind::Text,
         )
@@ -531,6 +680,7 @@ mod tests {
             false,
             Some(1024),
             &[],
+            None,
             &db_path,
             &FormatKind::Text,
         )
@@ -576,6 +726,7 @@ mod tests {
             false,
             None,
             &patterns,
+            None,
             &db_path,
             &FormatKind::Text,
         )
@@ -612,11 +763,211 @@ mod tests {
             false,
             None,
             &patterns,
+            None,
             &db_path,
             &FormatKind::Text,
         )
         .unwrap();
         assert_eq!(result, 0, "all assets match the exclude pattern");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn dir_key_should_return_path_up_to_third_segment() {
+        // 4+ slashes: cut at 4th slash
+        assert_eq!(
+            dir_key("/Game/Assets/Enemies/BP_Hero"),
+            "/Game/Assets/Enemies/"
+        );
+        assert_eq!(
+            dir_key("/Game/ThirdPerson/Blueprints/BP_Char"),
+            "/Game/ThirdPerson/Blueprints/"
+        );
+        // exactly 3 slashes: cut at 3rd slash — trailing slash consistent with deeper paths
+        assert_eq!(dir_key("/Game/Characters/BP_Hero"), "/Game/Characters/");
+    }
+
+    #[test]
+    fn dir_key_should_return_full_path_when_fewer_than_three_segments() {
+        assert_eq!(dir_key("/Game/Foo"), "/Game/Foo");
+        assert_eq!(dir_key("/Game"), "/Game");
+    }
+
+    #[test]
+    fn group_entry_should_serialize_with_group_count_total_size_keys() {
+        let entries = vec![GroupEntry {
+            group: "Texture2D".to_owned(),
+            count: 3,
+            total_size_bytes: 4096,
+        }];
+        let json = serde_json::to_string(&entries).unwrap();
+        assert!(json.contains("\"group\""), "must have group key");
+        assert!(json.contains("\"count\""), "must have count key");
+        assert!(
+            json.contains("\"total_size_bytes\""),
+            "must have total_size_bytes key"
+        );
+        assert!(
+            !json.contains("\"assets\""),
+            "must not have assets key when grouped"
+        );
+    }
+
+    #[test]
+    fn handle_dead_assets_group_type_should_aggregate_by_asset_type() {
+        let dir = std::env::temp_dir().join(format!(
+            "uasset_lens_dead22_group_type_{}",
+            std::process::id()
+        ));
+        std::fs::create_dir_all(&dir).unwrap();
+        let db_path = dir.join("test.db");
+
+        {
+            let mut db = asset_db::AssetDb::open(&db_path).unwrap();
+            db.upsert_all(&[
+                make_meta(
+                    "/Game/A/BP_One",
+                    dir.join("BP_One.uasset"),
+                    AssetType::Blueprint,
+                    1024,
+                    vec![],
+                ),
+                make_meta(
+                    "/Game/A/BP_Two",
+                    dir.join("BP_Two.uasset"),
+                    AssetType::Blueprint,
+                    2048,
+                    vec![],
+                ),
+                make_meta(
+                    "/Game/A/T_Rock",
+                    dir.join("T_Rock.uasset"),
+                    AssetType::Texture2D,
+                    4096,
+                    vec![],
+                ),
+            ])
+            .unwrap();
+        }
+
+        let result = handle_dead_assets(
+            &dir,
+            None,
+            false,
+            None,
+            &[],
+            Some(&GroupMode::Type),
+            &db_path,
+            &FormatKind::Text,
+        )
+        .unwrap();
+        assert_eq!(result, 1, "three dead assets across two types");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn handle_dead_assets_group_dir_should_aggregate_by_directory() {
+        let dir = std::env::temp_dir().join(format!(
+            "uasset_lens_dead22_group_dir_{}",
+            std::process::id()
+        ));
+        std::fs::create_dir_all(&dir).unwrap();
+        let db_path = dir.join("test.db");
+
+        {
+            let mut db = asset_db::AssetDb::open(&db_path).unwrap();
+            db.upsert_all(&[
+                make_meta(
+                    "/Game/Characters/Enemies/BP_Goblin",
+                    dir.join("BP_Goblin.uasset"),
+                    AssetType::Blueprint,
+                    1024,
+                    vec![],
+                ),
+                make_meta(
+                    "/Game/ThirdPerson/Blueprints/BP_Char",
+                    dir.join("BP_Char.uasset"),
+                    AssetType::Blueprint,
+                    2048,
+                    vec![],
+                ),
+            ])
+            .unwrap();
+        }
+
+        let result = handle_dead_assets(
+            &dir,
+            None,
+            false,
+            None,
+            &[],
+            Some(&GroupMode::Dir),
+            &db_path,
+            &FormatKind::Text,
+        )
+        .unwrap();
+        assert_eq!(result, 1, "assets in two different directories");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn handle_dead_assets_group_type_json_should_return_1_when_dead_assets_exist() {
+        let dir = std::env::temp_dir().join(format!(
+            "uasset_lens_dead22_group_json_{}",
+            std::process::id()
+        ));
+        std::fs::create_dir_all(&dir).unwrap();
+        let db_path = dir.join("test.db");
+
+        {
+            let mut db = asset_db::AssetDb::open(&db_path).unwrap();
+            db.upsert_all(&[make_meta(
+                "/Game/T_Rock",
+                dir.join("T_Rock.uasset"),
+                AssetType::Texture2D,
+                4096,
+                vec![],
+            )])
+            .unwrap();
+        }
+
+        let result = handle_dead_assets(
+            &dir,
+            None,
+            false,
+            None,
+            &[],
+            Some(&GroupMode::Type),
+            &db_path,
+            &FormatKind::Json,
+        )
+        .unwrap();
+        assert_eq!(result, 1);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn handle_dead_assets_group_should_return_0_when_no_dead_assets() {
+        let dir = std::env::temp_dir().join(format!(
+            "uasset_lens_dead22_group_empty_{}",
+            std::process::id()
+        ));
+        std::fs::create_dir_all(&dir).unwrap();
+        let db_path = dir.join("test.db");
+        asset_db::AssetDb::open(&db_path).unwrap();
+
+        let result = handle_dead_assets(
+            &dir,
+            None,
+            false,
+            None,
+            &[],
+            Some(&GroupMode::Type),
+            &db_path,
+            &FormatKind::Text,
+        )
+        .unwrap();
+        assert_eq!(result, 0);
         let _ = std::fs::remove_dir_all(&dir);
     }
 
@@ -664,6 +1015,7 @@ mod tests {
             false,
             None,
             &patterns,
+            None,
             &db_path,
             &FormatKind::Text,
         )
