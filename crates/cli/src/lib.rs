@@ -75,6 +75,16 @@ pub enum Commands {
         #[arg(long)]
         group: Option<GroupMode>,
     },
+    /// Show the forward dependency tree of an asset
+    Deps {
+        asset_path: PathBuf,
+        /// Maximum recursion depth (default: unlimited)
+        #[arg(long)]
+        depth: Option<u32>,
+        /// Print only the summary line, not the full tree
+        #[arg(long)]
+        size_only: bool,
+    },
     /// Show which assets would break if the target asset were deleted or renamed
     Impact { asset_path: PathBuf },
     /// List all ObjectRedirector assets in the project
@@ -186,6 +196,17 @@ fn dispatch(cli: &Cli) -> anyhow::Result<i32> {
                 &cli.format,
             )
         }
+        Commands::Deps {
+            asset_path,
+            depth,
+            size_only,
+        } => commands::deps::handle_deps(
+            asset_path,
+            cli.db.as_deref(),
+            *depth,
+            *size_only,
+            &cli.format,
+        ),
         Commands::Impact { asset_path } => {
             commands::impact::handle_impact(asset_path, cli.db.as_deref(), &cli.format)
         }
