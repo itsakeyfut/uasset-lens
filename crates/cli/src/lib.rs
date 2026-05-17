@@ -58,6 +58,9 @@ pub enum Commands {
         /// Sort results by file size, largest first
         #[arg(long)]
         sort_by_size: bool,
+        /// Exclude assets smaller than this many bytes
+        #[arg(long)]
+        min_size: Option<u64>,
     },
     /// Show which assets would break if the target asset were deleted or renamed
     Impact { asset_path: PathBuf },
@@ -154,12 +157,14 @@ fn dispatch(cli: &Cli) -> anyhow::Result<i32> {
             project_dir,
             asset_type,
             sort_by_size,
+            min_size,
         } => {
             let db_path = resolve_db_path(project_dir, cli.db.as_deref());
             commands::dead_assets::handle_dead_assets(
                 project_dir,
                 asset_type.as_deref(),
                 *sort_by_size,
+                *min_size,
                 &db_path,
                 &cli.format,
             )

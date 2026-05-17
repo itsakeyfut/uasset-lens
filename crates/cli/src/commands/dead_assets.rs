@@ -23,6 +23,7 @@ pub fn handle_dead_assets(
     _project_dir: &Path,
     asset_type_filter: Option<&str>,
     sort_by_size: bool,
+    min_size: Option<u64>,
     db_path: &Path,
     format: &FormatKind,
 ) -> anyhow::Result<i32> {
@@ -61,6 +62,10 @@ pub fn handle_dead_assets(
             }
         })
         .collect();
+
+    if let Some(min) = min_size {
+        entries.retain(|e| e.file_size >= min);
+    }
 
     if sort_by_size {
         entries.sort_unstable_by_key(|e| std::cmp::Reverse(e.file_size));
@@ -171,8 +176,14 @@ mod tests {
         ));
         let _ = std::fs::remove_file(&db_path);
 
-        let result =
-            handle_dead_assets(Path::new("/proj"), None, false, &db_path, &FormatKind::Text);
+        let result = handle_dead_assets(
+            Path::new("/proj"),
+            None,
+            false,
+            None,
+            &db_path,
+            &FormatKind::Text,
+        );
         assert!(result.is_err(), "missing DB should return an error");
     }
 
@@ -184,7 +195,8 @@ mod tests {
         let db_path = dir.join("test.db");
         asset_db::AssetDb::open(&db_path).unwrap();
 
-        let result = handle_dead_assets(&dir, None, false, &db_path, &FormatKind::Text).unwrap();
+        let result =
+            handle_dead_assets(&dir, None, false, None, &db_path, &FormatKind::Text).unwrap();
         assert_eq!(result, 0);
         let _ = std::fs::remove_dir_all(&dir);
     }
@@ -218,7 +230,8 @@ mod tests {
             .unwrap();
         }
 
-        let result = handle_dead_assets(&dir, None, false, &db_path, &FormatKind::Text).unwrap();
+        let result =
+            handle_dead_assets(&dir, None, false, None, &db_path, &FormatKind::Text).unwrap();
         assert_eq!(result, 0, "all nodes in a cycle have in_degree >= 1");
         let _ = std::fs::remove_dir_all(&dir);
     }
@@ -242,7 +255,8 @@ mod tests {
             .unwrap();
         }
 
-        let result = handle_dead_assets(&dir, None, false, &db_path, &FormatKind::Text).unwrap();
+        let result =
+            handle_dead_assets(&dir, None, false, None, &db_path, &FormatKind::Text).unwrap();
         assert_eq!(result, 1, "/Game/Orphan has no incoming edges");
         let _ = std::fs::remove_dir_all(&dir);
     }
@@ -268,9 +282,15 @@ mod tests {
             .unwrap();
         }
 
-        let result =
-            handle_dead_assets(&dir, Some("Texture2D"), false, &db_path, &FormatKind::Text)
-                .unwrap();
+        let result = handle_dead_assets(
+            &dir,
+            Some("Texture2D"),
+            false,
+            None,
+            &db_path,
+            &FormatKind::Text,
+        )
+        .unwrap();
         assert_eq!(
             result, 0,
             "dead asset is Blueprint, filter is Texture2D — no match"
@@ -308,9 +328,15 @@ mod tests {
             .unwrap();
         }
 
-        let result =
-            handle_dead_assets(&dir, Some("Texture2D"), false, &db_path, &FormatKind::Text)
-                .unwrap();
+        let result = handle_dead_assets(
+            &dir,
+            Some("Texture2D"),
+            false,
+            None,
+            &db_path,
+            &FormatKind::Text,
+        )
+        .unwrap();
         assert_eq!(result, 1, "Texture2D dead asset matches the filter");
         let _ = std::fs::remove_dir_all(&dir);
     }
@@ -325,7 +351,8 @@ mod tests {
         let db_path = dir.join("test.db");
         asset_db::AssetDb::open(&db_path).unwrap();
 
-        let result = handle_dead_assets(&dir, None, false, &db_path, &FormatKind::Json).unwrap();
+        let result =
+            handle_dead_assets(&dir, None, false, None, &db_path, &FormatKind::Json).unwrap();
         assert_eq!(result, 0);
         let _ = std::fs::remove_dir_all(&dir);
     }
@@ -351,7 +378,8 @@ mod tests {
             .unwrap();
         }
 
-        let result = handle_dead_assets(&dir, None, false, &db_path, &FormatKind::Json).unwrap();
+        let result =
+            handle_dead_assets(&dir, None, false, None, &db_path, &FormatKind::Json).unwrap();
         assert_eq!(result, 1, "JSON format exits 1 when dead assets are found");
         let _ = std::fs::remove_dir_all(&dir);
     }
@@ -393,7 +421,8 @@ mod tests {
             .unwrap();
         }
 
-        let result = handle_dead_assets(&dir, None, true, &db_path, &FormatKind::Text).unwrap();
+        let result =
+            handle_dead_assets(&dir, None, true, None, &db_path, &FormatKind::Text).unwrap();
         assert_eq!(result, 1, "dead assets found when sort_by_size is true");
         let _ = std::fs::remove_dir_all(&dir);
     }
@@ -421,5 +450,68 @@ mod tests {
         assert_eq!(entries[0].file_size, 8192);
         assert_eq!(entries[1].file_size, 4096);
         assert_eq!(entries[2].file_size, 1024);
+    }
+
+    #[test]
+    fn handle_dead_assets_min_size_should_exclude_assets_below_threshold() {
+        let dir = std::env::temp_dir().join(format!(
+            "uasset_lens_dead22_min_size_hit_{}",
+            std::process::id()
+        ));
+        std::fs::create_dir_all(&dir).unwrap();
+        let db_path = dir.join("test.db");
+
+        {
+            let mut db = asset_db::AssetDb::open(&db_path).unwrap();
+            db.upsert_all(&[
+                make_meta(
+                    "/Game/Small",
+                    dir.join("Small.uasset"),
+                    AssetType::Blueprint,
+                    512,
+                    vec![],
+                ),
+                make_meta(
+                    "/Game/Large",
+                    dir.join("Large.uasset"),
+                    AssetType::Blueprint,
+                    8192,
+                    vec![],
+                ),
+            ])
+            .unwrap();
+        }
+
+        let result =
+            handle_dead_assets(&dir, None, false, Some(1024), &db_path, &FormatKind::Text).unwrap();
+        assert_eq!(result, 1, "only Large (8192 B) meets the 1024 B threshold");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn handle_dead_assets_min_size_should_return_0_when_no_assets_meet_threshold() {
+        let dir = std::env::temp_dir().join(format!(
+            "uasset_lens_dead22_min_size_miss_{}",
+            std::process::id()
+        ));
+        std::fs::create_dir_all(&dir).unwrap();
+        let db_path = dir.join("test.db");
+
+        {
+            let mut db = asset_db::AssetDb::open(&db_path).unwrap();
+            db.upsert_all(&[make_meta(
+                "/Game/Tiny",
+                dir.join("Tiny.uasset"),
+                AssetType::Blueprint,
+                256,
+                vec![],
+            )])
+            .unwrap();
+        }
+
+        let result =
+            handle_dead_assets(&dir, None, false, Some(1024), &db_path, &FormatKind::Text).unwrap();
+        assert_eq!(result, 0, "Tiny (256 B) is below the 1024 B threshold");
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }
