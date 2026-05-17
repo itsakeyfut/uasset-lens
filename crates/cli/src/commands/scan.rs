@@ -198,6 +198,8 @@ pub fn handle_scan(
         }
     };
 
+    db.record_scan_snapshot()
+        .context("Failed to record scan snapshot")?;
     let assets_total = db_files.len() + new_count - removed_count;
 
     match format {
@@ -306,6 +308,23 @@ mod tests {
             blueprint_metrics: None,
             material_texture_samples: None,
         }
+    }
+
+    #[test]
+    fn handle_scan_should_record_scan_snapshot_after_upsert() {
+        let dir =
+            std::env::temp_dir().join(format!("uasset_lens_scan_history_{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let db_path = dir.join("test.db");
+
+        let result = handle_scan(&dir, false, &db_path, &FormatKind::Text, false).unwrap();
+        assert_eq!(result, 0);
+
+        let db = asset_db::AssetDb::open(&db_path).unwrap();
+        let snaps = db.recent_snapshots(1).unwrap();
+        assert_eq!(snaps.len(), 1, "scan should record exactly one snapshot");
+
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]

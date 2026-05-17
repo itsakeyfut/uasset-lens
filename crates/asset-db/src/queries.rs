@@ -6,7 +6,7 @@ use shared::AssetPath;
 
 use crate::db::AssetDb;
 use crate::error::DbError;
-use crate::record::{AssetFilter, AssetRecord, BlueprintRow};
+use crate::record::{AssetFilter, AssetRecord, BlueprintRow, ScanSnapshot};
 
 fn parse_asset_record(
     id: i64,
@@ -169,6 +169,54 @@ impl AssetDb {
         }
 
         Ok(records)
+    }
+
+    pub fn recent_snapshots(&self, n: usize) -> Result<Vec<ScanSnapshot>, DbError> {
+        let mut stmt = self.conn.prepare(
+            "SELECT id, scanned_at, asset_count, total_size, \
+                    blueprint_count, avg_node_count, texture_count, texture_size \
+             FROM scan_history \
+             ORDER BY scanned_at DESC \
+             LIMIT ?1",
+        )?;
+        stmt.query_map([n as i64], |row| {
+            Ok((
+                row.get::<_, i64>(0)?,
+                row.get::<_, i64>(1)?,
+                row.get::<_, i64>(2)?,
+                row.get::<_, i64>(3)?,
+                row.get::<_, i64>(4)?,
+                row.get::<_, f64>(5)?,
+                row.get::<_, i64>(6)?,
+                row.get::<_, i64>(7)?,
+            ))
+        })?
+        .collect::<Result<Vec<_>, _>>()?
+        .into_iter()
+        .map(
+            |(
+                id,
+                scanned_at,
+                asset_count,
+                total_size,
+                blueprint_count,
+                avg_node_count,
+                texture_count,
+                texture_size,
+            )| {
+                Ok(ScanSnapshot {
+                    id,
+                    scanned_at: scanned_at as u64,
+                    asset_count: asset_count as u64,
+                    total_size: total_size as u64,
+                    blueprint_count: blueprint_count as u64,
+                    avg_node_count,
+                    texture_count: texture_count as u64,
+                    texture_size: texture_size as u64,
+                })
+            },
+        )
+        .collect()
     }
 
     pub fn all_blueprint_metrics(&self) -> Result<Vec<BlueprintRow>, DbError> {
@@ -506,6 +554,47 @@ mod tests {
         };
         let results = db.find_assets(&filter).unwrap();
         assert!(results.is_empty());
+    }
+
+    #[test]
+    fn recent_snapshots_should_return_empty_when_no_history() {
+        let db = AssetDb::open(Path::new(":memory:")).unwrap();
+        let snaps = db.recent_snapshots(10).unwrap();
+        assert!(snaps.is_empty());
+    }
+
+    #[test]
+    fn recent_snapshots_should_return_at_most_n_rows() {
+        let db = AssetDb::open(Path::new(":memory:")).unwrap();
+        db.record_scan_snapshot().unwrap();
+        db.record_scan_snapshot().unwrap();
+        db.record_scan_snapshot().unwrap();
+        let snaps = db.recent_snapshots(2).unwrap();
+        assert_eq!(snaps.len(), 2);
+    }
+
+    #[test]
+    fn recent_snapshots_should_return_most_recent_first() {
+        let db = AssetDb::open(Path::new(":memory:")).unwrap();
+        db.conn
+            .execute(
+                "INSERT INTO scan_history \
+                 (scanned_at, asset_count, total_size, blueprint_count, avg_node_count, texture_count, texture_size) \
+                 VALUES (100, 0, 0, 0, 0.0, 0, 0)",
+                [],
+            )
+            .unwrap();
+        db.conn
+            .execute(
+                "INSERT INTO scan_history \
+                 (scanned_at, asset_count, total_size, blueprint_count, avg_node_count, texture_count, texture_size) \
+                 VALUES (200, 0, 0, 0, 0.0, 0, 0)",
+                [],
+            )
+            .unwrap();
+        let snaps = db.recent_snapshots(2).unwrap();
+        assert_eq!(snaps.len(), 2);
+        assert!(snaps[0].scanned_at >= snaps[1].scanned_at);
     }
 
     #[test]

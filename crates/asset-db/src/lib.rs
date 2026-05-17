@@ -12,4 +12,4 @@ pub use test_support::make_record;
 
 pub use db::AssetDb;
 pub use error::DbError;
-pub use record::{AssetFilter, AssetRecord, BlueprintRow};
+pub use record::{AssetFilter, AssetRecord, BlueprintRow, ScanSnapshot};

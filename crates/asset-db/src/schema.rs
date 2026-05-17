@@ -30,9 +30,21 @@ impl AssetDb {
                  dep_depth  INTEGER NOT NULL
              );
 
-             CREATE INDEX IF NOT EXISTS idx_assets_last_modified ON assets(last_modified);
-             CREATE INDEX IF NOT EXISTS idx_assets_asset_type    ON assets(asset_type);
-             CREATE INDEX IF NOT EXISTS idx_deps_to_path         ON dependencies(to_path);",
+             CREATE TABLE IF NOT EXISTS scan_history (
+                 id              INTEGER PRIMARY KEY AUTOINCREMENT,
+                 scanned_at      INTEGER NOT NULL,
+                 asset_count     INTEGER NOT NULL,
+                 total_size      INTEGER NOT NULL,
+                 blueprint_count INTEGER NOT NULL,
+                 avg_node_count  REAL    NOT NULL,
+                 texture_count   INTEGER NOT NULL,
+                 texture_size    INTEGER NOT NULL
+             );
+
+             CREATE INDEX IF NOT EXISTS idx_assets_last_modified    ON assets(last_modified);
+             CREATE INDEX IF NOT EXISTS idx_assets_asset_type     ON assets(asset_type);
+             CREATE INDEX IF NOT EXISTS idx_deps_to_path          ON dependencies(to_path);
+             CREATE INDEX IF NOT EXISTS idx_scan_history_scanned_at ON scan_history(scanned_at);",
         )?;
         Ok(())
     }
@@ -64,9 +76,11 @@ mod tests {
 
         assert!(names.contains(&"assets".to_string()));
         assert!(names.contains(&"dependencies".to_string()));
+        assert!(names.contains(&"scan_history".to_string()));
         assert!(names.contains(&"idx_assets_asset_type".to_string()));
         assert!(names.contains(&"idx_assets_last_modified".to_string()));
         assert!(names.contains(&"idx_deps_to_path".to_string()));
+        assert!(names.contains(&"idx_scan_history_scanned_at".to_string()));
     }
 
     #[test]
