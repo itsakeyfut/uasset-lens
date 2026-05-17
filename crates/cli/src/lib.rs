@@ -123,6 +123,17 @@ pub enum Commands {
     Duplicates { project_dir: PathBuf },
     /// Run all lint rules and report violations (exit 1 if any found)
     Lint { project_dir: PathBuf },
+    /// Run all (or selected) health checks; exits 1 if any check finds problems
+    #[command(name = "check")]
+    Check {
+        project_dir: PathBuf,
+        /// Run only these checks (comma-separated: dead-assets,cycles,redirectors,lint,budget,duplicates)
+        #[arg(long, value_delimiter = ',')]
+        only: Vec<String>,
+        /// Skip these checks (comma-separated: dead-assets,cycles,redirectors,lint,budget,duplicates)
+        #[arg(long, value_delimiter = ',')]
+        skip: Vec<String>,
+    },
     /// Watch the project directory and print new problems as files change
     Watch { project_dir: PathBuf },
 }
@@ -260,6 +271,14 @@ fn dispatch(cli: &Cli) -> anyhow::Result<i32> {
         Commands::Lint { project_dir } => {
             let db_path = resolve_db_path(project_dir, cli.db.as_deref());
             commands::lint::handle_lint(project_dir, &db_path, &cli.format)
+        }
+        Commands::Check {
+            project_dir,
+            only,
+            skip,
+        } => {
+            let db_path = resolve_db_path(project_dir, cli.db.as_deref());
+            commands::check::handle_check(project_dir, only, skip, &db_path, &cli.format)
         }
         Commands::Watch { project_dir } => {
             let db_path = resolve_db_path(project_dir, cli.db.as_deref());
