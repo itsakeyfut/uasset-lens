@@ -8,4 +8,6 @@ name = "uasset-lens"
 path = "src/main.rs"
 
 [dependencies]
-cli = { path = "../../crates/cli" }
+cli            = { path = "../../crates/cli" }
+clap           = { workspace = true }
+clap_complete  = "4.6.5"
