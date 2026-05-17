@@ -17,6 +17,13 @@ pub enum FormatKind {
     Json,
 }
 
+#[derive(Debug, Clone, PartialEq, ValueEnum)]
+pub enum GroupMode {
+    #[value(name = "type")]
+    Type,
+    Dir,
+}
+
 #[derive(Debug, Parser)]
 #[command(name = "uasset-lens", about = "Unreal Engine 5 asset static analyzer")]
 pub struct Cli {
@@ -64,6 +71,9 @@ pub enum Commands {
         /// Exclude assets whose path contains this substring (repeatable)
         #[arg(long = "exclude")]
         exclude_patterns: Vec<String>,
+        /// Aggregate results by asset type or top-level directory
+        #[arg(long)]
+        group: Option<GroupMode>,
     },
     /// Show which assets would break if the target asset were deleted or renamed
     Impact { asset_path: PathBuf },
@@ -162,6 +172,7 @@ fn dispatch(cli: &Cli) -> anyhow::Result<i32> {
             sort_by_size,
             min_size,
             exclude_patterns,
+            group,
         } => {
             let db_path = resolve_db_path(project_dir, cli.db.as_deref());
             commands::dead_assets::handle_dead_assets(
@@ -170,6 +181,7 @@ fn dispatch(cli: &Cli) -> anyhow::Result<i32> {
                 *sort_by_size,
                 *min_size,
                 exclude_patterns,
+                group.as_ref(),
                 &db_path,
                 &cli.format,
             )
