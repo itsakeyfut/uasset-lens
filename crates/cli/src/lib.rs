@@ -110,6 +110,13 @@ pub enum Commands {
     },
     /// Show a complexity ranking of Blueprint assets
     Blueprint { project_dir: PathBuf },
+    /// Show a size and composition overview of the project
+    Stats {
+        project_dir: PathBuf,
+        /// Number of folders and largest assets to show (default: 5 folders, 10 assets)
+        #[arg(long)]
+        top: Option<usize>,
+    },
     /// Report assets exceeding configured per-type size budgets
     Budget { project_dir: PathBuf },
     /// List same-name and texture duplicate asset groups
@@ -237,6 +244,10 @@ fn dispatch(cli: &Cli) -> anyhow::Result<i32> {
         Commands::Blueprint { project_dir } => {
             let db_path = resolve_db_path(project_dir, cli.db.as_deref());
             commands::blueprint::handle_blueprint(project_dir, &db_path, &cli.format)
+        }
+        Commands::Stats { project_dir, top } => {
+            let db_path = resolve_db_path(project_dir, cli.db.as_deref());
+            commands::stats::handle_stats(project_dir, *top, &db_path, &cli.format)
         }
         Commands::Budget { project_dir } => {
             let db_path = resolve_db_path(project_dir, cli.db.as_deref());
