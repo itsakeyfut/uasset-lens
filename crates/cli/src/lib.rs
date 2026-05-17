@@ -153,6 +153,12 @@ pub enum Commands {
     },
     /// Watch the project directory and print new problems as files change
     Watch { project_dir: PathBuf },
+    /// Generate shell completion scripts
+    #[command(name = "completions")]
+    Completions {
+        /// Shell to generate completions for (bash, zsh, fish, powershell, elvish)
+        shell: String,
+    },
 }
 
 /// Opens an existing database, translating `DbError::NotFound` into a user-friendly CLI message.
@@ -185,7 +191,12 @@ pub(crate) fn load_graph(
 }
 
 pub fn run() -> i32 {
-    let cli = Cli::parse();
+    run_with(Cli::parse())
+}
+
+/// Runs the CLI with a pre-parsed `Cli` instance.
+/// Callers that intercept specific commands (e.g., `completions`) before dispatch use this.
+pub fn run_with(cli: Cli) -> i32 {
     match dispatch(&cli) {
         Ok(code) => code,
         Err(e) => {
@@ -319,6 +330,10 @@ fn dispatch(cli: &Cli) -> anyhow::Result<i32> {
         Commands::Watch { project_dir } => {
             let db_path = resolve_db_path(project_dir, cli.db.as_deref());
             commands::watch::handle_watch(project_dir, &db_path)
+        }
+        // Intercepted before dispatch in apps/uasset-lens-cli/src/main.rs
+        Commands::Completions { .. } => {
+            unreachable!("completions is handled at the binary entry point before dispatch")
         }
     }
 }
