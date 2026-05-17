@@ -1,3 +1,4 @@
+use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 
 use anyhow::Context;
@@ -13,6 +14,27 @@ struct ImpactOutput {
     total: usize,
 }
 
+#[derive(Clone, Copy, serde::Serialize)]
+#[serde(rename_all = "lowercase")]
+enum NodeKind {
+    Direct,
+    Transitive,
+    Cycle,
+}
+
+#[derive(serde::Serialize)]
+struct TreeNode {
+    path: String,
+    kind: NodeKind,
+    children: Vec<TreeNode>,
+}
+
+#[derive(serde::Serialize)]
+struct ImpactTreeOutput {
+    target: String,
+    children: Vec<TreeNode>,
+}
+
 // Unlike other handlers that receive a resolved `db_path`, this handler takes
 // `asset_path` (a path to a specific asset, not a project dir) and resolves
 // both the target AssetPath and the DB location internally via
@@ -21,6 +43,7 @@ struct ImpactOutput {
 pub fn handle_impact(
     asset_path: &Path,
     db_override: Option<&Path>,
+    tree: bool,
     format: &FormatKind,
 ) -> anyhow::Result<i32> {
     let (target, db_path) = resolve_target_and_db(asset_path, db_override)?;
@@ -33,6 +56,45 @@ pub fn handle_impact(
 
     let result = impact_analyzer::detect(&graph, &target);
     let total = result.direct.len() + result.transitive.len();
+
+    if tree {
+        let mut path_stack = HashSet::new();
+        path_stack.insert(target.clone()); // clone required: path_stack owns the key
+        let children: Vec<TreeNode> = graph
+            .reverse_deps_of(&target)
+            .into_iter()
+            .map(|p| build_tree(&graph, p, 1, &mut path_stack))
+            .collect();
+
+        match format {
+            FormatKind::Json => {
+                let out = ImpactTreeOutput {
+                    target: target.as_str().to_owned(),
+                    children,
+                };
+                println!(
+                    "{}",
+                    serde_json::to_string_pretty(&out)
+                        .context("Failed to serialize impact tree output to JSON")?
+                );
+            }
+            FormatKind::Text => {
+                println!("{}  [target]", target.as_str());
+                let n = children.len();
+                for (i, child) in children.iter().enumerate() {
+                    print_tree_node(child, "", i == n - 1, None);
+                }
+                println!();
+                println!(
+                    "Impact: {} direct, {} transitive \u{2014} {} assets total",
+                    result.direct.len(),
+                    result.transitive.len(),
+                    total
+                );
+            }
+        }
+        return if total > 0 { Ok(1) } else { Ok(0) };
+    }
 
     match format {
         FormatKind::Json => {
@@ -78,6 +140,58 @@ pub fn handle_impact(
     }
 
     if total > 0 { Ok(1) } else { Ok(0) }
+}
+
+fn build_tree(
+    graph: &dependency_graph::DependencyGraph,
+    path: AssetPath,
+    depth: usize,
+    path_stack: &mut HashSet<AssetPath>,
+) -> TreeNode {
+    if path_stack.contains(&path) {
+        return TreeNode {
+            path: path.as_str().to_owned(),
+            kind: NodeKind::Cycle,
+            children: vec![],
+        };
+    }
+    let kind = if depth == 1 {
+        NodeKind::Direct
+    } else {
+        NodeKind::Transitive
+    };
+    path_stack.insert(path.clone()); // clone required: path_stack takes ownership of key
+    let children = graph
+        .reverse_deps_of(&path)
+        .into_iter()
+        .map(|p| build_tree(graph, p, depth + 1, path_stack))
+        .collect();
+    path_stack.remove(&path);
+    TreeNode {
+        path: path.as_str().to_owned(),
+        kind,
+        children,
+    }
+}
+
+fn print_tree_node(node: &TreeNode, prefix: &str, is_last: bool, parent_short: Option<&str>) {
+    let connector = if is_last {
+        "\u{2514}\u{2500}\u{2500} "
+    } else {
+        "\u{251C}\u{2500}\u{2500} "
+    };
+    let annotation = match node.kind {
+        NodeKind::Direct => "(direct)".to_owned(),
+        NodeKind::Cycle => "[cycle]".to_owned(),
+        NodeKind::Transitive => format!("(via {})", parent_short.unwrap_or("?")),
+    };
+    println!("{}{}{}  {}", prefix, connector, node.path, annotation);
+    let child_prefix = format!("{}{}", prefix, if is_last { "    " } else { "\u{2502}   " });
+    let short = node.path.split('/').next_back().unwrap_or(&node.path);
+    let n = node.children.len();
+    for (i, child) in node.children.iter().enumerate() {
+        print_tree_node(child, &child_prefix, i == n - 1, Some(short));
+    }
 }
 
 /// Resolves the target `AssetPath` and DB file path from the raw CLI argument.
@@ -146,7 +260,12 @@ mod tests {
         ));
         let _ = std::fs::remove_file(&db_path);
 
-        let result = handle_impact(Path::new("/Game/Target"), Some(&db_path), &FormatKind::Text);
+        let result = handle_impact(
+            Path::new("/Game/Target"),
+            Some(&db_path),
+            false,
+            &FormatKind::Text,
+        );
         assert!(result.is_err(), "missing DB should return an error");
     }
 
@@ -163,6 +282,7 @@ mod tests {
         let result = handle_impact(
             Path::new("/Game/NotInGraph"),
             Some(&db_path),
+            false,
             &FormatKind::Text,
         );
         assert!(
@@ -193,8 +313,13 @@ mod tests {
             .unwrap();
         }
 
-        let result =
-            handle_impact(Path::new("/Game/Target"), Some(&db_path), &FormatKind::Text).unwrap();
+        let result = handle_impact(
+            Path::new("/Game/Target"),
+            Some(&db_path),
+            false,
+            &FormatKind::Text,
+        )
+        .unwrap();
         assert_eq!(result, 0, "no referencing assets means no impact");
         let _ = std::fs::remove_dir_all(&dir);
     }
@@ -230,8 +355,13 @@ mod tests {
             .unwrap();
         }
 
-        let result =
-            handle_impact(Path::new("/Game/Target"), Some(&db_path), &FormatKind::Text).unwrap();
+        let result = handle_impact(
+            Path::new("/Game/Target"),
+            Some(&db_path),
+            false,
+            &FormatKind::Text,
+        )
+        .unwrap();
         assert_eq!(result, 1, "one direct reference means impact exists");
         let _ = std::fs::remove_dir_all(&dir);
     }
@@ -274,8 +404,13 @@ mod tests {
             .unwrap();
         }
 
-        let result =
-            handle_impact(Path::new("/Game/Target"), Some(&db_path), &FormatKind::Text).unwrap();
+        let result = handle_impact(
+            Path::new("/Game/Target"),
+            Some(&db_path),
+            false,
+            &FormatKind::Text,
+        )
+        .unwrap();
         assert_eq!(result, 1, "both direct and transitive refs make total > 0");
         let _ = std::fs::remove_dir_all(&dir);
     }
@@ -301,8 +436,13 @@ mod tests {
             .unwrap();
         }
 
-        let result =
-            handle_impact(Path::new("/Game/Target"), Some(&db_path), &FormatKind::Json).unwrap();
+        let result = handle_impact(
+            Path::new("/Game/Target"),
+            Some(&db_path),
+            false,
+            &FormatKind::Json,
+        )
+        .unwrap();
         assert_eq!(result, 0, "JSON format exits 0 when no impact");
         let _ = std::fs::remove_dir_all(&dir);
     }
@@ -337,8 +477,13 @@ mod tests {
             .unwrap();
         }
 
-        let result =
-            handle_impact(Path::new("/Game/Target"), Some(&db_path), &FormatKind::Json).unwrap();
+        let result = handle_impact(
+            Path::new("/Game/Target"),
+            Some(&db_path),
+            false,
+            &FormatKind::Json,
+        )
+        .unwrap();
         assert_eq!(result, 1, "JSON format exits 1 when impact exists");
         let _ = std::fs::remove_dir_all(&dir);
     }
@@ -370,5 +515,162 @@ mod tests {
             find_project_dir(&nonexistent).is_err(),
             "no .uasset-lens in path should return error"
         );
+    }
+
+    #[test]
+    fn handle_impact_tree_should_return_0_when_no_impact() {
+        let dir = std::env::temp_dir().join(format!(
+            "uasset_lens_impact163_tree_empty_{}",
+            std::process::id()
+        ));
+        std::fs::create_dir_all(&dir).unwrap();
+        let db_path = dir.join("test.db");
+
+        {
+            let mut db = asset_db::AssetDb::open(&db_path).unwrap();
+            db.upsert_all(&[make_meta(
+                "/Game/Target",
+                dir.join("Target.uasset"),
+                AssetType::Blueprint,
+                1024,
+                vec![],
+            )])
+            .unwrap();
+        }
+
+        let result = handle_impact(
+            Path::new("/Game/Target"),
+            Some(&db_path),
+            true,
+            &FormatKind::Text,
+        )
+        .unwrap();
+        assert_eq!(result, 0, "tree mode: no referencing assets → exit 0");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn handle_impact_tree_should_return_1_when_direct_references_exist() {
+        let dir = std::env::temp_dir().join(format!(
+            "uasset_lens_impact163_tree_direct_{}",
+            std::process::id()
+        ));
+        std::fs::create_dir_all(&dir).unwrap();
+        let db_path = dir.join("test.db");
+
+        {
+            let mut db = asset_db::AssetDb::open(&db_path).unwrap();
+            db.upsert_all(&[
+                make_meta(
+                    "/Game/Target",
+                    dir.join("Target.uasset"),
+                    AssetType::Blueprint,
+                    1024,
+                    vec![],
+                ),
+                make_meta(
+                    "/Game/A",
+                    dir.join("A.uasset"),
+                    AssetType::Blueprint,
+                    1024,
+                    vec![AssetPath::new("/Game/Target").unwrap()],
+                ),
+            ])
+            .unwrap();
+        }
+
+        let result = handle_impact(
+            Path::new("/Game/Target"),
+            Some(&db_path),
+            true,
+            &FormatKind::Text,
+        )
+        .unwrap();
+        assert_eq!(result, 1, "tree mode: direct reference → exit 1");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn handle_impact_tree_json_should_return_1_when_reference_exists() {
+        let dir = std::env::temp_dir().join(format!(
+            "uasset_lens_impact163_tree_json_{}",
+            std::process::id()
+        ));
+        std::fs::create_dir_all(&dir).unwrap();
+        let db_path = dir.join("test.db");
+
+        {
+            let mut db = asset_db::AssetDb::open(&db_path).unwrap();
+            db.upsert_all(&[
+                make_meta(
+                    "/Game/Target",
+                    dir.join("Target.uasset"),
+                    AssetType::Blueprint,
+                    1024,
+                    vec![],
+                ),
+                make_meta(
+                    "/Game/A",
+                    dir.join("A.uasset"),
+                    AssetType::Blueprint,
+                    1024,
+                    vec![AssetPath::new("/Game/Target").unwrap()],
+                ),
+            ])
+            .unwrap();
+        }
+
+        let result = handle_impact(
+            Path::new("/Game/Target"),
+            Some(&db_path),
+            true,
+            &FormatKind::Json,
+        )
+        .unwrap();
+        assert_eq!(result, 1, "tree JSON mode: reference exists → exit 1");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn handle_impact_tree_should_not_infinite_loop_on_cycle() {
+        let dir = std::env::temp_dir().join(format!(
+            "uasset_lens_impact163_tree_cycle_{}",
+            std::process::id()
+        ));
+        std::fs::create_dir_all(&dir).unwrap();
+        let db_path = dir.join("test.db");
+
+        {
+            let mut db = asset_db::AssetDb::open(&db_path).unwrap();
+            // A→Target→A: mutual cycle
+            db.upsert_all(&[
+                make_meta(
+                    "/Game/Target",
+                    dir.join("Target.uasset"),
+                    AssetType::Blueprint,
+                    1024,
+                    vec![AssetPath::new("/Game/A").unwrap()],
+                ),
+                make_meta(
+                    "/Game/A",
+                    dir.join("A.uasset"),
+                    AssetType::Blueprint,
+                    1024,
+                    vec![AssetPath::new("/Game/Target").unwrap()],
+                ),
+            ])
+            .unwrap();
+        }
+
+        // path_stack prevents infinite DFS when A→Target→A forms a mutual cycle
+        let result = handle_impact(
+            Path::new("/Game/Target"),
+            Some(&db_path),
+            true,
+            &FormatKind::Text,
+        )
+        .unwrap();
+        assert_eq!(result, 1, "tree mode with cycle: impact exists → exit 1");
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }
