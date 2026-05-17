@@ -24,6 +24,7 @@ pub fn handle_dead_assets(
     asset_type_filter: Option<&str>,
     sort_by_size: bool,
     min_size: Option<u64>,
+    exclude_patterns: &[String],
     db_path: &Path,
     format: &FormatKind,
 ) -> anyhow::Result<i32> {
@@ -65,6 +66,10 @@ pub fn handle_dead_assets(
 
     if let Some(min) = min_size {
         entries.retain(|e| e.file_size >= min);
+    }
+
+    if !exclude_patterns.is_empty() {
+        entries.retain(|e| !exclude_patterns.iter().any(|p| e.path.contains(p.as_str())));
     }
 
     if sort_by_size {
@@ -181,6 +186,7 @@ mod tests {
             None,
             false,
             None,
+            &[],
             &db_path,
             &FormatKind::Text,
         );
@@ -196,7 +202,7 @@ mod tests {
         asset_db::AssetDb::open(&db_path).unwrap();
 
         let result =
-            handle_dead_assets(&dir, None, false, None, &db_path, &FormatKind::Text).unwrap();
+            handle_dead_assets(&dir, None, false, None, &[], &db_path, &FormatKind::Text).unwrap();
         assert_eq!(result, 0);
         let _ = std::fs::remove_dir_all(&dir);
     }
@@ -231,7 +237,7 @@ mod tests {
         }
 
         let result =
-            handle_dead_assets(&dir, None, false, None, &db_path, &FormatKind::Text).unwrap();
+            handle_dead_assets(&dir, None, false, None, &[], &db_path, &FormatKind::Text).unwrap();
         assert_eq!(result, 0, "all nodes in a cycle have in_degree >= 1");
         let _ = std::fs::remove_dir_all(&dir);
     }
@@ -256,7 +262,7 @@ mod tests {
         }
 
         let result =
-            handle_dead_assets(&dir, None, false, None, &db_path, &FormatKind::Text).unwrap();
+            handle_dead_assets(&dir, None, false, None, &[], &db_path, &FormatKind::Text).unwrap();
         assert_eq!(result, 1, "/Game/Orphan has no incoming edges");
         let _ = std::fs::remove_dir_all(&dir);
     }
@@ -287,6 +293,7 @@ mod tests {
             Some("Texture2D"),
             false,
             None,
+            &[],
             &db_path,
             &FormatKind::Text,
         )
@@ -333,6 +340,7 @@ mod tests {
             Some("Texture2D"),
             false,
             None,
+            &[],
             &db_path,
             &FormatKind::Text,
         )
@@ -352,7 +360,7 @@ mod tests {
         asset_db::AssetDb::open(&db_path).unwrap();
 
         let result =
-            handle_dead_assets(&dir, None, false, None, &db_path, &FormatKind::Json).unwrap();
+            handle_dead_assets(&dir, None, false, None, &[], &db_path, &FormatKind::Json).unwrap();
         assert_eq!(result, 0);
         let _ = std::fs::remove_dir_all(&dir);
     }
@@ -379,7 +387,7 @@ mod tests {
         }
 
         let result =
-            handle_dead_assets(&dir, None, false, None, &db_path, &FormatKind::Json).unwrap();
+            handle_dead_assets(&dir, None, false, None, &[], &db_path, &FormatKind::Json).unwrap();
         assert_eq!(result, 1, "JSON format exits 1 when dead assets are found");
         let _ = std::fs::remove_dir_all(&dir);
     }
@@ -422,7 +430,7 @@ mod tests {
         }
 
         let result =
-            handle_dead_assets(&dir, None, true, None, &db_path, &FormatKind::Text).unwrap();
+            handle_dead_assets(&dir, None, true, None, &[], &db_path, &FormatKind::Text).unwrap();
         assert_eq!(result, 1, "dead assets found when sort_by_size is true");
         let _ = std::fs::remove_dir_all(&dir);
     }
@@ -482,8 +490,16 @@ mod tests {
             .unwrap();
         }
 
-        let result =
-            handle_dead_assets(&dir, None, false, Some(1024), &db_path, &FormatKind::Text).unwrap();
+        let result = handle_dead_assets(
+            &dir,
+            None,
+            false,
+            Some(1024),
+            &[],
+            &db_path,
+            &FormatKind::Text,
+        )
+        .unwrap();
         assert_eq!(result, 1, "only Large (8192 B) meets the 1024 B threshold");
         let _ = std::fs::remove_dir_all(&dir);
     }
@@ -509,9 +525,153 @@ mod tests {
             .unwrap();
         }
 
-        let result =
-            handle_dead_assets(&dir, None, false, Some(1024), &db_path, &FormatKind::Text).unwrap();
+        let result = handle_dead_assets(
+            &dir,
+            None,
+            false,
+            Some(1024),
+            &[],
+            &db_path,
+            &FormatKind::Text,
+        )
+        .unwrap();
         assert_eq!(result, 0, "Tiny (256 B) is below the 1024 B threshold");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn handle_dead_assets_exclude_pattern_should_exclude_matching_assets() {
+        let dir = std::env::temp_dir().join(format!(
+            "uasset_lens_dead22_excl_hit_{}",
+            std::process::id()
+        ));
+        std::fs::create_dir_all(&dir).unwrap();
+        let db_path = dir.join("test.db");
+
+        {
+            let mut db = asset_db::AssetDb::open(&db_path).unwrap();
+            db.upsert_all(&[
+                make_meta(
+                    "/Game/ThirdPerson/BP_Character",
+                    dir.join("BP_Character.uasset"),
+                    AssetType::Blueprint,
+                    2048,
+                    vec![],
+                ),
+                make_meta(
+                    "/Game/Characters/BP_Player",
+                    dir.join("BP_Player.uasset"),
+                    AssetType::Blueprint,
+                    4096,
+                    vec![],
+                ),
+            ])
+            .unwrap();
+        }
+
+        let patterns = vec!["ThirdPerson".to_owned()];
+        let result = handle_dead_assets(
+            &dir,
+            None,
+            false,
+            None,
+            &patterns,
+            &db_path,
+            &FormatKind::Text,
+        )
+        .unwrap();
+        assert_eq!(result, 1, "ThirdPerson asset excluded; BP_Player remains");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn handle_dead_assets_exclude_pattern_should_return_0_when_all_match() {
+        let dir = std::env::temp_dir().join(format!(
+            "uasset_lens_dead22_excl_all_{}",
+            std::process::id()
+        ));
+        std::fs::create_dir_all(&dir).unwrap();
+        let db_path = dir.join("test.db");
+
+        {
+            let mut db = asset_db::AssetDb::open(&db_path).unwrap();
+            db.upsert_all(&[make_meta(
+                "/Game/ThirdPerson/BP_Character",
+                dir.join("BP_Character.uasset"),
+                AssetType::Blueprint,
+                2048,
+                vec![],
+            )])
+            .unwrap();
+        }
+
+        let patterns = vec!["ThirdPerson".to_owned()];
+        let result = handle_dead_assets(
+            &dir,
+            None,
+            false,
+            None,
+            &patterns,
+            &db_path,
+            &FormatKind::Text,
+        )
+        .unwrap();
+        assert_eq!(result, 0, "all assets match the exclude pattern");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn handle_dead_assets_exclude_pattern_multiple_patterns_should_or_combine() {
+        let dir = std::env::temp_dir().join(format!(
+            "uasset_lens_dead22_excl_multi_{}",
+            std::process::id()
+        ));
+        std::fs::create_dir_all(&dir).unwrap();
+        let db_path = dir.join("test.db");
+
+        {
+            let mut db = asset_db::AssetDb::open(&db_path).unwrap();
+            db.upsert_all(&[
+                make_meta(
+                    "/Game/ThirdPerson/BP_Character",
+                    dir.join("BP_Character.uasset"),
+                    AssetType::Blueprint,
+                    2048,
+                    vec![],
+                ),
+                make_meta(
+                    "/Game/EditorTools/BP_Helper",
+                    dir.join("BP_Helper.uasset"),
+                    AssetType::Blueprint,
+                    1024,
+                    vec![],
+                ),
+                make_meta(
+                    "/Game/Characters/BP_Player",
+                    dir.join("BP_Player.uasset"),
+                    AssetType::Blueprint,
+                    4096,
+                    vec![],
+                ),
+            ])
+            .unwrap();
+        }
+
+        let patterns = vec!["ThirdPerson".to_owned(), "EditorTools".to_owned()];
+        let result = handle_dead_assets(
+            &dir,
+            None,
+            false,
+            None,
+            &patterns,
+            &db_path,
+            &FormatKind::Text,
+        )
+        .unwrap();
+        assert_eq!(
+            result, 1,
+            "ThirdPerson and EditorTools excluded; only BP_Player remains"
+        );
         let _ = std::fs::remove_dir_all(&dir);
     }
 }
