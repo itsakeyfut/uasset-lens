@@ -29,3 +29,15 @@ pub struct AssetFilter {
     pub max_size: Option<u64>,
     pub path_pattern: Option<String>,
 }
+
+#[derive(Debug)]
+pub struct ScanSnapshot {
+    pub id: i64,
+    pub scanned_at: u64,
+    pub asset_count: u64,
+    pub total_size: u64,
+    pub blueprint_count: u64,
+    pub avg_node_count: f64,
+    pub texture_count: u64,
+    pub texture_size: u64,
+}

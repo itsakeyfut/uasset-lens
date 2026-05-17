@@ -72,6 +72,30 @@ impl AssetDb {
         Ok(())
     }
 
+    pub fn record_scan_snapshot(&self) -> Result<(), DbError> {
+        let scanned_at = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs() as i64;
+        let bp_type = serde_json::to_string(&shared::AssetType::Blueprint)?;
+        let tx2d_type = serde_json::to_string(&shared::AssetType::Texture2D)?;
+        self.conn.execute(
+            "INSERT INTO scan_history \
+                 (scanned_at, asset_count, total_size, blueprint_count, avg_node_count, texture_count, texture_size) \
+             SELECT \
+                 ?1, \
+                 COUNT(*), \
+                 COALESCE(SUM(file_size), 0), \
+                 COALESCE(SUM(CASE WHEN asset_type = ?2 THEN 1 ELSE 0 END), 0), \
+                 COALESCE((SELECT AVG(node_count) FROM blueprint_metrics), 0.0), \
+                 COALESCE(SUM(CASE WHEN asset_type = ?3 THEN 1 ELSE 0 END), 0), \
+                 COALESCE(SUM(CASE WHEN asset_type = ?3 THEN file_size ELSE 0 END), 0) \
+             FROM assets",
+            rusqlite::params![scanned_at, bp_type, tx2d_type],
+        )?;
+        Ok(())
+    }
+
     pub fn delete_asset(&self, asset_path: &AssetPath) -> Result<(), DbError> {
         self.conn.execute(
             "DELETE FROM assets WHERE asset_path = ?1",
@@ -105,6 +129,71 @@ mod tests {
     use super::*;
     use shared::{AssetPath, AssetType};
     use std::path::{Path, PathBuf};
+
+    #[test]
+    fn record_scan_snapshot_should_insert_row_when_db_is_empty() {
+        let db = AssetDb::open(Path::new(":memory:")).unwrap();
+        db.record_scan_snapshot().unwrap();
+        let snaps = db.recent_snapshots(1).unwrap();
+        assert_eq!(snaps.len(), 1);
+        assert_eq!(snaps[0].asset_count, 0);
+        assert_eq!(snaps[0].total_size, 0);
+        assert_eq!(snaps[0].blueprint_count, 0);
+        assert_eq!(snaps[0].avg_node_count, 0.0);
+        assert_eq!(snaps[0].texture_count, 0);
+        assert_eq!(snaps[0].texture_size, 0);
+    }
+
+    #[test]
+    fn record_scan_snapshot_should_capture_correct_aggregate_counts() {
+        let mut db = AssetDb::open(Path::new(":memory:")).unwrap();
+        let assets = vec![
+            scanner::AssetMetadata {
+                file_path: PathBuf::from("/proj/Content/BP_Test.uasset"),
+                file_size: 1024,
+                last_modified: 100,
+                ..scanner::make_meta("/Game/BP_Test", AssetType::Blueprint)
+            },
+            scanner::AssetMetadata {
+                file_path: PathBuf::from("/proj/Content/T_Rock.uasset"),
+                file_size: 2048,
+                last_modified: 200,
+                ..scanner::make_meta("/Game/T_Rock", AssetType::Texture2D)
+            },
+        ];
+        db.upsert_all(&assets).unwrap();
+        db.record_scan_snapshot().unwrap();
+        let snaps = db.recent_snapshots(1).unwrap();
+        assert_eq!(snaps.len(), 1);
+        assert_eq!(snaps[0].asset_count, 2);
+        assert_eq!(snaps[0].total_size, 3072);
+        assert_eq!(snaps[0].blueprint_count, 1);
+        assert_eq!(snaps[0].texture_count, 1);
+        assert_eq!(snaps[0].texture_size, 2048);
+    }
+
+    #[test]
+    fn record_scan_snapshot_should_capture_avg_node_count_from_blueprint_metrics() {
+        let db = AssetDb::open(Path::new(":memory:")).unwrap();
+        let bm = scanner::BlueprintMetrics {
+            node_count: 10,
+            event_tick_count: 0,
+            cast_count: 0,
+            dependency_depth: 0,
+        };
+        let meta = scanner::AssetMetadata {
+            file_path: PathBuf::from("/proj/Content/BP_A.uasset"),
+            file_size: 512,
+            last_modified: 1,
+            blueprint_metrics: Some(bm),
+            ..scanner::make_meta("/Game/BP_A", AssetType::Blueprint)
+        };
+        db.upsert_asset(&meta).unwrap();
+        db.record_scan_snapshot().unwrap();
+        let snaps = db.recent_snapshots(1).unwrap();
+        assert_eq!(snaps.len(), 1);
+        assert!((snaps[0].avg_node_count - 10.0).abs() < f64::EPSILON);
+    }
 
     #[test]
     fn upsert_then_delete_should_cascade_remove_dependencies() {
