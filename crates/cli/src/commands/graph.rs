@@ -55,8 +55,8 @@ pub fn handle_graph(
         FormatKind::GithubActions | FormatKind::Text => {
             if !cycles_only {
                 println!("Dependency Graph Summary");
-                println!("  Total assets   : {}", format_number(total_assets));
-                println!("  Total edges    : {}", format_number(total_edges));
+                println!("  Total assets   : {}", crate::format_number(total_assets));
+                println!("  Total edges    : {}", crate::format_number(total_edges));
                 println!("  Circular deps  : {} cycles detected", cycles.len());
             }
             if !cycle_paths.is_empty() {
@@ -76,18 +76,6 @@ pub fn handle_graph(
     } else {
         Ok(0)
     }
-}
-
-fn format_number(n: usize) -> String {
-    let s = n.to_string();
-    let mut result = String::new();
-    for (i, c) in s.chars().rev().enumerate() {
-        if i > 0 && i % 3 == 0 {
-            result.push(',');
-        }
-        result.push(c);
-    }
-    result.chars().rev().collect()
 }
 
 #[cfg(test)]
@@ -255,13 +243,5 @@ mod tests {
         let result = handle_graph(&dir, true, &db_path, &FormatKind::Json).unwrap();
         assert_eq!(result, 1, "JSON cycles-only with A→B→A cycle should exit 1");
         let _ = std::fs::remove_dir_all(&dir);
-    }
-
-    #[test]
-    fn format_number_should_add_comma_separator_for_thousands() {
-        assert_eq!(format_number(0), "0");
-        assert_eq!(format_number(999), "999");
-        assert_eq!(format_number(1000), "1,000");
-        assert_eq!(format_number(1234567), "1,234,567");
     }
 }

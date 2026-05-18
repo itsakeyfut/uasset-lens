@@ -26,32 +26,6 @@ struct GroupEntry {
     total_size_bytes: u64,
 }
 
-fn dir_key(path: &str) -> &str {
-    let mut slash_count = 0;
-    let mut last_cut = path.len();
-    for (i, c) in path.char_indices() {
-        if c == '/' {
-            slash_count += 1;
-            if slash_count == 4 {
-                return &path[..i + 1];
-            }
-            if slash_count == 3 {
-                last_cut = i + 1;
-            }
-        }
-    }
-    // Trailing-slash consistency: 3-slash paths get the same treatment as 4+ slash paths.
-    if slash_count >= 3 {
-        &path[..last_cut]
-    } else {
-        path
-    }
-}
-
-fn digit_count(n: usize) -> usize {
-    if n == 0 { 1 } else { n.ilog10() as usize + 1 }
-}
-
 // Each arg maps to a distinct CLI flag; a wrapper struct adds indirection at a single call site.
 #[allow(clippy::too_many_arguments)]
 pub fn handle_dead_assets(
@@ -121,7 +95,7 @@ pub fn handle_dead_assets(
         for e in &entries {
             let key = match mode {
                 GroupMode::Type => e.asset_type.clone(),
-                GroupMode::Dir => dir_key(&e.path).to_owned(),
+                GroupMode::Dir => crate::path_depth_prefix(&e.path).to_owned(),
             };
             let (cnt, size) = map.entry(key).or_default();
             *cnt += 1;
@@ -149,7 +123,7 @@ pub fn handle_dead_assets(
                 let max_name = groups.iter().map(|g| g.group.len()).max().unwrap_or(1);
                 let max_cnt = groups
                     .iter()
-                    .map(|g| digit_count(g.count))
+                    .map(|g| crate::digit_count(g.count))
                     .max()
                     .unwrap_or(1);
                 for g in &groups {
@@ -771,27 +745,6 @@ mod tests {
         .unwrap();
         assert_eq!(result, 0, "all assets match the exclude pattern");
         let _ = std::fs::remove_dir_all(&dir);
-    }
-
-    #[test]
-    fn dir_key_should_return_path_up_to_third_segment() {
-        // 4+ slashes: cut at 4th slash
-        assert_eq!(
-            dir_key("/Game/Assets/Enemies/BP_Hero"),
-            "/Game/Assets/Enemies/"
-        );
-        assert_eq!(
-            dir_key("/Game/ThirdPerson/Blueprints/BP_Char"),
-            "/Game/ThirdPerson/Blueprints/"
-        );
-        // exactly 3 slashes: cut at 3rd slash — trailing slash consistent with deeper paths
-        assert_eq!(dir_key("/Game/Characters/BP_Hero"), "/Game/Characters/");
-    }
-
-    #[test]
-    fn dir_key_should_return_full_path_when_fewer_than_three_segments() {
-        assert_eq!(dir_key("/Game/Foo"), "/Game/Foo");
-        assert_eq!(dir_key("/Game"), "/Game");
     }
 
     #[test]
