@@ -18,6 +18,8 @@ pub fn handle_watch(project_dir: &Path, db_path: &Path) -> anyhow::Result<i32> {
         db_path,
         &crate::FormatKind::Text,
         true, // yes=true: non-interactive startup, auto-remove stale records
+        None,
+        None,
     )?;
 
     let content_root = crate::resolve_content_root(project_dir);

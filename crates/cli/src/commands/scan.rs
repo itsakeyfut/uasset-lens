@@ -43,12 +43,14 @@ struct SizeIncreaseEntry {
 #[derive(serde::Serialize)]
 struct ScanDiffOutput {
     prev_scanned_at: Option<u64>,
+    baseline_name: Option<String>,
     new_assets: Vec<String>,
     deleted_assets: Vec<String>,
     regressions: Vec<BpRegressionEntry>,
     size_increases: Vec<SizeIncreaseEntry>,
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn handle_scan(
     project_dir: &Path,
     full_scan: bool,
@@ -56,6 +58,8 @@ pub fn handle_scan(
     db_path: &Path,
     format: &FormatKind,
     yes: bool,
+    save_baseline: Option<&str>,
+    diff_from: Option<&str>,
 ) -> anyhow::Result<i32> {
     let use_color = matches!(format, FormatKind::Text)
         && std::io::stdout().is_terminal()
@@ -66,6 +70,21 @@ pub fn handle_scan(
     }
 
     let mut db = asset_db::AssetDb::open(db_path).context("Failed to open database")?;
+
+    // Fail fast before expensive walkdir if the requested baseline doesn't exist.
+    let loaded_baseline = if let Some(name) = diff_from {
+        Some(db.load_baseline(name).map_err(|e| match e {
+            asset_db::DbError::BaselineNotFound(_) => anyhow::anyhow!(
+                "Baseline '{}' not found. Run 'scan --save-baseline {}' first.",
+                name,
+                name
+            ),
+            other => anyhow::Error::from(other),
+        })?)
+    } else {
+        None
+    };
+
     let content_root = crate::resolve_content_root(project_dir);
 
     // Snapshot DB state before walkdir for stale detection and new/updated classification.
@@ -78,8 +97,10 @@ pub fn handle_scan(
     let config = crate::config::load_config(project_dir);
     let excluded = config.scan.exclude_paths;
 
+    let effective_diff = diff || diff_from.is_some();
+
     // Capture per-asset metrics before upsert so we can compute the diff afterwards.
-    let (old_bp, old_sizes) = if diff {
+    let (old_bp, old_sizes) = if effective_diff {
         let bp: HashMap<shared::AssetPath, (u32, u32)> = db
             .all_blueprint_metrics()
             .context("Failed to read blueprint metrics from database")?
@@ -244,19 +265,28 @@ pub fn handle_scan(
         }
     };
 
-    db.record_scan_snapshot()
+    let snapshot_id = db
+        .record_scan_snapshot()
         .context("Failed to record scan snapshot")?;
+    if let Some(name) = save_baseline {
+        db.save_baseline(name, snapshot_id)
+            .context("Failed to save baseline")?;
+        eprintln!("Baseline '{}' saved.", name);
+    }
     let assets_total = db_files.len() + new_count - removed_count;
 
-    if diff {
+    if effective_diff {
         crate::maybe_hint_github_actions(format);
-        // snaps[0] = current, snaps[1] = previous (DESC order)
-        let prev_scanned_at = db
-            .recent_snapshots(2)
-            .context("Failed to read scan history")?
-            .into_iter()
-            .nth(1)
-            .map(|s| s.scanned_at);
+        let prev_scanned_at = if let Some(ref snap) = loaded_baseline {
+            Some(snap.scanned_at)
+        } else {
+            // snaps[0] = current, snaps[1] = previous (DESC order)
+            db.recent_snapshots(2)
+                .context("Failed to read scan history")?
+                .into_iter()
+                .nth(1)
+                .map(|s| s.scanned_at)
+        };
 
         let threshold = config.diff.size_increase_threshold_pct;
 
@@ -327,6 +357,7 @@ pub fn handle_scan(
             FormatKind::Json => {
                 let out = ScanDiffOutput {
                     prev_scanned_at,
+                    baseline_name: diff_from.map(|s| s.to_owned()), // clone required: ScanDiffOutput owns the name
                     new_assets: new_asset_paths,
                     deleted_assets: deleted_asset_paths,
                     regressions,
@@ -340,9 +371,12 @@ pub fn handle_scan(
             }
             FormatKind::Text => {
                 println!();
-                match prev_scanned_at {
-                    Some(ts) => println!("Diff vs previous scan ({}):", format_utc(ts)),
-                    None => println!("Diff: (no previous scan to compare against)"),
+                match (prev_scanned_at, diff_from) {
+                    (Some(ts), Some(name)) => {
+                        println!("Diff vs baseline \"{}\" ({}):", name, format_utc(ts))
+                    }
+                    (Some(ts), None) => println!("Diff vs previous scan ({}):", format_utc(ts)),
+                    (None, _) => println!("Diff: (no previous scan to compare against)"),
                 }
                 if !new_asset_paths.is_empty() {
                     println!("  + {} new asset(s):", new_asset_paths.len());
@@ -619,7 +653,17 @@ mod tests {
         std::fs::create_dir_all(&dir).unwrap();
         let db_path = dir.join("test.db");
 
-        let result = handle_scan(&dir, false, false, &db_path, &FormatKind::Text, false).unwrap();
+        let result = handle_scan(
+            &dir,
+            false,
+            false,
+            &db_path,
+            &FormatKind::Text,
+            false,
+            None,
+            None,
+        )
+        .unwrap();
         assert_eq!(result, 0);
 
         let db = asset_db::AssetDb::open(&db_path).unwrap();
@@ -644,7 +688,17 @@ mod tests {
         std::fs::write(excluded_dir.join("Dummy.uasset"), b"not a real uasset").unwrap();
 
         let db_path = dir.join("test.db");
-        let _ = handle_scan(&dir, false, false, &db_path, &FormatKind::Text, false).unwrap();
+        let _ = handle_scan(
+            &dir,
+            false,
+            false,
+            &db_path,
+            &FormatKind::Text,
+            false,
+            None,
+            None,
+        )
+        .unwrap();
 
         let db = asset_db::AssetDb::open(&db_path).unwrap();
         assert!(
@@ -662,7 +716,17 @@ mod tests {
         std::fs::create_dir_all(&dir).unwrap();
         let db_path = dir.join("test.db");
 
-        let result = handle_scan(&dir, false, false, &db_path, &FormatKind::Text, false).unwrap();
+        let result = handle_scan(
+            &dir,
+            false,
+            false,
+            &db_path,
+            &FormatKind::Text,
+            false,
+            None,
+            None,
+        )
+        .unwrap();
 
         assert_eq!(result, 0);
         let _ = std::fs::remove_dir_all(&dir);
@@ -682,7 +746,17 @@ mod tests {
                 .unwrap();
         }
 
-        let result = handle_scan(&dir, false, false, &db_path, &FormatKind::Text, true).unwrap();
+        let result = handle_scan(
+            &dir,
+            false,
+            false,
+            &db_path,
+            &FormatKind::Text,
+            true,
+            None,
+            None,
+        )
+        .unwrap();
 
         assert_eq!(
             result, 1,
@@ -713,7 +787,17 @@ mod tests {
 
         // yes=false + empty stdin (EOF in test context) → read_line returns "" →
         // trim() is "" → not "y" → confirmed=false → record preserved → exit code 0.
-        let result = handle_scan(&dir, false, false, &db_path, &FormatKind::Text, false).unwrap();
+        let result = handle_scan(
+            &dir,
+            false,
+            false,
+            &db_path,
+            &FormatKind::Text,
+            false,
+            None,
+            None,
+        )
+        .unwrap();
 
         assert_eq!(
             result, 0,
@@ -739,7 +823,17 @@ mod tests {
         std::fs::create_dir_all(&dir).unwrap();
         let db_path = dir.join("test.db");
 
-        let result = handle_scan(&dir, false, true, &db_path, &FormatKind::Text, false).unwrap();
+        let result = handle_scan(
+            &dir,
+            false,
+            true,
+            &db_path,
+            &FormatKind::Text,
+            false,
+            None,
+            None,
+        )
+        .unwrap();
 
         assert_eq!(
             result, 0,
@@ -759,10 +853,30 @@ mod tests {
         let db_path = dir.join("test.db");
 
         // First scan to populate scan_history
-        handle_scan(&dir, false, false, &db_path, &FormatKind::Text, false).unwrap();
+        handle_scan(
+            &dir,
+            false,
+            false,
+            &db_path,
+            &FormatKind::Text,
+            false,
+            None,
+            None,
+        )
+        .unwrap();
 
         // Second scan with --diff; no .uasset files → no scanned assets → no regressions
-        let result = handle_scan(&dir, false, true, &db_path, &FormatKind::Text, false).unwrap();
+        let result = handle_scan(
+            &dir,
+            false,
+            true,
+            &db_path,
+            &FormatKind::Text,
+            false,
+            None,
+            None,
+        )
+        .unwrap();
 
         assert_eq!(result, 0, "diff scan with no regressions exits 0");
 
@@ -776,9 +890,29 @@ mod tests {
         std::fs::create_dir_all(&dir).unwrap();
         let db_path = dir.join("test.db");
 
-        handle_scan(&dir, false, false, &db_path, &FormatKind::Text, false).unwrap();
+        handle_scan(
+            &dir,
+            false,
+            false,
+            &db_path,
+            &FormatKind::Text,
+            false,
+            None,
+            None,
+        )
+        .unwrap();
 
-        let result = handle_scan(&dir, false, true, &db_path, &FormatKind::Json, false).unwrap();
+        let result = handle_scan(
+            &dir,
+            false,
+            true,
+            &db_path,
+            &FormatKind::Json,
+            false,
+            None,
+            None,
+        )
+        .unwrap();
 
         assert_eq!(result, 0);
 
@@ -801,9 +935,29 @@ mod tests {
         .unwrap();
 
         let db_path = dir.join("test.db");
-        handle_scan(&dir, false, false, &db_path, &FormatKind::Text, false).unwrap();
+        handle_scan(
+            &dir,
+            false,
+            false,
+            &db_path,
+            &FormatKind::Text,
+            false,
+            None,
+            None,
+        )
+        .unwrap();
 
-        let result = handle_scan(&dir, false, true, &db_path, &FormatKind::Text, false).unwrap();
+        let result = handle_scan(
+            &dir,
+            false,
+            true,
+            &db_path,
+            &FormatKind::Text,
+            false,
+            None,
+            None,
+        )
+        .unwrap();
 
         assert_eq!(
             result, 0,
@@ -820,7 +974,17 @@ mod tests {
         std::fs::create_dir_all(&dir).unwrap();
         let db_path = dir.join("test.db");
 
-        handle_scan(&dir, false, false, &db_path, &FormatKind::Text, false).unwrap();
+        handle_scan(
+            &dir,
+            false,
+            false,
+            &db_path,
+            &FormatKind::Text,
+            false,
+            None,
+            None,
+        )
+        .unwrap();
 
         let result = handle_scan(
             &dir,
@@ -829,6 +993,8 @@ mod tests {
             &db_path,
             &FormatKind::GithubActions,
             false,
+            None,
+            None,
         )
         .unwrap();
 
@@ -985,5 +1151,106 @@ mod tests {
         //   1970: 365, 1971: 365, then 31 (Jan) + 29 (Feb day 29) - 1 = 59 days into 1972
         //   total = 365 + 365 + 59 = 789 days → epoch 789 * 86400 = 68169600
         assert_eq!(format_utc(68_169_600), "1972-02-29 00:00:00 UTC");
+    }
+
+    #[test]
+    fn handle_scan_should_save_baseline_when_flag_provided() {
+        let dir =
+            std::env::temp_dir().join(format!("uasset_lens_scan_baseline_{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let db_path = dir.join("test.db");
+
+        let result = handle_scan(
+            &dir,
+            false,
+            false,
+            &db_path,
+            &FormatKind::Text,
+            false,
+            Some("main"),
+            None,
+        )
+        .unwrap();
+        assert_eq!(result, 0);
+
+        let db = asset_db::AssetDb::open(&db_path).unwrap();
+        let snap = db.load_baseline("main").unwrap();
+        assert_eq!(snap.asset_count, 0);
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn handle_scan_diff_from_baseline_should_return_0_when_no_regressions() {
+        let dir =
+            std::env::temp_dir().join(format!("uasset_lens_scan_diff_from_{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let db_path = dir.join("test.db");
+
+        handle_scan(
+            &dir,
+            false,
+            false,
+            &db_path,
+            &FormatKind::Text,
+            false,
+            Some("main"),
+            None,
+        )
+        .unwrap();
+
+        let result = handle_scan(
+            &dir,
+            false,
+            false,
+            &db_path,
+            &FormatKind::Text,
+            false,
+            None,
+            Some("main"),
+        )
+        .unwrap();
+        assert_eq!(result, 0, "diff-from baseline with no regressions exits 0");
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn handle_scan_diff_from_missing_baseline_should_return_error() {
+        let dir = std::env::temp_dir().join(format!(
+            "uasset_lens_scan_no_baseline_{}",
+            std::process::id()
+        ));
+        std::fs::create_dir_all(&dir).unwrap();
+        let db_path = dir.join("test.db");
+
+        handle_scan(
+            &dir,
+            false,
+            false,
+            &db_path,
+            &FormatKind::Text,
+            false,
+            None,
+            None,
+        )
+        .unwrap();
+
+        let result = handle_scan(
+            &dir,
+            false,
+            false,
+            &db_path,
+            &FormatKind::Text,
+            false,
+            None,
+            Some("ghost"),
+        );
+        assert!(
+            result.is_err(),
+            "diff-from unknown baseline should return an error"
+        );
+
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }

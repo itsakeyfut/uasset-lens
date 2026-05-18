@@ -41,6 +41,12 @@ impl AssetDb {
                  texture_size    INTEGER NOT NULL
              );
 
+             CREATE TABLE IF NOT EXISTS baselines (
+                 name        TEXT    PRIMARY KEY,
+                 snapshot_id INTEGER NOT NULL REFERENCES scan_history(id) ON DELETE CASCADE,
+                 saved_at    INTEGER NOT NULL
+             );
+
              CREATE INDEX IF NOT EXISTS idx_assets_last_modified    ON assets(last_modified);
              CREATE INDEX IF NOT EXISTS idx_assets_asset_type     ON assets(asset_type);
              CREATE INDEX IF NOT EXISTS idx_deps_to_path          ON dependencies(to_path);
@@ -77,6 +83,7 @@ mod tests {
         assert!(names.contains(&"assets".to_string()));
         assert!(names.contains(&"dependencies".to_string()));
         assert!(names.contains(&"scan_history".to_string()));
+        assert!(names.contains(&"baselines".to_string()));
         assert!(names.contains(&"idx_assets_asset_type".to_string()));
         assert!(names.contains(&"idx_assets_last_modified".to_string()));
         assert!(names.contains(&"idx_deps_to_path".to_string()));
