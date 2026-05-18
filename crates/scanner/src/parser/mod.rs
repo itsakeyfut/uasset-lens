@@ -4,6 +4,7 @@ pub mod import;
 pub mod name_table;
 pub mod properties;
 pub mod soft_object_paths;
+pub(crate) mod tagged_props;
 
 #[cfg(test)]
 pub mod test_utils;
