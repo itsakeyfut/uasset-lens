@@ -8,6 +8,7 @@ use std::path::{Path, PathBuf};
 use anyhow::Context;
 use clap::{Parser, Subcommand, ValueEnum};
 
+pub(crate) use paths::{find_project_dir, resolve_target_and_db};
 pub use paths::{resolve_content_root, resolve_db_path};
 
 #[derive(Debug, Clone, Default, PartialEq, ValueEnum)]
