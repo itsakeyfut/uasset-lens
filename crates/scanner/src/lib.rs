@@ -1,3 +1,4 @@
+mod anim_montage;
 mod blueprint;
 mod data_table;
 pub mod error;
@@ -159,6 +160,21 @@ fn scan_single(file: &Path, content_root: &Path) -> Result<AssetMetadata, ScanEr
     };
 
     soft_dependencies.extend(dt_soft_refs);
+
+    let am_soft_refs = if anim_montage::is_anim_montage_asset(&asset_type) {
+        anim_montage::extract_anim_montage_soft_refs(
+            &data,
+            hdr.export_offset,
+            hdr.export_count,
+            hdr.depends_offset,
+            &cls_names,
+            &name_table,
+        )
+    } else {
+        Vec::new()
+    };
+
+    soft_dependencies.extend(am_soft_refs);
 
     let asset_path = AssetPath::from_fs_path(content_root, file)?;
 
