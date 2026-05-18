@@ -2,6 +2,7 @@ mod anim_montage;
 mod blueprint;
 mod data_table;
 pub mod error;
+mod level_sequence;
 mod material;
 pub mod parser;
 
@@ -176,6 +177,20 @@ fn scan_single(file: &Path, content_root: &Path) -> Result<AssetMetadata, ScanEr
 
     soft_dependencies.extend(am_soft_refs);
 
+    let ls_soft_refs = if level_sequence::is_level_sequence_asset(&asset_type) {
+        level_sequence::extract_level_sequence_soft_refs(
+            &data,
+            hdr.export_offset,
+            hdr.export_count,
+            hdr.depends_offset,
+            &name_table,
+        )
+    } else {
+        Vec::new()
+    };
+
+    soft_dependencies.extend(ls_soft_refs);
+
     let asset_path = AssetPath::from_fs_path(content_root, file)?;
 
     Ok(AssetMetadata {
@@ -253,6 +268,28 @@ mod tests {
         assert!(
             meta.material_texture_samples.is_none(),
             "Texture2D should not have material texture samples"
+        );
+    }
+
+    #[test]
+    fn scan_files_should_extract_soft_refs_from_level_sequence_asset() {
+        let fixture = PathBuf::from(format!("{FIXTURES_DIR}/valid/LS_Simple.uasset"));
+        let content_root = PathBuf::from(format!("{FIXTURES_DIR}/valid"));
+        let result = scan_files(&[fixture], &content_root);
+
+        assert!(result.skipped.is_empty());
+        assert_eq!(result.assets.len(), 1);
+        let meta = &result.assets[0];
+        assert_eq!(meta.asset_type, AssetType::LevelSequence);
+
+        let paths: Vec<&str> = meta.soft_dependencies.iter().map(|p| p.as_str()).collect();
+        assert!(
+            paths.contains(&"/Game/Anims/AS_Run"),
+            "expected /Game/Anims/AS_Run in soft_dependencies, got: {paths:?}"
+        );
+        assert!(
+            paths.contains(&"/Game/Sounds/SW_Fire"),
+            "expected /Game/Sounds/SW_Fire in soft_dependencies, got: {paths:?}"
         );
     }
 }

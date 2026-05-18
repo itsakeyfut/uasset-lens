@@ -88,6 +88,7 @@ fn class_name_to_asset_type(name: &str) -> Option<AssetType> {
         "SoundCue" => Some(AssetType::SoundCue),
         "AnimSequence" => Some(AssetType::AnimSequence),
         "AnimMontage" => Some(AssetType::AnimMontage),
+        "LevelSequence" => Some(AssetType::LevelSequence),
         "DataTable" => Some(AssetType::DataTable),
         "DataAsset" => Some(AssetType::DataAsset),
         "ObjectRedirector" => Some(AssetType::ObjectRedirector),
@@ -209,6 +210,14 @@ mod tests {
         assert_eq!(
             class_name_to_asset_type("AnimMontage"),
             Some(AssetType::AnimMontage)
+        );
+    }
+
+    #[test]
+    fn class_name_to_asset_type_should_return_level_sequence_for_level_sequence() {
+        assert_eq!(
+            class_name_to_asset_type("LevelSequence"),
+            Some(AssetType::LevelSequence)
         );
     }
 
