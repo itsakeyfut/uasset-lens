@@ -1,6 +1,7 @@
 use byteorder::{LittleEndian, ReadBytesExt};
 use std::io::Cursor;
 
+use super::{advance, map_io};
 use crate::ScanError;
 
 // UE5 tagged property stream layout (per-property):
@@ -111,23 +112,6 @@ pub fn parse_properties(
     }
 
     Ok(result)
-}
-
-fn advance(cur: &mut Cursor<&[u8]>, n: u64) -> Result<(), ScanError> {
-    let new_pos = cur.position() + n;
-    if new_pos > cur.get_ref().len() as u64 {
-        return Err(ScanError::UnexpectedEof);
-    }
-    cur.set_position(new_pos);
-    Ok(())
-}
-
-fn map_io(e: std::io::Error) -> ScanError {
-    if e.kind() == std::io::ErrorKind::UnexpectedEof {
-        ScanError::UnexpectedEof
-    } else {
-        ScanError::Io(e)
-    }
 }
 
 #[cfg(test)]

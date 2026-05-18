@@ -22,6 +22,15 @@ fn map_io(e: std::io::Error) -> ScanError {
     }
 }
 
+fn advance(cur: &mut Cursor<&[u8]>, n: u64) -> Result<(), ScanError> {
+    let new_pos = cur.position() + n;
+    if new_pos > cur.get_ref().len() as u64 {
+        return Err(ScanError::UnexpectedEof);
+    }
+    cur.set_position(new_pos);
+    Ok(())
+}
+
 // Keeps FString skip logic in one place so header and soft_object_paths stay in sync.
 fn skip_fstring(cur: &mut Cursor<&[u8]>) -> Result<(), ScanError> {
     let len = cur.read_i32::<LittleEndian>().map_err(map_io)?;
@@ -34,6 +43,5 @@ fn skip_fstring(cur: &mut Cursor<&[u8]>) -> Result<(), ScanError> {
         // UTF-8/ASCII including null terminator
         len as u64
     };
-    cur.set_position(cur.position() + byte_count);
-    Ok(())
+    advance(cur, byte_count)
 }
