@@ -94,7 +94,7 @@ mod tests {
 
     #[test]
     fn analyze_should_return_none_for_non_material_assets() {
-        let graph = DependencyGraph::build(vec![], vec![]);
+        let graph = DependencyGraph::build(vec![], vec![], &[] as &[&str]);
         assert!(
             analyze(
                 &make_metadata("/Game/SM", AssetType::StaticMesh, None),
@@ -113,7 +113,7 @@ mod tests {
 
     #[test]
     fn analyze_should_propagate_texture_sample_count_from_metadata_for_material() {
-        let graph = DependencyGraph::build(vec![], vec![]);
+        let graph = DependencyGraph::build(vec![], vec![], &[] as &[&str]);
         let meta = make_metadata("/Game/M_Test", AssetType::Material, Some(3));
         let result = analyze(&meta, &graph).expect("Material should return Some");
         assert_eq!(result.texture_sample_count, 3);
@@ -135,6 +135,7 @@ mod tests {
                 (ap("/Game/MI_B"), ap("/Game/MI_C")),
                 (ap("/Game/MI_C"), ap("/Game/M_Base")),
             ],
+            &[] as &[&str],
         );
 
         let meta = make_metadata("/Game/MI_A", AssetType::MaterialInstance, None);
@@ -145,7 +146,7 @@ mod tests {
 
     #[test]
     fn analyze_should_return_zero_texture_samples_when_metadata_has_none() {
-        let graph = DependencyGraph::build(vec![], vec![]);
+        let graph = DependencyGraph::build(vec![], vec![], &[] as &[&str]);
         let meta = make_metadata("/Game/M_Simple", AssetType::Material, None);
         let result = analyze(&meta, &graph).expect("Material should return Some");
         assert_eq!(result.texture_sample_count, 0);
@@ -164,7 +165,7 @@ mod tests {
         let meta = &scan_result.assets[0];
         assert_eq!(meta.asset_type, AssetType::Material);
 
-        let graph = DependencyGraph::build(vec![], vec![]);
+        let graph = DependencyGraph::build(vec![], vec![], &[] as &[&str]);
         let result = analyze(meta, &graph).expect("Material should return Some(MaterialMetrics)");
         assert!(
             result.texture_sample_count > 0,

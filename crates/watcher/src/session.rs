@@ -20,15 +20,17 @@ pub enum WatchSessionError {
 pub struct WatchSession {
     db: asset_db::AssetDb,
     content_root: PathBuf,
+    external_roots: Vec<String>,
     last_dead: HashSet<AssetPath>,
     last_cycles: Vec<Vec<AssetPath>>,
 }
 
 impl WatchSession {
-    pub fn new(db: asset_db::AssetDb, content_root: PathBuf) -> Self {
+    pub fn new(db: asset_db::AssetDb, content_root: PathBuf, external_roots: Vec<String>) -> Self {
         Self {
             db,
             content_root,
+            external_roots,
             last_dead: HashSet::new(),
             last_cycles: Vec::new(),
         }
@@ -36,7 +38,7 @@ impl WatchSession {
 
     /// Snapshot current DB state so the first batch is diffed against existing problems.
     pub fn init(&mut self) -> Result<(), WatchSessionError> {
-        let graph = build_graph(&self.db)?;
+        let graph = build_graph(&self.db, &self.external_roots)?;
         self.last_dead = dead_asset_detector::detect(&graph).into_iter().collect();
         self.last_cycles = graph.find_cycles();
         Ok(())
@@ -106,7 +108,7 @@ impl WatchSession {
             );
         }
 
-        let graph = build_graph(&self.db)?;
+        let graph = build_graph(&self.db, &self.external_roots)?;
         let new_dead: HashSet<AssetPath> =
             dead_asset_detector::detect(&graph).into_iter().collect();
         let new_cycles = graph.find_cycles();
@@ -132,6 +134,7 @@ impl WatchSession {
 
 fn build_graph(
     db: &asset_db::AssetDb,
+    external_roots: &[String],
 ) -> Result<dependency_graph::DependencyGraph, WatchSessionError> {
     let records = db.all_assets()?;
     let nodes = records
@@ -142,7 +145,11 @@ fn build_graph(
         })
         .collect::<Vec<_>>();
     let edges = db.all_edges()?;
-    Ok(dependency_graph::DependencyGraph::build(nodes, edges))
+    Ok(dependency_graph::DependencyGraph::build(
+        nodes,
+        edges,
+        external_roots,
+    ))
 }
 
 // Canonical string key for a cycle, independent of member ordering.
@@ -162,7 +169,7 @@ mod tests {
     fn make_session() -> WatchSession {
         let db = asset_db::AssetDb::open(Path::new(":memory:")).unwrap();
         let content_root = PathBuf::from(FIXTURES_DIR);
-        WatchSession::new(db, content_root)
+        WatchSession::new(db, content_root, vec![])
     }
 
     fn created_event(path: PathBuf) -> WatchEvent {

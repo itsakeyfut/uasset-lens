@@ -93,7 +93,8 @@ pub fn handle_stats(
     let records = db
         .all_assets()
         .context("Failed to read assets from database")?;
-    let graph = crate::load_graph(&db)?;
+    let config = crate::config::load_config(project_dir);
+    let graph = crate::load_graph(&db, &config.scan.external_roots)?;
 
     let folder_limit = top.unwrap_or(5);
     let asset_limit = top.unwrap_or(10);
@@ -374,7 +375,7 @@ mod tests {
 
         let db = asset_db::AssetDb::open_existing(&db_path).unwrap();
         let records = db.all_assets().unwrap();
-        let graph = crate::load_graph(&db).unwrap();
+        let graph = crate::load_graph(&db, &[]).unwrap();
         let output = StatsOutput {
             total_assets: records.len(),
             total_bytes: records.iter().map(|r| r.file_size).sum(),
@@ -450,7 +451,7 @@ mod tests {
         assert_eq!(result, 0, "stats always exits 0");
 
         let db = asset_db::AssetDb::open_existing(&db_path).unwrap();
-        let graph = crate::load_graph(&db).unwrap();
+        let graph = crate::load_graph(&db, &[]).unwrap();
         assert_eq!(graph.edge_count(), 2, "A→B and B→A = 2 edges");
         let unreferenced = graph
             .nodes()

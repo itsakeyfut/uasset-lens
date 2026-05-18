@@ -22,7 +22,7 @@ struct FindOutput {
 
 #[allow(clippy::too_many_arguments)]
 pub fn handle_find(
-    _project_dir: &Path,
+    project_dir: &Path,
     asset_type: Option<&str>,
     larger_than: Option<u64>,
     smaller_than: Option<u64>,
@@ -40,6 +40,7 @@ pub fn handle_find(
     });
 
     let db = crate::open_db(db_path)?;
+    let config = crate::config::load_config(project_dir);
 
     let filter = asset_db::AssetFilter {
         asset_type: at,
@@ -51,7 +52,7 @@ pub fn handle_find(
     let mut results = db.find_assets(&filter).context("Failed to query assets")?;
 
     let graph = if unreferenced || refs.is_some() || deps.is_some() {
-        Some(crate::load_graph(&db)?)
+        Some(crate::load_graph(&db, &config.scan.external_roots)?)
     } else {
         None
     };
@@ -408,7 +409,7 @@ mod tests {
         }
 
         let db = asset_db::AssetDb::open(&db_path).unwrap();
-        let graph = crate::load_graph(&db).unwrap();
+        let graph = crate::load_graph(&db, &[]).unwrap();
         let dead: std::collections::HashSet<AssetPath> =
             dead_asset_detector::detect(&graph).into_iter().collect();
 
@@ -693,7 +694,7 @@ mod tests {
         assert_eq!(result, 0, "--refs → exit 0");
         // Verify that find_impact correctly identifies all referencing assets
         let db_verify = asset_db::AssetDb::open(&db_path).unwrap();
-        let graph = crate::load_graph(&db_verify).unwrap();
+        let graph = crate::load_graph(&db_verify, &[]).unwrap();
         let target = AssetPath::new("/Game/T").unwrap();
         let impact = graph.find_impact(&target);
         let ref_set: std::collections::HashSet<AssetPath> =
@@ -780,7 +781,7 @@ mod tests {
         assert_eq!(result, 0, "--deps → exit 0");
         // Verify that dependencies_of returns exactly T and M, not Unrelated
         let db_verify = asset_db::AssetDb::open(&db_path).unwrap();
-        let graph = crate::load_graph(&db_verify).unwrap();
+        let graph = crate::load_graph(&db_verify, &[]).unwrap();
         let target = AssetPath::new("/Game/A").unwrap();
         let dep_paths: std::collections::HashSet<AssetPath> = graph
             .dependencies_of(&target)

@@ -210,6 +210,7 @@ pub(crate) fn open_db(db_path: &Path) -> anyhow::Result<asset_db::AssetDb> {
 
 pub(crate) fn load_graph(
     db: &asset_db::AssetDb,
+    external_roots: &[String],
 ) -> anyhow::Result<dependency_graph::DependencyGraph> {
     let records = db
         .all_assets()
@@ -224,7 +225,11 @@ pub(crate) fn load_graph(
     let edges = db
         .all_edges()
         .context("Failed to read dependency edges from database")?;
-    Ok(dependency_graph::DependencyGraph::build(nodes, edges))
+    Ok(dependency_graph::DependencyGraph::build(
+        nodes,
+        edges,
+        external_roots,
+    ))
 }
 
 pub fn run() -> i32 {

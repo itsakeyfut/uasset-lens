@@ -24,6 +24,7 @@ pub fn handle_watch(project_dir: &Path, db_path: &Path) -> anyhow::Result<i32> {
 
     let content_root = crate::resolve_content_root(project_dir);
     let db = crate::open_db(db_path)?;
+    let config = crate::config::load_config(project_dir);
 
     let stop = Arc::new(AtomicBool::new(false));
     {
@@ -37,7 +38,7 @@ pub fn handle_watch(project_dir: &Path, db_path: &Path) -> anyhow::Result<i32> {
     let watcher =
         watcher::Watcher::new(project_dir).context("Failed to start file system watcher")?;
 
-    let mut session = watcher::WatchSession::new(db, content_root);
+    let mut session = watcher::WatchSession::new(db, content_root, config.scan.external_roots);
     session
         .init()
         .context("Failed to initialize watch session")?;
