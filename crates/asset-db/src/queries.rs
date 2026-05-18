@@ -219,6 +219,52 @@ impl AssetDb {
         .collect()
     }
 
+    pub fn load_baseline(&self, name: &str) -> Result<ScanSnapshot, DbError> {
+        let mut stmt = self.conn.prepare(
+            "SELECT sh.id, sh.scanned_at, sh.asset_count, sh.total_size, \
+                    sh.blueprint_count, sh.avg_node_count, sh.texture_count, sh.texture_size \
+             FROM baselines b \
+             JOIN scan_history sh ON b.snapshot_id = sh.id \
+             WHERE b.name = ?1",
+        )?;
+        match stmt.query_row([name], |row| {
+            Ok((
+                row.get::<_, i64>(0)?,
+                row.get::<_, i64>(1)?,
+                row.get::<_, i64>(2)?,
+                row.get::<_, i64>(3)?,
+                row.get::<_, i64>(4)?,
+                row.get::<_, f64>(5)?,
+                row.get::<_, i64>(6)?,
+                row.get::<_, i64>(7)?,
+            ))
+        }) {
+            Ok((
+                id,
+                scanned_at,
+                asset_count,
+                total_size,
+                blueprint_count,
+                avg_node_count,
+                texture_count,
+                texture_size,
+            )) => Ok(ScanSnapshot {
+                id,
+                scanned_at: scanned_at as u64,
+                asset_count: asset_count as u64,
+                total_size: total_size as u64,
+                blueprint_count: blueprint_count as u64,
+                avg_node_count,
+                texture_count: texture_count as u64,
+                texture_size: texture_size as u64,
+            }),
+            Err(rusqlite::Error::QueryReturnedNoRows) => {
+                Err(DbError::BaselineNotFound(name.to_owned()))
+            }
+            Err(e) => Err(DbError::Sqlite(e)),
+        }
+    }
+
     pub fn all_blueprint_metrics(&self) -> Result<Vec<BlueprintRow>, DbError> {
         let mut stmt = self.conn.prepare(
             "SELECT a.asset_path, a.asset_type, \
@@ -554,6 +600,25 @@ mod tests {
         };
         let results = db.find_assets(&filter).unwrap();
         assert!(results.is_empty());
+    }
+
+    #[test]
+    fn load_baseline_should_return_snapshot_for_known_name() {
+        let db = AssetDb::open(Path::new(":memory:")).unwrap();
+        let snapshot_id = db.record_scan_snapshot().unwrap();
+        db.save_baseline("main", snapshot_id).unwrap();
+        let snap = db.load_baseline("main").unwrap();
+        assert_eq!(snap.id, snapshot_id);
+    }
+
+    #[test]
+    fn load_baseline_should_return_baseline_not_found_for_unknown_name() {
+        let db = AssetDb::open(Path::new(":memory:")).unwrap();
+        let err = db.load_baseline("nonexistent").unwrap_err();
+        assert!(
+            matches!(err, DbError::BaselineNotFound(_)),
+            "expected BaselineNotFound, got {err:?}"
+        );
     }
 
     #[test]

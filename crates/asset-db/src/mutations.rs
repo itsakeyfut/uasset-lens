@@ -72,7 +72,7 @@ impl AssetDb {
         Ok(())
     }
 
-    pub fn record_scan_snapshot(&self) -> Result<(), DbError> {
+    pub fn record_scan_snapshot(&self) -> Result<i64, DbError> {
         let scanned_at = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap_or_default()
@@ -92,6 +92,18 @@ impl AssetDb {
                  COALESCE(SUM(CASE WHEN asset_type = ?3 THEN file_size ELSE 0 END), 0) \
              FROM assets",
             rusqlite::params![scanned_at, bp_type, tx2d_type],
+        )?;
+        Ok(self.conn.last_insert_rowid())
+    }
+
+    pub fn save_baseline(&self, name: &str, snapshot_id: i64) -> Result<(), DbError> {
+        let saved_at = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs() as i64;
+        self.conn.execute(
+            "INSERT OR REPLACE INTO baselines (name, snapshot_id, saved_at) VALUES (?1, ?2, ?3)",
+            rusqlite::params![name, snapshot_id, saved_at],
         )?;
         Ok(())
     }
@@ -129,6 +141,33 @@ mod tests {
     use super::*;
     use shared::{AssetPath, AssetType};
     use std::path::{Path, PathBuf};
+
+    #[test]
+    fn record_scan_snapshot_should_return_inserted_row_id() {
+        let db = AssetDb::open(Path::new(":memory:")).unwrap();
+        let id = db.record_scan_snapshot().unwrap();
+        assert!(id > 0, "snapshot id should be a positive row id");
+    }
+
+    #[test]
+    fn save_baseline_should_persist_named_baseline() {
+        let db = AssetDb::open(Path::new(":memory:")).unwrap();
+        let snapshot_id = db.record_scan_snapshot().unwrap();
+        db.save_baseline("main", snapshot_id).unwrap();
+        let snap = db.load_baseline("main").unwrap();
+        assert_eq!(snap.id, snapshot_id);
+    }
+
+    #[test]
+    fn save_baseline_should_overwrite_existing_baseline_with_same_name() {
+        let db = AssetDb::open(Path::new(":memory:")).unwrap();
+        let id1 = db.record_scan_snapshot().unwrap();
+        let id2 = db.record_scan_snapshot().unwrap();
+        db.save_baseline("main", id1).unwrap();
+        db.save_baseline("main", id2).unwrap();
+        let snap = db.load_baseline("main").unwrap();
+        assert_eq!(snap.id, id2, "second save should replace the first");
+    }
 
     #[test]
     fn record_scan_snapshot_should_insert_row_when_db_is_empty() {

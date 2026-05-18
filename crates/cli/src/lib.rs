@@ -50,8 +50,14 @@ pub enum Commands {
         #[arg(long)]
         full_scan: bool,
         /// Show a diff of changes compared to the previous scan
-        #[arg(long)]
+        #[arg(long, conflicts_with = "diff_from")]
         diff: bool,
+        /// Save the scan result as a named baseline for later --diff-from comparisons
+        #[arg(long)]
+        save_baseline: Option<String>,
+        /// Diff against a named baseline instead of the previous scan (implies --diff)
+        #[arg(long)]
+        diff_from: Option<String>,
     },
     /// Show the dependency graph summary and detect circular dependencies
     Graph {
@@ -243,6 +249,8 @@ fn dispatch(cli: &Cli) -> anyhow::Result<i32> {
             project_dir,
             full_scan,
             diff,
+            save_baseline,
+            diff_from,
         } => {
             let db_path = resolve_db_path(project_dir, cli.db.as_deref());
             commands::scan::handle_scan(
@@ -252,6 +260,8 @@ fn dispatch(cli: &Cli) -> anyhow::Result<i32> {
                 &db_path,
                 &cli.format,
                 cli.yes,
+                save_baseline.as_deref(),
+                diff_from.as_deref(),
             )
         }
         Commands::Graph {

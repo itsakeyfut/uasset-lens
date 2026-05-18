@@ -12,4 +12,6 @@ pub enum DbError {
     Glob(#[from] globset::Error),
     #[error("database not found: {0}")]
     NotFound(PathBuf),
+    #[error("baseline not found: {0}")]
+    BaselineNotFound(String),
 }
