@@ -70,7 +70,7 @@ pub fn handle_check(
         .any(|&n| matches!(n, "lint" | "budget" | "duplicates"));
 
     let graph = if needs_graph {
-        Some(crate::load_graph(&db)?)
+        Some(crate::load_graph(&db, &config.scan.external_roots)?)
     } else {
         None
     };

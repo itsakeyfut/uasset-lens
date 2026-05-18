@@ -11,12 +11,13 @@ struct RedirectorsOutput {
 }
 
 pub fn handle_redirectors(
-    _project_dir: &Path,
+    project_dir: &Path,
     db_path: &Path,
     format: &FormatKind,
 ) -> anyhow::Result<i32> {
     let db = crate::open_db(db_path)?;
-    let graph = crate::load_graph(&db)?;
+    let config = crate::config::load_config(project_dir);
+    let graph = crate::load_graph(&db, &config.scan.external_roots)?;
     let paths = redirector_analyzer::detect(&graph);
 
     let redirector_paths: Vec<String> = paths

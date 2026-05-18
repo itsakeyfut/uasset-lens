@@ -42,7 +42,7 @@ struct CleanSummaryJson {
 // Each arg maps to a distinct CLI flag; a wrapper struct adds indirection at a single call site.
 #[allow(clippy::too_many_arguments)]
 pub fn handle_clean(
-    _project_dir: &Path,
+    project_dir: &Path,
     yes: bool,
     dry_run: bool,
     min_size: Option<u64>,
@@ -52,7 +52,8 @@ pub fn handle_clean(
     format: &FormatKind,
 ) -> anyhow::Result<i32> {
     let db = crate::open_db(db_path)?;
-    let graph = crate::load_graph(&db)?;
+    let config = crate::config::load_config(project_dir);
+    let graph = crate::load_graph(&db, &config.scan.external_roots)?;
 
     let dead_paths = dead_asset_detector::detect(&graph);
 

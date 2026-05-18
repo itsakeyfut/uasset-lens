@@ -24,7 +24,12 @@ pub fn handle_deps(
 ) -> anyhow::Result<i32> {
     let (target, db_path) = resolve_target_and_db(asset_path, db_override)?;
     let db = crate::open_db(&db_path)?;
-    let graph = crate::load_graph(&db)?;
+    let config = db_path
+        .parent()
+        .and_then(|p| p.parent())
+        .map(crate::config::load_config)
+        .unwrap_or_default();
+    let graph = crate::load_graph(&db, &config.scan.external_roots)?;
 
     if !graph.contains(&target) {
         anyhow::bail!("asset not found in scan data: {}", target.as_str());
@@ -578,6 +583,7 @@ mod tests {
                 shared::AssetPath::new("/Game/Root").unwrap(),
                 shared::AssetPath::new("/Game/Dep").unwrap(),
             )],
+            &[] as &[&str],
         );
         let mut asset_map: HashMap<AssetPath, (AssetType, u64)> = HashMap::new();
         asset_map.insert(

@@ -32,6 +32,7 @@ mod tests {
         let graph = DependencyGraph::build(
             vec![node("/Game/A"), node("/Game/B"), node("/Game/C")],
             vec![],
+            &[] as &[&str],
         );
 
         let mut result: Vec<_> = detect(&graph)
@@ -54,6 +55,7 @@ mod tests {
                 (ap("/Game/B"), ap("/Game/C")),
                 (ap("/Game/C"), ap("/Game/A")),
             ],
+            &[] as &[&str],
         );
 
         assert!(detect(&graph).is_empty());
@@ -67,6 +69,7 @@ mod tests {
                 node("/Game/Maps/__ExternalActors__/MyMap/SomeActor"),
             ],
             vec![],
+            &[] as &[&str],
         );
 
         let result: Vec<_> = detect(&graph)
@@ -84,6 +87,7 @@ mod tests {
                 node("/Game/Maps/__ExternalObjects__/MyMap/SomeObject"),
             ],
             vec![],
+            &[] as &[&str],
         );
 
         let result: Vec<_> = detect(&graph)
@@ -98,6 +102,7 @@ mod tests {
         let graph = DependencyGraph::build(
             vec![node("/Game/A"), node("/Game/B")],
             vec![(ap("/Game/A"), ap("/Game/B"))],
+            &[] as &[&str],
         );
 
         let result: Vec<_> = detect(&graph)
@@ -114,6 +119,7 @@ mod tests {
         let graph = DependencyGraph::build(
             vec![node("/Game/A"), node("/Game/B"), node("/Game/C")],
             vec![(ap("/Game/A"), ap("/Game/B"))],
+            &[] as &[&str],
         );
 
         let mut result: Vec<_> = detect(&graph)

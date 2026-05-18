@@ -13,10 +13,25 @@ pub struct ConfigFile {
     pub diff: DiffConfig,
 }
 
-#[derive(Default, serde::Deserialize)]
+#[derive(serde::Deserialize)]
 pub struct ScanConfig {
     #[serde(default)]
     pub exclude_paths: Vec<String>,
+    #[serde(default = "default_external_roots")]
+    pub external_roots: Vec<String>,
+}
+
+impl Default for ScanConfig {
+    fn default() -> Self {
+        Self {
+            exclude_paths: Vec::new(),
+            external_roots: default_external_roots(),
+        }
+    }
+}
+
+pub(crate) fn default_external_roots() -> Vec<String> {
+    vec!["/Engine/".to_string(), "/Script/".to_string()]
 }
 
 #[derive(Default, serde::Deserialize)]
@@ -148,6 +163,37 @@ mod tests {
         assert_eq!(
             config.budget.limits.get("SoundWave").map(|b| b.max_size),
             Some(2097152)
+        );
+    }
+
+    #[test]
+    fn load_config_should_parse_external_roots_from_valid_toml() {
+        let dir =
+            std::env::temp_dir().join(format!("uasset_lens_cfg_roots_{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(
+            dir.join(".uasset-lens.toml"),
+            "[scan]\nexternal_roots = [\"/Engine/\", \"/Plugins/\"]\n",
+        )
+        .unwrap();
+
+        let config = load_config(&dir);
+        let _ = std::fs::remove_dir_all(&dir);
+
+        assert_eq!(config.scan.external_roots, vec!["/Engine/", "/Plugins/"]);
+    }
+
+    #[test]
+    fn load_config_should_use_default_external_roots_when_key_absent() {
+        let dir =
+            std::env::temp_dir().join(format!("uasset_lens_cfg_roots_dflt_{}", std::process::id()));
+
+        let config = load_config(&dir);
+
+        assert_eq!(
+            config.scan.external_roots,
+            vec!["/Engine/", "/Script/"],
+            "default external roots should be /Engine/ and /Script/"
         );
     }
 }

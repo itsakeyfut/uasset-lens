@@ -29,6 +29,7 @@ mod tests {
                 node("/Game/B", AssetType::StaticMesh),
             ],
             vec![],
+            &[] as &[&str],
         );
 
         assert!(detect(&graph).is_empty());
@@ -42,6 +43,7 @@ mod tests {
                 node("/Game/OldMesh", AssetType::ObjectRedirector),
             ],
             vec![],
+            &[] as &[&str],
         );
 
         let mut result: Vec<_> = detect(&graph)
@@ -62,6 +64,7 @@ mod tests {
                 node("/Game/OldMesh", AssetType::ObjectRedirector),
             ],
             vec![],
+            &[] as &[&str],
         );
 
         let mut result: Vec<_> = detect(&graph)

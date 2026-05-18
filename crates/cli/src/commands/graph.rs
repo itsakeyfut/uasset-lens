@@ -12,13 +12,14 @@ struct GraphOutput {
 }
 
 pub fn handle_graph(
-    _project_dir: &Path,
+    project_dir: &Path,
     cycles_only: bool,
     db_path: &Path,
     format: &FormatKind,
 ) -> anyhow::Result<i32> {
     let db = crate::open_db(db_path)?;
-    let graph = crate::load_graph(&db)?;
+    let config = crate::config::load_config(project_dir);
+    let graph = crate::load_graph(&db, &config.scan.external_roots)?;
     let cycles = graph.find_cycles();
     let total_assets = graph.nodes().count();
     let total_edges = graph.edge_count();

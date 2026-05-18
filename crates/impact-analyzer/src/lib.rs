@@ -26,7 +26,7 @@ mod tests {
 
     #[test]
     fn detect_should_return_empty_when_target_has_no_referencing_assets() {
-        let graph = DependencyGraph::build(vec![node("/Game/Target")], vec![]);
+        let graph = DependencyGraph::build(vec![node("/Game/Target")], vec![], &[] as &[&str]);
 
         let result = detect(&graph, &ap("/Game/Target"));
         assert!(result.direct.is_empty());
@@ -39,6 +39,7 @@ mod tests {
         let graph = DependencyGraph::build(
             vec![node("/Game/Target"), node("/Game/A")],
             vec![(ap("/Game/A"), ap("/Game/Target"))],
+            &[] as &[&str],
         );
 
         let result = detect(&graph, &ap("/Game/Target"));
@@ -55,6 +56,7 @@ mod tests {
                 (ap("/Game/B"), ap("/Game/Target")),
                 (ap("/Game/C"), ap("/Game/B")),
             ],
+            &[] as &[&str],
         );
 
         let result = detect(&graph, &ap("/Game/Target"));

@@ -22,9 +22,10 @@ pub struct DependencyGraph {
 }
 
 impl DependencyGraph {
-    pub fn build(
+    pub fn build<S: AsRef<str>>(
         nodes: Vec<AssetNode>,
         edges: impl IntoIterator<Item = (AssetPath, AssetPath)>,
+        exclusion_prefixes: &[S],
     ) -> Self {
         let node_count = nodes.len();
         let mut graph = DiGraph::with_capacity(node_count, 0);
@@ -37,6 +38,12 @@ impl DependencyGraph {
         }
 
         for (from_path, to_path) in edges {
+            if exclusion_prefixes
+                .iter()
+                .any(|p| to_path.as_str().starts_with(p.as_ref()))
+            {
+                continue;
+            }
             let from_idx = get_or_insert_placeholder(&mut graph, &mut index, from_path);
             let to_idx = get_or_insert_placeholder(&mut graph, &mut index, to_path);
             graph.add_edge(from_idx, to_idx, ());
@@ -191,6 +198,7 @@ mod tests {
         let graph = DependencyGraph::build(
             vec![node("/Game/A"), node("/Game/B"), node("/Game/C")],
             vec![],
+            &[] as &[&str],
         );
 
         let paths: Vec<_> = graph.nodes().map(|n| n.path.as_str()).collect();
@@ -205,6 +213,7 @@ mod tests {
         let graph = DependencyGraph::build(
             vec![node("/Game/A")],
             vec![(ap("/Game/A"), ap("/Game/Unknown"))],
+            &[] as &[&str],
         );
 
         let paths: Vec<_> = graph.nodes().map(|n| n.path.as_str()).collect();
@@ -230,6 +239,7 @@ mod tests {
         let graph = DependencyGraph::build(
             vec![node("/Game/B")],
             vec![(ap("/Game/Unknown"), ap("/Game/B"))],
+            &[] as &[&str],
         );
 
         let paths: Vec<_> = graph.nodes().map(|n| n.path.as_str()).collect();
@@ -245,6 +255,7 @@ mod tests {
         let graph = DependencyGraph::build(
             vec![node("/Game/A"), node("/Game/B"), node("/Game/C")],
             vec![(ap("/Game/A"), ap("/Game/B"))],
+            &[] as &[&str],
         );
 
         let paths: Vec<_> = graph.nodes().map(|n| n.path.as_str()).collect();
@@ -259,13 +270,13 @@ mod tests {
 
     #[test]
     fn contains_should_return_true_for_existing_node() {
-        let graph = DependencyGraph::build(vec![node("/Game/A")], vec![]);
+        let graph = DependencyGraph::build(vec![node("/Game/A")], vec![], &[] as &[&str]);
         assert!(graph.contains(&ap("/Game/A")));
     }
 
     #[test]
     fn contains_should_return_false_for_unknown_path() {
-        let graph = DependencyGraph::build(vec![node("/Game/A")], vec![]);
+        let graph = DependencyGraph::build(vec![node("/Game/A")], vec![], &[] as &[&str]);
         assert!(!graph.contains(&ap("/Game/NotInGraph")));
     }
 
@@ -274,6 +285,7 @@ mod tests {
         let graph = DependencyGraph::build(
             vec![node("/Game/A"), node("/Game/B")],
             vec![(ap("/Game/A"), ap("/Game/B"))],
+            &[] as &[&str],
         );
 
         assert_eq!(
@@ -297,6 +309,7 @@ mod tests {
                 (ap("/Game/B"), ap("/Game/D")),
                 (ap("/Game/C"), ap("/Game/D")),
             ],
+            &[] as &[&str],
         );
 
         assert_eq!(
@@ -308,7 +321,7 @@ mod tests {
 
     #[test]
     fn in_degree_should_return_zero_for_unknown_path() {
-        let graph = DependencyGraph::build(vec![node("/Game/A")], vec![]);
+        let graph = DependencyGraph::build(vec![node("/Game/A")], vec![], &[] as &[&str]);
 
         assert_eq!(
             graph.in_degree(&ap("/Game/NotInGraph")),
@@ -326,6 +339,7 @@ mod tests {
                 (ap("/Game/B"), ap("/Game/A")),
                 (ap("/Game/C"), ap("/Game/A")),
             ],
+            &[] as &[&str],
         );
 
         let result = graph.find_impact(&ap("/Game/A"));
@@ -344,6 +358,7 @@ mod tests {
                 (ap("/Game/B"), ap("/Game/A")),
                 (ap("/Game/C"), ap("/Game/B")),
             ],
+            &[] as &[&str],
         );
 
         let result = graph.find_impact(&ap("/Game/A"));
@@ -356,6 +371,7 @@ mod tests {
         let graph = DependencyGraph::build(
             vec![node("/Game/A"), node("/Game/B")],
             vec![(ap("/Game/A"), ap("/Game/B"))],
+            &[] as &[&str],
         );
 
         let result = graph.find_impact(&ap("/Game/A"));
@@ -365,7 +381,7 @@ mod tests {
 
     #[test]
     fn find_impact_should_return_empty_for_target_not_in_graph() {
-        let graph = DependencyGraph::build(vec![node("/Game/A")], vec![]);
+        let graph = DependencyGraph::build(vec![node("/Game/A")], vec![], &[] as &[&str]);
 
         let result = graph.find_impact(&ap("/Game/NotInGraph"));
         assert!(result.direct.is_empty());
@@ -377,6 +393,7 @@ mod tests {
         let graph = DependencyGraph::build(
             vec![node("/Game/A"), node("/Game/B")],
             vec![(ap("/Game/B"), ap("/Game/A"))],
+            &[] as &[&str],
         );
 
         let result = graph.find_impact(&ap("/Game/A"));
@@ -397,6 +414,7 @@ mod tests {
                 (ap("/Game/A"), ap("/Game/B")),
                 (ap("/Game/C"), ap("/Game/B")),
             ],
+            &[] as &[&str],
         );
 
         let rev = graph.reverse_deps_of(&ap("/Game/B"));
@@ -410,6 +428,7 @@ mod tests {
         let graph = DependencyGraph::build(
             vec![node("/Game/A"), node("/Game/B")],
             vec![(ap("/Game/A"), ap("/Game/B"))],
+            &[] as &[&str],
         );
 
         assert!(
@@ -420,7 +439,7 @@ mod tests {
 
     #[test]
     fn reverse_deps_of_should_return_empty_for_unknown_path() {
-        let graph = DependencyGraph::build(vec![node("/Game/A")], vec![]);
+        let graph = DependencyGraph::build(vec![node("/Game/A")], vec![], &[] as &[&str]);
         assert!(graph.reverse_deps_of(&ap("/Game/NotInGraph")).is_empty());
     }
 
@@ -432,6 +451,7 @@ mod tests {
                 (ap("/Game/A"), ap("/Game/B")),
                 (ap("/Game/A"), ap("/Game/C")),
             ],
+            &[] as &[&str],
         );
 
         let deps = graph.dependencies_of(&ap("/Game/A"));
@@ -442,7 +462,7 @@ mod tests {
 
     #[test]
     fn dependencies_of_should_return_empty_for_unknown_path() {
-        let graph = DependencyGraph::build(vec![node("/Game/A")], vec![]);
+        let graph = DependencyGraph::build(vec![node("/Game/A")], vec![], &[] as &[&str]);
         assert!(graph.dependencies_of(&ap("/Game/NotInGraph")).is_empty());
     }
 
@@ -454,6 +474,7 @@ mod tests {
                 (ap("/Game/A"), ap("/Game/B")),
                 (ap("/Game/B"), ap("/Game/C")),
             ],
+            &[] as &[&str],
         );
 
         assert!(graph.find_cycles().is_empty());
@@ -467,6 +488,7 @@ mod tests {
                 (ap("/Game/A"), ap("/Game/B")),
                 (ap("/Game/B"), ap("/Game/A")),
             ],
+            &[] as &[&str],
         );
 
         let cycles = graph.find_cycles();
@@ -486,6 +508,7 @@ mod tests {
                 (ap("/Game/B"), ap("/Game/C")),
                 (ap("/Game/C"), ap("/Game/A")),
             ],
+            &[] as &[&str],
         );
 
         let cycles = graph.find_cycles();
@@ -512,6 +535,7 @@ mod tests {
                 (ap("/Game/C"), ap("/Game/D")),
                 (ap("/Game/D"), ap("/Game/C")),
             ],
+            &[] as &[&str],
         );
 
         let cycles = graph.find_cycles();
@@ -522,8 +546,11 @@ mod tests {
     #[test]
     fn find_cycles_should_exclude_self_loop_only() {
         // A self-loop A→A forms a single-node SCC, which must be filtered out.
-        let graph =
-            DependencyGraph::build(vec![node("/Game/A")], vec![(ap("/Game/A"), ap("/Game/A"))]);
+        let graph = DependencyGraph::build(
+            vec![node("/Game/A")],
+            vec![(ap("/Game/A"), ap("/Game/A"))],
+            &[] as &[&str],
+        );
 
         assert!(
             graph.find_cycles().is_empty(),
@@ -548,6 +575,7 @@ mod tests {
                     ap("/Game/Maps/MyMap"),
                 ),
             ],
+            &[] as &[&str],
         );
 
         assert!(
@@ -573,6 +601,7 @@ mod tests {
                     ap("/Game/Maps/MyMap"),
                 ),
             ],
+            &[] as &[&str],
         );
 
         assert!(
@@ -589,6 +618,7 @@ mod tests {
                 (ap("/Game/A"), ap("/Game/B")),
                 (ap("/Game/B"), ap("/Game/A")),
             ],
+            &[] as &[&str],
         );
 
         let cycles = graph.find_cycles();
@@ -620,11 +650,65 @@ mod tests {
                 ),
                 (ap("/Game/BP_NormalBlueprint"), ap("/Game/Maps/MyMap")),
             ],
+            &[] as &[&str],
         );
 
         assert!(
             graph.find_cycles().is_empty(),
             "mixed OFPA+normal SCC should be suppressed"
+        );
+    }
+
+    #[test]
+    fn build_should_exclude_to_path_matching_exclusion_prefix() {
+        let graph = DependencyGraph::build(
+            vec![node("/Game/A")],
+            vec![(ap("/Game/A"), ap("/Plugins/Foo/Bar"))],
+            &["/Plugins/"],
+        );
+
+        let paths: Vec<_> = graph.nodes().map(|n| n.path.as_str()).collect();
+        assert!(
+            !paths.contains(&"/Plugins/Foo/Bar"),
+            "excluded prefix node should not be added to the graph"
+        );
+        assert_eq!(paths.len(), 1, "only /Game/A should remain");
+        assert_eq!(graph.edge_count(), 0, "excluded edge should not be added");
+    }
+
+    #[test]
+    fn build_should_not_exclude_to_path_that_does_not_match_any_prefix() {
+        let graph = DependencyGraph::build(
+            vec![node("/Game/A"), node("/Game/B")],
+            vec![(ap("/Game/A"), ap("/Game/B"))],
+            &["/Engine/", "/Script/"],
+        );
+
+        assert_eq!(graph.edge_count(), 1, "non-excluded edge should remain");
+    }
+
+    #[test]
+    fn build_should_exclude_all_edges_when_all_to_paths_match_exclusions() {
+        let graph = DependencyGraph::build(
+            vec![node("/Game/A")],
+            vec![
+                (ap("/Game/A"), ap("/Engine/BasicShapes/Cube")),
+                (ap("/Game/A"), ap("/Script/CoreUObject")),
+                (ap("/Game/A"), ap("/Plugins/MyPlugin/Content/Foo")),
+            ],
+            &["/Engine/", "/Script/", "/Plugins/"],
+        );
+
+        assert_eq!(
+            graph.edge_count(),
+            0,
+            "all external edges should be excluded"
+        );
+        let paths: Vec<_> = graph.nodes().map(|n| n.path.as_str()).collect();
+        assert_eq!(
+            paths.len(),
+            1,
+            "only the scanned /Game/A node should remain"
         );
     }
 }
