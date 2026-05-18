@@ -15,6 +15,7 @@ use byteorder::{LittleEndian, ReadBytesExt};
 use shared::AssetPath;
 use std::io::Cursor;
 
+use super::{advance, map_io, skip_fstring};
 use crate::ScanError;
 
 const MAX_DEPTH: u8 = 6;
@@ -183,33 +184,4 @@ fn read_soft_object_path(
         out.push(p);
     }
     Ok(())
-}
-
-fn advance(cur: &mut Cursor<&[u8]>, n: u64) -> Result<(), ScanError> {
-    let new_pos = cur.position() + n;
-    if new_pos > cur.get_ref().len() as u64 {
-        return Err(ScanError::UnexpectedEof);
-    }
-    cur.set_position(new_pos);
-    Ok(())
-}
-
-fn skip_fstring(cur: &mut Cursor<&[u8]>) -> Result<(), ScanError> {
-    let len = cur.read_i32::<LittleEndian>().map_err(map_io)?;
-    let byte_count: u64 = if len == 0 {
-        0
-    } else if len < 0 {
-        (-len as u64) * 2
-    } else {
-        len as u64
-    };
-    advance(cur, byte_count)
-}
-
-fn map_io(e: std::io::Error) -> ScanError {
-    if e.kind() == std::io::ErrorKind::UnexpectedEof {
-        ScanError::UnexpectedEof
-    } else {
-        ScanError::Io(e)
-    }
 }
