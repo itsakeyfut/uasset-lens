@@ -144,7 +144,7 @@ pub fn handle_dead_assets(
                         .context("Failed to serialize grouped output to JSON")?
                 );
             }
-            FormatKind::Text => {
+            FormatKind::GithubActions | FormatKind::Text => {
                 let max_name = groups.iter().map(|g| g.group.len()).max().unwrap_or(1);
                 let max_cnt = groups
                     .iter()
@@ -182,7 +182,7 @@ pub fn handle_dead_assets(
                     .context("Failed to serialize dead assets output to JSON")?
             );
         }
-        FormatKind::Text => {
+        FormatKind::GithubActions | FormatKind::Text => {
             for entry in &entries {
                 println!(
                     "  {}  ({}, {})",

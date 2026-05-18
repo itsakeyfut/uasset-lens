@@ -38,7 +38,7 @@ pub fn handle_path_conv(
                 serde_json::to_string_pretty(&out).context("Failed to serialize path output")?
             );
         }
-        FormatKind::Text => println!("{output}"),
+        FormatKind::GithubActions | FormatKind::Text => println!("{output}"),
     }
 
     Ok(0)

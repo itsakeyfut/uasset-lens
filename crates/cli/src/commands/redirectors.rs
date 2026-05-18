@@ -38,7 +38,7 @@ pub fn handle_redirectors(
                     .context("Failed to serialize redirectors output to JSON")?
             );
         }
-        FormatKind::Text => {
+        FormatKind::GithubActions | FormatKind::Text => {
             let header = format!("ObjectRedirectors ({} found)", redirector_paths.len());
             let separator = "=".repeat(header.len());
             println!("{header}");

@@ -111,7 +111,7 @@ pub fn handle_find(
                     .context("Failed to serialize find output to JSON")?
             );
         }
-        FormatKind::Text => {
+        FormatKind::GithubActions | FormatKind::Text => {
             let header = format!("Found {} assets", entries.len());
             let separator = "=".repeat(header.len());
             println!("{header}");

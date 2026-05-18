@@ -63,7 +63,7 @@ pub fn handle_duplicates(
                     .context("Failed to serialize duplicates output to JSON")?
             );
         }
-        FormatKind::Text => {
+        FormatKind::GithubActions | FormatKind::Text => {
             println!("Duplicate Assets");
             println!("================");
             if entries.is_empty() {

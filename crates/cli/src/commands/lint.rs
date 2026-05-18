@@ -14,6 +14,7 @@ struct LintEntry {
 }
 
 pub fn handle_lint(project_dir: &Path, db_path: &Path, format: &FormatKind) -> anyhow::Result<i32> {
+    crate::maybe_hint_github_actions(format);
     let config = crate::config::load_config(project_dir);
     let db = crate::open_db(db_path)?;
 
@@ -58,6 +59,33 @@ pub fn handle_lint(project_dir: &Path, db_path: &Path, format: &FormatKind) -> a
         .collect();
 
     match format {
+        FormatKind::GithubActions => {
+            let path_lookup: HashMap<&str, &std::path::Path> = assets
+                .iter()
+                .map(|r| (r.asset_path.as_str(), r.file_path.as_path()))
+                .collect();
+            let has_error = violations
+                .iter()
+                .any(|v| v.severity == lint_engine::Severity::Error);
+            for v in &violations {
+                let rel = crate::rel_path_for_annotation(
+                    path_lookup
+                        .get(v.asset_path.as_str())
+                        .copied()
+                        .unwrap_or(std::path::Path::new("")),
+                    project_dir,
+                );
+                let level = match v.severity {
+                    lint_engine::Severity::Error => "error",
+                    lint_engine::Severity::Warning => "warning",
+                };
+                println!(
+                    "{}",
+                    crate::format_gh_annotation(level, &rel, v.rule_id, &v.message)
+                );
+            }
+            return if has_error { Ok(1) } else { Ok(0) };
+        }
         FormatKind::Json => {
             println!(
                 "{}",
@@ -122,6 +150,79 @@ mod tests {
             blueprint_metrics: None,
             material_texture_samples: None,
         }
+    }
+
+    #[test]
+    fn handle_lint_github_actions_should_return_0_when_no_violations() {
+        let dir =
+            std::env::temp_dir().join(format!("uasset_lens_lint_ga_empty_{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let db_path = dir.join("test.db");
+        asset_db::AssetDb::open(&db_path).unwrap();
+
+        let result = handle_lint(&dir, &db_path, &FormatKind::GithubActions).unwrap();
+
+        assert_eq!(result, 0);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn handle_lint_github_actions_should_return_0_when_only_warnings() {
+        let dir =
+            std::env::temp_dir().join(format!("uasset_lens_lint_ga_warn_{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let db_path = dir.join("test.db");
+
+        {
+            let mut db = asset_db::AssetDb::open(&db_path).unwrap();
+            db.upsert_all(&[make_bp_asset("/Game/Blueprints/Rock_BP", &dir)])
+                .unwrap();
+        }
+
+        let result = handle_lint(&dir, &db_path, &FormatKind::GithubActions).unwrap();
+
+        assert_eq!(
+            result, 0,
+            "warnings-only should exit 0 in github-actions mode"
+        );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn handle_lint_github_actions_should_return_1_when_error_violation_found() {
+        let dir =
+            std::env::temp_dir().join(format!("uasset_lens_lint_ga_err_{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let db_path = dir.join("test.db");
+
+        {
+            let mut db = asset_db::AssetDb::open(&db_path).unwrap();
+            db.upsert_all(&[scanner::AssetMetadata {
+                asset_path: AssetPath::new("/Game/BP_Boss").unwrap(),
+                file_path: dir.join("BP_Boss.uasset"),
+                asset_type: AssetType::Blueprint,
+                file_size: 4096,
+                last_modified: 0,
+                dependencies: vec![],
+                soft_dependencies: vec![],
+                blueprint_metrics: Some(scanner::BlueprintMetrics {
+                    node_count: 201,
+                    event_tick_count: 0,
+                    cast_count: 0,
+                    dependency_depth: 0,
+                }),
+                material_texture_samples: None,
+            }])
+            .unwrap();
+        }
+
+        let result = handle_lint(&dir, &db_path, &FormatKind::GithubActions).unwrap();
+
+        assert_eq!(
+            result, 1,
+            "error-level violation should exit 1 in github-actions mode"
+        );
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
