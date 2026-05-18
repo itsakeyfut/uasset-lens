@@ -68,23 +68,8 @@ fn resolve_content_root_for_game_path(override_path: Option<&Path>) -> anyhow::R
         return Ok(cr.to_path_buf());
     }
     let cwd = std::env::current_dir().context("Failed to get current directory")?;
-    let project_dir = find_project_dir(&cwd)?;
+    let project_dir = crate::find_project_dir(&cwd)?;
     Ok(crate::resolve_content_root(&project_dir))
-}
-
-fn find_project_dir(start: &Path) -> anyhow::Result<PathBuf> {
-    let mut dir = start;
-    loop {
-        if dir.join(".uasset-lens").is_dir() {
-            return Ok(dir.to_path_buf());
-        }
-        match dir.parent() {
-            Some(parent) => dir = parent,
-            None => {
-                anyhow::bail!("no scan data found.\nRun 'uasset-lens scan <project_dir>' first.")
-            }
-        }
-    }
 }
 
 #[cfg(test)]

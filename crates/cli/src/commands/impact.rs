@@ -1,5 +1,5 @@
 use std::collections::HashSet;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use anyhow::Context;
 use shared::AssetPath;
@@ -46,7 +46,7 @@ pub fn handle_impact(
     tree: bool,
     format: &FormatKind,
 ) -> anyhow::Result<i32> {
-    let (target, db_path) = resolve_target_and_db(asset_path, db_override)?;
+    let (target, db_path) = crate::resolve_target_and_db(asset_path, db_override)?;
     let db = crate::open_db(&db_path)?;
     let config = db_path
         .parent()
@@ -196,58 +196,6 @@ fn print_tree_node(node: &TreeNode, prefix: &str, is_last: bool, parent_short: O
     let n = node.children.len();
     for (i, child) in node.children.iter().enumerate() {
         print_tree_node(child, &child_prefix, i == n - 1, Some(short));
-    }
-}
-
-/// Resolves the target `AssetPath` and DB file path from the raw CLI argument.
-///
-/// Accepts two forms:
-/// - Game path (`/Game/...`): parsed directly; DB found by walking up from CWD or via `--db`.
-/// - Filesystem path (`.uasset`/`.umap`): converted to game path via `from_fs_path`; project
-///   root located by walking up from the file.
-fn resolve_target_and_db(
-    asset_path: &Path,
-    db_override: Option<&Path>,
-) -> anyhow::Result<(AssetPath, PathBuf)> {
-    if asset_path.starts_with("/Game") {
-        let s = asset_path.to_string_lossy();
-        let target = AssetPath::new(&s).map_err(|e| anyhow::anyhow!("invalid game path: {e}"))?;
-        let db_path = match db_override {
-            Some(p) => p.to_path_buf(),
-            None => {
-                let cwd = std::env::current_dir().context("Failed to get current directory")?;
-                let project_dir = find_project_dir(&cwd)?;
-                project_dir.join(".uasset-lens").join("uasset-lens.db")
-            }
-        };
-        return Ok((target, db_path));
-    }
-
-    // Filesystem path — walk up from file's parent to locate project root
-    let start = asset_path.parent().unwrap_or(asset_path);
-    let project_dir = find_project_dir(start)?;
-    let content_root = crate::resolve_content_root(&project_dir);
-    let target = AssetPath::from_fs_path(&content_root, asset_path)
-        .map_err(|e| anyhow::anyhow!("cannot convert path to game path: {e}"))?;
-    let db_path = db_override
-        .map(|p| p.to_path_buf())
-        .unwrap_or_else(|| project_dir.join(".uasset-lens").join("uasset-lens.db"));
-
-    Ok((target, db_path))
-}
-
-fn find_project_dir(start: &Path) -> anyhow::Result<PathBuf> {
-    let mut dir = start;
-    loop {
-        if dir.join(".uasset-lens").is_dir() {
-            return Ok(dir.to_path_buf());
-        }
-        match dir.parent() {
-            Some(parent) => dir = parent,
-            None => {
-                anyhow::bail!("no scan data found.\nRun 'uasset-lens scan <project_dir>' first.")
-            }
-        }
     }
 }
 
@@ -503,7 +451,7 @@ mod tests {
         std::fs::create_dir_all(&sub).unwrap();
         std::fs::create_dir_all(dir.join(".uasset-lens")).unwrap();
 
-        let result = find_project_dir(&sub).unwrap();
+        let result = crate::find_project_dir(&sub).unwrap();
         assert_eq!(result, dir);
         let _ = std::fs::remove_dir_all(&dir);
     }
@@ -517,7 +465,7 @@ mod tests {
             std::process::id()
         ));
         assert!(
-            find_project_dir(&nonexistent).is_err(),
+            crate::find_project_dir(&nonexistent).is_err(),
             "no .uasset-lens in path should return error"
         );
     }

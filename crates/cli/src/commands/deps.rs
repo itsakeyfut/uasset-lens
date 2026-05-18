@@ -1,5 +1,5 @@
 use std::collections::{HashMap, HashSet, VecDeque};
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use anyhow::Context;
 use shared::{AssetPath, AssetType};
@@ -22,7 +22,7 @@ pub fn handle_deps(
     size_only: bool,
     format: &FormatKind,
 ) -> anyhow::Result<i32> {
-    let (target, db_path) = resolve_target_and_db(asset_path, db_override)?;
+    let (target, db_path) = crate::resolve_target_and_db(asset_path, db_override)?;
     let db = crate::open_db(&db_path)?;
     let config = db_path
         .parent()
@@ -272,51 +272,6 @@ fn build_json_node(
         asset_type: type_str,
         size_bytes: size,
         deps,
-    }
-}
-
-fn resolve_target_and_db(
-    asset_path: &Path,
-    db_override: Option<&Path>,
-) -> anyhow::Result<(AssetPath, PathBuf)> {
-    if asset_path.starts_with("/Game") {
-        let s = asset_path.to_string_lossy();
-        let target = AssetPath::new(&s).map_err(|e| anyhow::anyhow!("invalid game path: {e}"))?;
-        let db_path = match db_override {
-            Some(p) => p.to_path_buf(),
-            None => {
-                let cwd = std::env::current_dir().context("Failed to get current directory")?;
-                let project_dir = find_project_dir(&cwd)?;
-                project_dir.join(".uasset-lens").join("uasset-lens.db")
-            }
-        };
-        return Ok((target, db_path));
-    }
-
-    let start = asset_path.parent().unwrap_or(asset_path);
-    let project_dir = find_project_dir(start)?;
-    let content_root = crate::resolve_content_root(&project_dir);
-    let target = AssetPath::from_fs_path(&content_root, asset_path)
-        .map_err(|e| anyhow::anyhow!("cannot convert path to game path: {e}"))?;
-    let db_path = db_override
-        .map(|p| p.to_path_buf())
-        .unwrap_or_else(|| project_dir.join(".uasset-lens").join("uasset-lens.db"));
-
-    Ok((target, db_path))
-}
-
-fn find_project_dir(start: &Path) -> anyhow::Result<PathBuf> {
-    let mut dir = start;
-    loop {
-        if dir.join(".uasset-lens").is_dir() {
-            return Ok(dir.to_path_buf());
-        }
-        match dir.parent() {
-            Some(parent) => dir = parent,
-            None => {
-                anyhow::bail!("no scan data found.\nRun 'uasset-lens scan <project_dir>' first.")
-            }
-        }
     }
 }
 
