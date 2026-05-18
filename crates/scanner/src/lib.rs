@@ -2,6 +2,7 @@ mod anim_montage;
 mod blueprint;
 mod data_table;
 pub mod error;
+mod level_sequence;
 mod material;
 pub mod parser;
 
@@ -175,6 +176,20 @@ fn scan_single(file: &Path, content_root: &Path) -> Result<AssetMetadata, ScanEr
     };
 
     soft_dependencies.extend(am_soft_refs);
+
+    let ls_soft_refs = if level_sequence::is_level_sequence_asset(&asset_type) {
+        level_sequence::extract_level_sequence_soft_refs(
+            &data,
+            hdr.export_offset,
+            hdr.export_count,
+            hdr.depends_offset,
+            &name_table,
+        )
+    } else {
+        Vec::new()
+    };
+
+    soft_dependencies.extend(ls_soft_refs);
 
     let asset_path = AssetPath::from_fs_path(content_root, file)?;
 
