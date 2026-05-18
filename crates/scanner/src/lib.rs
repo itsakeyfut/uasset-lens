@@ -270,4 +270,26 @@ mod tests {
             "Texture2D should not have material texture samples"
         );
     }
+
+    #[test]
+    fn scan_files_should_extract_soft_refs_from_level_sequence_asset() {
+        let fixture = PathBuf::from(format!("{FIXTURES_DIR}/valid/LS_Simple.uasset"));
+        let content_root = PathBuf::from(format!("{FIXTURES_DIR}/valid"));
+        let result = scan_files(&[fixture], &content_root);
+
+        assert!(result.skipped.is_empty());
+        assert_eq!(result.assets.len(), 1);
+        let meta = &result.assets[0];
+        assert_eq!(meta.asset_type, AssetType::LevelSequence);
+
+        let paths: Vec<&str> = meta.soft_dependencies.iter().map(|p| p.as_str()).collect();
+        assert!(
+            paths.contains(&"/Game/Anims/AS_Run"),
+            "expected /Game/Anims/AS_Run in soft_dependencies, got: {paths:?}"
+        );
+        assert!(
+            paths.contains(&"/Game/Sounds/SW_Fire"),
+            "expected /Game/Sounds/SW_Fire in soft_dependencies, got: {paths:?}"
+        );
+    }
 }

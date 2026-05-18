@@ -10,6 +10,7 @@ fn scan_files_should_detect_correct_asset_types_for_all_valid_fixtures() {
     let valid = Path::new(FIXTURES_DIR).join("valid");
     let files = vec![
         valid.join("BP_Simple.uasset"),
+        valid.join("LS_Simple.uasset"),
         valid.join("M_Basic.uasset"),
         valid.join("Redirect.uasset"),
         valid.join("SM_Cube.uasset"),
@@ -29,7 +30,7 @@ fn scan_files_should_detect_correct_asset_types_for_all_valid_fixtures() {
             .map(|s| &s.file_path)
             .collect::<Vec<_>>()
     );
-    assert_eq!(result.assets.len(), 6);
+    assert_eq!(result.assets.len(), 7);
 
     let by_path: HashMap<_, _> = result
         .assets
@@ -38,6 +39,7 @@ fn scan_files_should_detect_correct_asset_types_for_all_valid_fixtures() {
         .collect();
 
     assert_eq!(by_path["/Game/BP_Simple"], &AssetType::Blueprint);
+    assert_eq!(by_path["/Game/LS_Simple"], &AssetType::LevelSequence);
     assert_eq!(by_path["/Game/M_Basic"], &AssetType::Material);
     assert_eq!(by_path["/Game/Redirect"], &AssetType::ObjectRedirector);
     assert_eq!(by_path["/Game/SM_Cube"], &AssetType::StaticMesh);
