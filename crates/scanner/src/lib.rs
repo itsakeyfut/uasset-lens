@@ -1,4 +1,5 @@
 mod blueprint;
+mod data_table;
 pub mod error;
 mod material;
 pub mod parser;
@@ -99,7 +100,7 @@ fn scan_single(file: &Path, content_root: &Path) -> Result<AssetMetadata, ScanEr
     let (cls_names, dependencies) =
         parse_import_entries(&data, hdr.import_offset, hdr.import_count, &name_table)?;
 
-    let soft_dependencies = parse_soft_object_paths(
+    let mut soft_dependencies = parse_soft_object_paths(
         &data,
         hdr.soft_object_path_offset,
         hdr.soft_object_path_count,
@@ -143,6 +144,21 @@ fn scan_single(file: &Path, content_root: &Path) -> Result<AssetMetadata, ScanEr
     } else {
         None
     };
+
+    let dt_soft_refs = if data_table::is_data_table_asset(&asset_type) {
+        data_table::extract_data_table_soft_refs(
+            &data,
+            hdr.export_offset,
+            hdr.export_count,
+            hdr.depends_offset,
+            &cls_names,
+            &name_table,
+        )
+    } else {
+        Vec::new()
+    };
+
+    soft_dependencies.extend(dt_soft_refs);
 
     let asset_path = AssetPath::from_fs_path(content_root, file)?;
 
