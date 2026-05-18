@@ -277,7 +277,7 @@ pub fn handle_check(
                     .context("Failed to serialize check output to JSON")?
             );
         }
-        FormatKind::Text => {
+        FormatKind::GithubActions | FormatKind::Text => {
             let name_width = active
                 .iter()
                 .map(|&n| check_display_name(n).len())

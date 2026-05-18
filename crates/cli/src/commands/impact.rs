@@ -78,7 +78,7 @@ pub fn handle_impact(
                         .context("Failed to serialize impact tree output to JSON")?
                 );
             }
-            FormatKind::Text => {
+            FormatKind::GithubActions | FormatKind::Text => {
                 println!("{}  [target]", target.as_str());
                 let n = children.len();
                 for (i, child) in children.iter().enumerate() {
@@ -118,7 +118,7 @@ pub fn handle_impact(
                     .context("Failed to serialize impact output to JSON")?
             );
         }
-        FormatKind::Text => {
+        FormatKind::GithubActions | FormatKind::Text => {
             println!("  Impact Analysis: {}", target.as_str());
             println!();
             println!("  Direct referencing ({}):", result.direct.len());

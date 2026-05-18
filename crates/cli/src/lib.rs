@@ -15,6 +15,8 @@ pub enum FormatKind {
     #[default]
     Text,
     Json,
+    #[value(name = "github-actions")]
+    GithubActions,
 }
 
 #[derive(Debug, Clone, PartialEq, ValueEnum)]
@@ -391,6 +393,30 @@ fn dispatch(cli: &Cli) -> anyhow::Result<i32> {
     }
 }
 
+pub(crate) fn maybe_hint_github_actions(format: &FormatKind) {
+    if !matches!(format, FormatKind::GithubActions)
+        && (std::env::var("GITHUB_ACTIONS").is_ok()
+            || std::env::var("ACTIONS_RUNNER_ENVIRONMENT").is_ok())
+    {
+        eprintln!(
+            "Hint: running inside GitHub Actions — \
+             add '--format github-actions' to get inline PR annotations."
+        );
+    }
+}
+
+pub(crate) fn rel_path_for_annotation(file_path: &Path, project_dir: &Path) -> String {
+    file_path
+        .strip_prefix(project_dir)
+        .unwrap_or(file_path)
+        .to_string_lossy()
+        .replace('\\', "/")
+}
+
+pub(crate) fn format_gh_annotation(level: &str, rel: &str, title: &str, message: &str) -> String {
+    format!("::{level} file={rel},title={title}::{message}")
+}
+
 pub(crate) fn format_size(bytes: u64) -> String {
     const MIB: u64 = 1024 * 1024;
     const KIB: u64 = 1024;
@@ -406,6 +432,38 @@ pub(crate) fn format_size(bytes: u64) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn rel_path_for_annotation_should_strip_project_prefix() {
+        let project = std::path::Path::new("/proj");
+        let file = std::path::Path::new("/proj/Content/T_Rock.uasset");
+        assert_eq!(
+            rel_path_for_annotation(file, project),
+            "Content/T_Rock.uasset"
+        );
+    }
+
+    #[test]
+    fn rel_path_for_annotation_should_use_full_path_when_prefix_not_matched() {
+        let project = std::path::Path::new("/proj");
+        let file = std::path::Path::new("/other/T_Rock.uasset");
+        let result = rel_path_for_annotation(file, project);
+        assert_eq!(result, "/other/T_Rock.uasset");
+    }
+
+    #[test]
+    fn format_gh_annotation_should_produce_correct_workflow_command() {
+        let s = format_gh_annotation(
+            "error",
+            "Content/T_Rock.uasset",
+            "BudgetOverrun",
+            "Texture2D 2.0 MB exceeds limit 1.0 MB",
+        );
+        assert_eq!(
+            s,
+            "::error file=Content/T_Rock.uasset,title=BudgetOverrun::Texture2D 2.0 MB exceeds limit 1.0 MB"
+        );
+    }
 
     #[test]
     fn format_size_should_format_bytes_as_human_readable() {

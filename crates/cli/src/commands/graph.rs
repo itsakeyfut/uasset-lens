@@ -51,7 +51,7 @@ pub fn handle_graph(
                     .context("Failed to serialize graph output to JSON")?
             );
         }
-        FormatKind::Text => {
+        FormatKind::GithubActions | FormatKind::Text => {
             if !cycles_only {
                 println!("Dependency Graph Summary");
                 println!("  Total assets   : {}", format_number(total_assets));

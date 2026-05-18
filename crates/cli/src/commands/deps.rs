@@ -66,7 +66,7 @@ pub fn handle_deps(
                 );
             }
         }
-        FormatKind::Text => {
+        FormatKind::GithubActions | FormatKind::Text => {
             if !size_only {
                 let (root_type, root_size) = asset_map
                     .get(&target)

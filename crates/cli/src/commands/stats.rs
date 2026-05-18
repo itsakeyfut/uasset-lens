@@ -177,7 +177,7 @@ pub fn handle_stats(
                     .context("Failed to serialize stats output to JSON")?
             );
         }
-        FormatKind::Text => {
+        FormatKind::GithubActions | FormatKind::Text => {
             let project_name = project_dir
                 .file_name()
                 .map(|n| n.to_string_lossy().to_string())

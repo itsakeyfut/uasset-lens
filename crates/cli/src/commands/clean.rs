@@ -123,7 +123,7 @@ pub fn handle_clean(
                         .context("Failed to serialize dry-run output to JSON")?
                 );
             }
-            FormatKind::Text => {
+            FormatKind::GithubActions | FormatKind::Text => {
                 for e in &entries {
                     println!(
                         "  {}  ({}, {})",
@@ -269,7 +269,7 @@ pub fn handle_clean(
                     .context("Failed to serialize summary to JSON")?
             );
         }
-        FormatKind::Text => {
+        FormatKind::GithubActions | FormatKind::Text => {
             println!(
                 "  Summary: {} deleted ({}), {} skipped, {} errors",
                 deleted,

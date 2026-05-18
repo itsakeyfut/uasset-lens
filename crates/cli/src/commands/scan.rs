@@ -249,6 +249,7 @@ pub fn handle_scan(
     let assets_total = db_files.len() + new_count - removed_count;
 
     if diff {
+        crate::maybe_hint_github_actions(format);
         // snaps[0] = current, snaps[1] = previous (DESC order)
         let prev_scanned_at = db
             .recent_snapshots(2)
@@ -276,8 +277,53 @@ pub fn handle_scan(
             .collect();
 
         let has_regressions = !regressions.is_empty();
+        let has_size_increases = !size_increases.is_empty();
 
         match format {
+            FormatKind::GithubActions => {
+                let path_lookup: HashMap<&str, &std::path::Path> = result
+                    .assets
+                    .iter()
+                    .map(|m| (m.asset_path.as_str(), m.file_path.as_path()))
+                    .collect();
+                for p in &new_asset_paths {
+                    println!("::notice title=NewAsset::{p}");
+                }
+                for p in &deleted_asset_paths {
+                    println!("::warning title=DeletedAsset::{p}");
+                }
+                for r in &regressions {
+                    let rel = path_lookup
+                        .get(r.path.as_str())
+                        .map(|&fp| crate::rel_path_for_annotation(fp, project_dir))
+                        .unwrap_or_default();
+                    let node_delta = r.new_node_count - r.old_node_count;
+                    let msg = format!(
+                        "node_count {} \u{2192} {} (+{node_delta})",
+                        r.old_node_count, r.new_node_count
+                    );
+                    println!(
+                        "{}",
+                        crate::format_gh_annotation("error", &rel, "BlueprintRegression", &msg)
+                    );
+                }
+                for s in &size_increases {
+                    let rel = path_lookup
+                        .get(s.path.as_str())
+                        .map(|&fp| crate::rel_path_for_annotation(fp, project_dir))
+                        .unwrap_or_default();
+                    let msg = format!(
+                        "{} \u{2192} {} (+{}%)",
+                        crate::format_size(s.old_size),
+                        crate::format_size(s.new_size),
+                        s.pct_increase
+                    );
+                    println!(
+                        "{}",
+                        crate::format_gh_annotation("error", &rel, "AssetSizeIncrease", &msg)
+                    );
+                }
+            }
             FormatKind::Json => {
                 let out = ScanDiffOutput {
                     prev_scanned_at,
@@ -350,7 +396,11 @@ pub fn handle_scan(
             }
         }
 
-        return if has_regressions { Ok(1) } else { Ok(0) };
+        // In GH Actions mode size increases are annotated as ::error → exit 1.
+        // In Text/JSON mode they are informational only → exit 0.
+        let exit_1 =
+            has_regressions || (matches!(format, FormatKind::GithubActions) && has_size_increases);
+        return if exit_1 { Ok(1) } else { Ok(0) };
     }
 
     match format {
@@ -376,7 +426,7 @@ pub fn handle_scan(
                     .context("Failed to serialize scan output to JSON")?
             );
         }
-        FormatKind::Text => {
+        FormatKind::Text | FormatKind::GithubActions => {
             println!();
             println!(
                 "  {} {} assets total, {} record(s) cleaned, {} skipped (parse error)",
@@ -759,6 +809,30 @@ mod tests {
             result, 0,
             "diff with custom threshold exits 0 when no regressions"
         );
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn handle_scan_diff_github_actions_should_return_0_when_no_regressions() {
+        let dir =
+            std::env::temp_dir().join(format!("uasset_lens_scan_diff_ga_{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let db_path = dir.join("test.db");
+
+        handle_scan(&dir, false, false, &db_path, &FormatKind::Text, false).unwrap();
+
+        let result = handle_scan(
+            &dir,
+            false,
+            true,
+            &db_path,
+            &FormatKind::GithubActions,
+            false,
+        )
+        .unwrap();
+
+        assert_eq!(result, 0, "github-actions diff with no regressions exits 0");
 
         let _ = std::fs::remove_dir_all(&dir);
     }

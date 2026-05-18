@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::path::Path;
 
 use anyhow::Context;
@@ -14,10 +15,11 @@ struct BlueprintEntry {
 }
 
 pub fn handle_blueprint(
-    _project_dir: &Path,
+    project_dir: &Path,
     db_path: &Path,
     format: &FormatKind,
 ) -> anyhow::Result<i32> {
+    crate::maybe_hint_github_actions(format);
     let db = crate::open_db(db_path)?;
 
     let mut rows = db
@@ -38,6 +40,33 @@ pub fn handle_blueprint(
         .collect();
 
     match format {
+        FormatKind::GithubActions => {
+            let assets = db
+                .all_assets()
+                .context("Failed to read assets from database")?;
+            let path_lookup: HashMap<&str, &std::path::Path> = assets
+                .iter()
+                .map(|r| (r.asset_path.as_str(), r.file_path.as_path()))
+                .collect();
+            for e in &entries {
+                let rel = crate::rel_path_for_annotation(
+                    path_lookup
+                        .get(e.asset_path.as_str())
+                        .copied()
+                        .unwrap_or(std::path::Path::new("")),
+                    project_dir,
+                );
+                let msg = format!(
+                    "nodes={}, ticks={}, casts={}, depth={}",
+                    e.node_count, e.event_tick_count, e.cast_count, e.dependency_depth
+                );
+                println!(
+                    "{}",
+                    crate::format_gh_annotation("notice", &rel, "BlueprintComplexity", &msg)
+                );
+            }
+            return Ok(0);
+        }
         FormatKind::Json => {
             println!(
                 "{}",
@@ -127,6 +156,20 @@ mod tests {
         ];
         db.upsert_all(&assets).unwrap();
         db
+    }
+
+    #[test]
+    fn handle_blueprint_github_actions_should_return_0() {
+        let dir = std::env::temp_dir().join(format!("uasset_lens_bp_ga_{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let db_path = dir.join("test.db");
+
+        make_db_with_blueprints(&db_path);
+
+        let result = handle_blueprint(&dir, &db_path, &FormatKind::GithubActions).unwrap();
+
+        assert_eq!(result, 0, "blueprint is informational — always exits 0");
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]

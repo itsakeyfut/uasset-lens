@@ -1,4 +1,4 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 use std::path::Path;
 
 use anyhow::Context;
@@ -24,6 +24,7 @@ pub fn handle_budget(
     db_path: &Path,
     format: &FormatKind,
 ) -> anyhow::Result<i32> {
+    crate::maybe_hint_github_actions(format);
     let config = crate::config::load_config(project_dir);
     let db = crate::open_db(db_path)?;
 
@@ -47,6 +48,32 @@ pub fn handle_budget(
     let has_violations = !entries.is_empty();
 
     match format {
+        FormatKind::GithubActions => {
+            let path_lookup: HashMap<&str, &std::path::Path> = assets
+                .iter()
+                .map(|r| (r.asset_path.as_str(), r.file_path.as_path()))
+                .collect();
+            for e in &entries {
+                let rel = crate::rel_path_for_annotation(
+                    path_lookup
+                        .get(e.asset_path.as_str())
+                        .copied()
+                        .unwrap_or(std::path::Path::new("")),
+                    project_dir,
+                );
+                let msg = format!(
+                    "{} {} exceeds limit {}",
+                    e.asset_type,
+                    crate::format_size(e.file_size),
+                    crate::format_size(e.max_size)
+                );
+                println!(
+                    "{}",
+                    crate::format_gh_annotation("error", &rel, "BudgetOverrun", &msg)
+                );
+            }
+            return if has_violations { Ok(1) } else { Ok(0) };
+        }
         FormatKind::Json => {
             let total = entries.len();
             let output = BudgetOutput {
@@ -110,6 +137,66 @@ pub fn handle_budget(
 mod tests {
     use super::*;
     use shared::AssetType;
+
+    #[test]
+    fn handle_budget_github_actions_should_return_0_when_no_violations() {
+        let dir =
+            std::env::temp_dir().join(format!("uasset_lens_budget_ga_ok_{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let db_path = dir.join("test.db");
+        std::fs::write(
+            dir.join(".uasset-lens.toml"),
+            "[budget]\nTexture2D.max_size = 10000\n",
+        )
+        .unwrap();
+
+        {
+            let mut db = asset_db::AssetDb::open(&db_path).unwrap();
+            db.upsert_all(&[crate::commands::make_meta(
+                "/Game/T_Small",
+                dir.join("T_Small.uasset"),
+                AssetType::Texture2D,
+                1000,
+                vec![],
+            )])
+            .unwrap();
+        }
+
+        let result = handle_budget(&dir, &db_path, &FormatKind::GithubActions).unwrap();
+
+        assert_eq!(result, 0);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn handle_budget_github_actions_should_return_1_when_violations_found() {
+        let dir =
+            std::env::temp_dir().join(format!("uasset_lens_budget_ga_over_{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let db_path = dir.join("test.db");
+        std::fs::write(
+            dir.join(".uasset-lens.toml"),
+            "[budget]\nTexture2D.max_size = 1\n",
+        )
+        .unwrap();
+
+        {
+            let mut db = asset_db::AssetDb::open(&db_path).unwrap();
+            db.upsert_all(&[crate::commands::make_meta(
+                "/Game/T_Large",
+                dir.join("T_Large.uasset"),
+                AssetType::Texture2D,
+                1024,
+                vec![],
+            )])
+            .unwrap();
+        }
+
+        let result = handle_budget(&dir, &db_path, &FormatKind::GithubActions).unwrap();
+
+        assert_eq!(result, 1);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 
     #[test]
     fn handle_budget_should_return_err_when_db_does_not_exist() {
