@@ -445,6 +445,44 @@ pub(crate) fn format_size(bytes: u64) -> String {
     }
 }
 
+pub(crate) fn path_depth_prefix(path: &str) -> &str {
+    let mut slash_count = 0;
+    let mut last_cut = path.len();
+    for (i, c) in path.char_indices() {
+        if c == '/' {
+            slash_count += 1;
+            if slash_count == 4 {
+                return &path[..i + 1];
+            }
+            if slash_count == 3 {
+                last_cut = i + 1;
+            }
+        }
+    }
+    // Trailing-slash consistency: 3-slash paths get the same treatment as 4+ slash paths.
+    if slash_count >= 3 {
+        &path[..last_cut]
+    } else {
+        path
+    }
+}
+
+pub(crate) fn format_number(n: usize) -> String {
+    let s = n.to_string();
+    let mut result = String::new();
+    for (i, c) in s.chars().rev().enumerate() {
+        if i > 0 && i % 3 == 0 {
+            result.push(',');
+        }
+        result.push(c);
+    }
+    result.chars().rev().collect()
+}
+
+pub(crate) fn digit_count(n: usize) -> usize {
+    if n == 0 { 1 } else { n.ilog10() as usize + 1 }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -490,5 +528,44 @@ mod tests {
         assert_eq!(format_size(2048), "2.0 KB");
         assert_eq!(format_size(1024 * 1024), "1.0 MB");
         assert_eq!(format_size(2 * 1024 * 1024), "2.0 MB");
+    }
+
+    #[test]
+    fn path_depth_prefix_should_return_path_up_to_third_segment() {
+        assert_eq!(
+            path_depth_prefix("/Game/Assets/Enemies/BP_Hero"),
+            "/Game/Assets/Enemies/"
+        );
+        assert_eq!(
+            path_depth_prefix("/Game/ThirdPerson/Blueprints/BP_Char"),
+            "/Game/ThirdPerson/Blueprints/"
+        );
+        assert_eq!(
+            path_depth_prefix("/Game/Characters/BP_Hero"),
+            "/Game/Characters/"
+        );
+    }
+
+    #[test]
+    fn path_depth_prefix_should_return_full_path_when_fewer_than_three_segments() {
+        assert_eq!(path_depth_prefix("/Game/Foo"), "/Game/Foo");
+        assert_eq!(path_depth_prefix("/Game"), "/Game");
+    }
+
+    #[test]
+    fn format_number_should_add_comma_separator_for_thousands() {
+        assert_eq!(format_number(0), "0");
+        assert_eq!(format_number(999), "999");
+        assert_eq!(format_number(1000), "1,000");
+        assert_eq!(format_number(1234567), "1,234,567");
+    }
+
+    #[test]
+    fn digit_count_should_return_correct_digit_count() {
+        assert_eq!(digit_count(0), 1);
+        assert_eq!(digit_count(9), 1);
+        assert_eq!(digit_count(10), 2);
+        assert_eq!(digit_count(999), 3);
+        assert_eq!(digit_count(1000), 4);
     }
 }

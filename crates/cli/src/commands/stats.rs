@@ -45,44 +45,6 @@ struct StatsOutput {
     graph: GraphStat,
 }
 
-// Same cutoff logic as dead_assets::dir_key; duplicated because no shared utility exists.
-fn folder_key(path: &str) -> &str {
-    let mut slash_count = 0;
-    let mut last_cut = path.len();
-    for (i, c) in path.char_indices() {
-        if c == '/' {
-            slash_count += 1;
-            if slash_count == 4 {
-                return &path[..i + 1];
-            }
-            if slash_count == 3 {
-                last_cut = i + 1;
-            }
-        }
-    }
-    if slash_count >= 3 {
-        &path[..last_cut]
-    } else {
-        path
-    }
-}
-
-fn format_number(n: usize) -> String {
-    let s = n.to_string();
-    let mut result = String::new();
-    for (i, c) in s.chars().rev().enumerate() {
-        if i > 0 && i % 3 == 0 {
-            result.push(',');
-        }
-        result.push(c);
-    }
-    result.chars().rev().collect()
-}
-
-fn digit_count(n: usize) -> usize {
-    if n == 0 { 1 } else { n.ilog10() as usize + 1 }
-}
-
 pub fn handle_stats(
     project_dir: &Path,
     top: Option<usize>,
@@ -121,7 +83,7 @@ pub fn handle_stats(
 
     let mut folder_map: HashMap<String, u64> = HashMap::new();
     for r in &records {
-        let key = folder_key(r.asset_path.as_str()).to_owned();
+        let key = crate::path_depth_prefix(r.asset_path.as_str()).to_owned();
         *folder_map.entry(key).or_default() += r.file_size;
     }
     let mut by_folder: Vec<FolderStat> = folder_map
@@ -197,7 +159,11 @@ pub fn handle_stats(
             let top3 = &by_type[..by_type.len().min(3)];
             if !top3.is_empty() {
                 let max_name = top3.iter().map(|t| t.asset_type.len()).max().unwrap_or(1);
-                let max_count = top3.iter().map(|t| digit_count(t.count)).max().unwrap_or(1);
+                let max_count = top3
+                    .iter()
+                    .map(|t| crate::digit_count(t.count))
+                    .max()
+                    .unwrap_or(1);
                 let max_size_len = top3
                     .iter()
                     .map(|t| crate::format_size(t.bytes).len())
@@ -262,7 +228,10 @@ pub fn handle_stats(
             // Graph
             println!();
             println!("Graph:");
-            println!("  Total edges      : {}", format_number(graph_stat.edges));
+            println!(
+                "  Total edges      : {}",
+                crate::format_number(graph_stat.edges)
+            );
             println!("  Avg out-degree   : {:.2}", graph_stat.avg_out_degree);
             let pct_unref = if total_assets > 0 {
                 100.0 * graph_stat.unreferenced as f64 / total_assets as f64
@@ -285,25 +254,6 @@ mod tests {
     use super::*;
     use crate::commands::make_meta;
     use shared::{AssetPath, AssetType};
-
-    #[test]
-    fn folder_key_should_return_path_up_to_third_segment() {
-        assert_eq!(
-            folder_key("/Game/Assets/Enemies/BP_Hero"),
-            "/Game/Assets/Enemies/"
-        );
-        assert_eq!(
-            folder_key("/Game/ThirdPerson/Blueprints/BP_Char"),
-            "/Game/ThirdPerson/Blueprints/"
-        );
-        assert_eq!(folder_key("/Game/Characters/BP_Hero"), "/Game/Characters/");
-    }
-
-    #[test]
-    fn folder_key_should_return_full_path_when_fewer_than_three_segments() {
-        assert_eq!(folder_key("/Game/Foo"), "/Game/Foo");
-        assert_eq!(folder_key("/Game"), "/Game");
-    }
 
     #[test]
     fn handle_stats_should_return_err_when_db_does_not_exist() {
@@ -509,7 +459,7 @@ mod tests {
         let mut folder_map: HashMap<String, u64> = HashMap::new();
         for r in &records {
             *folder_map
-                .entry(folder_key(r.asset_path.as_str()).to_owned())
+                .entry(crate::path_depth_prefix(r.asset_path.as_str()).to_owned())
                 .or_default() += r.file_size;
         }
         let mut by_folder: Vec<FolderStat> = folder_map
