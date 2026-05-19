@@ -278,16 +278,13 @@ fn build_json_node(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::commands::make_meta;
+    use crate::commands::{make_meta, test_db_in_tempdir};
     use shared::{AssetPath, AssetType};
 
     #[test]
     fn handle_deps_should_return_err_when_db_does_not_exist() {
-        let db_path = std::env::temp_dir().join(format!(
-            "uasset_lens_deps_missing_{}.db",
-            std::process::id()
-        ));
-        let _ = std::fs::remove_file(&db_path);
+        let (dir, db_path) = test_db_in_tempdir("deps_missing");
+        let _ = std::fs::remove_dir_all(&dir);
 
         let result = handle_deps(
             Path::new("/Game/Target"),
@@ -301,10 +298,7 @@ mod tests {
 
     #[test]
     fn handle_deps_should_return_err_when_target_not_in_graph() {
-        let dir =
-            std::env::temp_dir().join(format!("uasset_lens_deps_notfound_{}", std::process::id()));
-        std::fs::create_dir_all(&dir).unwrap();
-        let db_path = dir.join("test.db");
+        let (dir, db_path) = test_db_in_tempdir("deps_notfound");
         asset_db::AssetDb::open(&db_path).unwrap();
 
         let result = handle_deps(
@@ -323,10 +317,7 @@ mod tests {
 
     #[test]
     fn handle_deps_should_return_0_when_no_dependencies() {
-        let dir =
-            std::env::temp_dir().join(format!("uasset_lens_deps_no_deps_{}", std::process::id()));
-        std::fs::create_dir_all(&dir).unwrap();
-        let db_path = dir.join("test.db");
+        let (dir, db_path) = test_db_in_tempdir("deps_no_deps");
 
         {
             let mut db = asset_db::AssetDb::open(&db_path).unwrap();
@@ -354,10 +345,7 @@ mod tests {
 
     #[test]
     fn handle_deps_should_return_0_when_dependencies_exist() {
-        let dir =
-            std::env::temp_dir().join(format!("uasset_lens_deps_with_deps_{}", std::process::id()));
-        std::fs::create_dir_all(&dir).unwrap();
-        let db_path = dir.join("test.db");
+        let (dir, db_path) = test_db_in_tempdir("deps_with_deps");
 
         {
             let mut db = asset_db::AssetDb::open(&db_path).unwrap();
@@ -394,10 +382,7 @@ mod tests {
 
     #[test]
     fn handle_deps_json_should_serialize_nested_structure() {
-        let dir =
-            std::env::temp_dir().join(format!("uasset_lens_deps_json_{}", std::process::id()));
-        std::fs::create_dir_all(&dir).unwrap();
-        let db_path = dir.join("test.db");
+        let (dir, db_path) = test_db_in_tempdir("deps_json");
 
         {
             let mut db = asset_db::AssetDb::open(&db_path).unwrap();
@@ -434,10 +419,7 @@ mod tests {
 
     #[test]
     fn handle_deps_should_handle_cycles_without_infinite_loop() {
-        let dir =
-            std::env::temp_dir().join(format!("uasset_lens_deps_cycle_{}", std::process::id()));
-        std::fs::create_dir_all(&dir).unwrap();
-        let db_path = dir.join("test.db");
+        let (dir, db_path) = test_db_in_tempdir("deps_cycle");
 
         {
             let mut db = asset_db::AssetDb::open(&db_path).unwrap();
@@ -475,10 +457,7 @@ mod tests {
 
     #[test]
     fn handle_deps_should_respect_depth_limit() {
-        let dir =
-            std::env::temp_dir().join(format!("uasset_lens_deps_depth_{}", std::process::id()));
-        std::fs::create_dir_all(&dir).unwrap();
-        let db_path = dir.join("test.db");
+        let (dir, db_path) = test_db_in_tempdir("deps_depth");
 
         {
             let mut db = asset_db::AssetDb::open(&db_path).unwrap();
@@ -573,10 +552,7 @@ mod tests {
 
     #[test]
     fn handle_deps_size_only_should_return_0() {
-        let dir =
-            std::env::temp_dir().join(format!("uasset_lens_deps_size_only_{}", std::process::id()));
-        std::fs::create_dir_all(&dir).unwrap();
-        let db_path = dir.join("test.db");
+        let (dir, db_path) = test_db_in_tempdir("deps_size_only");
 
         {
             let mut db = asset_db::AssetDb::open(&db_path).unwrap();

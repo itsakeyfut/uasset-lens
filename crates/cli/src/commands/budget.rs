@@ -136,14 +136,12 @@ pub fn handle_budget(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::commands::test_db_in_tempdir;
     use shared::AssetType;
 
     #[test]
     fn handle_budget_github_actions_should_return_0_when_no_violations() {
-        let dir =
-            std::env::temp_dir().join(format!("uasset_lens_budget_ga_ok_{}", std::process::id()));
-        std::fs::create_dir_all(&dir).unwrap();
-        let db_path = dir.join("test.db");
+        let (dir, db_path) = test_db_in_tempdir("budget_ga_ok");
         std::fs::write(
             dir.join(".uasset-lens.toml"),
             "[budget]\nTexture2D.max_size = 10000\n",
@@ -170,10 +168,7 @@ mod tests {
 
     #[test]
     fn handle_budget_github_actions_should_return_1_when_violations_found() {
-        let dir =
-            std::env::temp_dir().join(format!("uasset_lens_budget_ga_over_{}", std::process::id()));
-        std::fs::create_dir_all(&dir).unwrap();
-        let db_path = dir.join("test.db");
+        let (dir, db_path) = test_db_in_tempdir("budget_ga_over");
         std::fs::write(
             dir.join(".uasset-lens.toml"),
             "[budget]\nTexture2D.max_size = 1\n",
@@ -200,21 +195,15 @@ mod tests {
 
     #[test]
     fn handle_budget_should_return_err_when_db_does_not_exist() {
-        let path = std::env::temp_dir().join(format!(
-            "uasset_lens_budget_missing_{}.db",
-            std::process::id()
-        ));
-        let _ = std::fs::remove_file(&path);
-        let result = handle_budget(std::path::Path::new("."), &path, &FormatKind::Text);
+        let (dir, db_path) = test_db_in_tempdir("budget_missing");
+        let _ = std::fs::remove_dir_all(&dir);
+        let result = handle_budget(std::path::Path::new("."), &db_path, &FormatKind::Text);
         assert!(result.is_err());
     }
 
     #[test]
     fn handle_budget_should_return_0_when_budget_config_is_empty() {
-        let dir =
-            std::env::temp_dir().join(format!("uasset_lens_budget_empty_{}", std::process::id()));
-        std::fs::create_dir_all(&dir).unwrap();
-        let db_path = dir.join("test.db");
+        let (dir, db_path) = test_db_in_tempdir("budget_empty");
         asset_db::AssetDb::open(&db_path).unwrap();
 
         let result = handle_budget(&dir, &db_path, &FormatKind::Text).unwrap();
@@ -225,10 +214,7 @@ mod tests {
 
     #[test]
     fn handle_budget_should_return_0_when_all_assets_within_budget() {
-        let dir =
-            std::env::temp_dir().join(format!("uasset_lens_budget_ok_{}", std::process::id()));
-        std::fs::create_dir_all(&dir).unwrap();
-        let db_path = dir.join("test.db");
+        let (dir, db_path) = test_db_in_tempdir("budget_ok");
         std::fs::write(
             dir.join(".uasset-lens.toml"),
             "[budget]\nTexture2D.max_size = 10000\n",
@@ -255,10 +241,7 @@ mod tests {
 
     #[test]
     fn handle_budget_should_return_1_when_asset_exceeds_budget() {
-        let dir =
-            std::env::temp_dir().join(format!("uasset_lens_budget_over_{}", std::process::id()));
-        std::fs::create_dir_all(&dir).unwrap();
-        let db_path = dir.join("test.db");
+        let (dir, db_path) = test_db_in_tempdir("budget_over");
         // max_size = 1 byte so any real asset triggers a violation
         std::fs::write(
             dir.join(".uasset-lens.toml"),
@@ -286,10 +269,7 @@ mod tests {
 
     #[test]
     fn handle_budget_json_should_return_1_when_violations_found() {
-        let dir =
-            std::env::temp_dir().join(format!("uasset_lens_budget_json_{}", std::process::id()));
-        std::fs::create_dir_all(&dir).unwrap();
-        let db_path = dir.join("test.db");
+        let (dir, db_path) = test_db_in_tempdir("budget_json");
         std::fs::write(
             dir.join(".uasset-lens.toml"),
             "[budget]\nTexture2D.max_size = 1\n",

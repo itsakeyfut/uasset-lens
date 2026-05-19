@@ -92,15 +92,16 @@ fn utc_hms() -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::commands::test_db_in_tempdir;
 
     #[test]
     fn handle_watch_should_return_err_when_project_dir_is_not_watchable() {
-        let dir = std::env::temp_dir().join(format!("watch_nonexist_{}", std::process::id()));
-        let db_path =
-            std::env::temp_dir().join(format!("watch_nonexist_{}.db", std::process::id()));
-        // Watcher::new() errors on a non-existent path
-        let result = handle_watch(&dir, &db_path);
+        let (dir, db_path) = test_db_in_tempdir("watch_nonexist");
+        // project_dir must not exist; db_path stays inside dir so create_dir_all in
+        // handle_watch recreates dir but not proj, keeping project_dir non-existent.
+        let proj = dir.join("proj");
+        let result = handle_watch(&proj, &db_path);
         assert!(result.is_err());
-        let _ = std::fs::remove_file(&db_path);
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }

@@ -135,6 +135,7 @@ fn truncate_path(path: &str, max_len: usize) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::commands::test_db_in_tempdir;
     use shared::{AssetPath, AssetType};
     use std::path::PathBuf;
 
@@ -154,10 +155,7 @@ mod tests {
 
     #[test]
     fn handle_lint_github_actions_should_return_0_when_no_violations() {
-        let dir =
-            std::env::temp_dir().join(format!("uasset_lens_lint_ga_empty_{}", std::process::id()));
-        std::fs::create_dir_all(&dir).unwrap();
-        let db_path = dir.join("test.db");
+        let (dir, db_path) = test_db_in_tempdir("lint_ga_empty");
         asset_db::AssetDb::open(&db_path).unwrap();
 
         let result = handle_lint(&dir, &db_path, &FormatKind::GithubActions).unwrap();
@@ -168,10 +166,7 @@ mod tests {
 
     #[test]
     fn handle_lint_github_actions_should_return_0_when_only_warnings() {
-        let dir =
-            std::env::temp_dir().join(format!("uasset_lens_lint_ga_warn_{}", std::process::id()));
-        std::fs::create_dir_all(&dir).unwrap();
-        let db_path = dir.join("test.db");
+        let (dir, db_path) = test_db_in_tempdir("lint_ga_warn");
 
         {
             let mut db = asset_db::AssetDb::open(&db_path).unwrap();
@@ -190,10 +185,7 @@ mod tests {
 
     #[test]
     fn handle_lint_github_actions_should_return_1_when_error_violation_found() {
-        let dir =
-            std::env::temp_dir().join(format!("uasset_lens_lint_ga_err_{}", std::process::id()));
-        std::fs::create_dir_all(&dir).unwrap();
-        let db_path = dir.join("test.db");
+        let (dir, db_path) = test_db_in_tempdir("lint_ga_err");
 
         {
             let mut db = asset_db::AssetDb::open(&db_path).unwrap();
@@ -227,21 +219,15 @@ mod tests {
 
     #[test]
     fn handle_lint_should_return_err_when_db_does_not_exist() {
-        let path = std::env::temp_dir().join(format!(
-            "uasset_lens_lint_missing_{}.db",
-            std::process::id()
-        ));
-        let _ = std::fs::remove_file(&path);
-        let result = handle_lint(std::path::Path::new("."), &path, &FormatKind::Text);
+        let (dir, db_path) = test_db_in_tempdir("lint_missing");
+        let _ = std::fs::remove_dir_all(&dir);
+        let result = handle_lint(std::path::Path::new("."), &db_path, &FormatKind::Text);
         assert!(result.is_err());
     }
 
     #[test]
     fn handle_lint_should_return_0_when_no_assets_in_db() {
-        let dir =
-            std::env::temp_dir().join(format!("uasset_lens_lint_empty_{}", std::process::id()));
-        std::fs::create_dir_all(&dir).unwrap();
-        let db_path = dir.join("test.db");
+        let (dir, db_path) = test_db_in_tempdir("lint_empty");
         asset_db::AssetDb::open(&db_path).unwrap();
 
         let result = handle_lint(&dir, &db_path, &FormatKind::Text).unwrap();
@@ -252,10 +238,7 @@ mod tests {
 
     #[test]
     fn handle_lint_should_return_1_when_naming_violation_found() {
-        let dir =
-            std::env::temp_dir().join(format!("uasset_lens_lint_naming_{}", std::process::id()));
-        std::fs::create_dir_all(&dir).unwrap();
-        let db_path = dir.join("test.db");
+        let (dir, db_path) = test_db_in_tempdir("lint_naming");
 
         {
             let mut db = asset_db::AssetDb::open(&db_path).unwrap();
@@ -272,9 +255,7 @@ mod tests {
 
     #[test]
     fn handle_lint_should_return_0_when_all_assets_are_compliant() {
-        let dir = std::env::temp_dir().join(format!("uasset_lens_lint_ok_{}", std::process::id()));
-        std::fs::create_dir_all(&dir).unwrap();
-        let db_path = dir.join("test.db");
+        let (dir, db_path) = test_db_in_tempdir("lint_ok");
 
         {
             let mut db = asset_db::AssetDb::open(&db_path).unwrap();
@@ -290,10 +271,7 @@ mod tests {
 
     #[test]
     fn handle_lint_should_return_1_with_violations_in_json_mode() {
-        let dir =
-            std::env::temp_dir().join(format!("uasset_lens_lint_json_{}", std::process::id()));
-        std::fs::create_dir_all(&dir).unwrap();
-        let db_path = dir.join("test.db");
+        let (dir, db_path) = test_db_in_tempdir("lint_json");
 
         {
             let mut db = asset_db::AssetDb::open(&db_path).unwrap();
@@ -309,10 +287,7 @@ mod tests {
 
     #[test]
     fn handle_lint_should_return_1_when_blueprint_complexity_violation_found() {
-        let dir =
-            std::env::temp_dir().join(format!("uasset_lens_lint_bp_cmplx_{}", std::process::id()));
-        std::fs::create_dir_all(&dir).unwrap();
-        let db_path = dir.join("test.db");
+        let (dir, db_path) = test_db_in_tempdir("lint_bp_cmplx");
 
         {
             let mut db = asset_db::AssetDb::open(&db_path).unwrap();
