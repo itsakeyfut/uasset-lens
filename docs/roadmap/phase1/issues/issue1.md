@@ -33,7 +33,6 @@ uasset-lens/
 |---|---|
 | `thiserror` | — |
 | `serde` | `["derive"]` |
-| `nom` | — |
 | `byteorder` | — |
 | `rayon` | — |
 | `walkdir` | — |

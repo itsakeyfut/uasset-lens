@@ -1,5 +1,6 @@
 [package]
 name    = "impact-analyzer"
+publish = false
 version.workspace = true
 edition.workspace = true
 

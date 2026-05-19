@@ -2,7 +2,6 @@
 
 ## References
 
-- [nom documentation](https://docs.rs/nom)
 - [byteorder documentation](https://docs.rs/byteorder)
 - [UE5 .uasset format](https://docs.rs/unreal-asset) (参考のみ — 実装は自前)
 
@@ -47,35 +46,61 @@ let magic = cursor.read_u32::<NativeEndian>()?;
 
 ---
 
-## nom 使用パターン
+## byteorder + Cursor パターン
 
-### プリミティブ読み込みには `nom::number::complete` を使う
+UE5 の `.uasset` はオフセットベースのナビゲーション（NameTable / ImportTable / ExportTable それぞれの
+絶対位置をヘッダーから得てジャンプする）が前提のため、ストリーミング消費モデルではなく
+`Cursor` を使って絶対位置に直接 `set_position()` する方式を採用している。
+
+### プリミティブ読み込みには `ReadBytesExt` を使う
 
 ```rust
-use nom::number::complete::{le_u32, le_i32, le_i64};
+use byteorder::{LittleEndian, ReadBytesExt};
+use std::io::Cursor;
 
-fn parse_magic(input: &[u8]) -> IResult<&[u8], u32> {
-    le_u32(input)
+let mut cur = Cursor::new(data);
+let magic   = cur.read_u32::<LittleEndian>().map_err(map_io)?;
+let version = cur.read_i32::<LittleEndian>().map_err(map_io)?;
+```
+
+### 配列読み込みにはループを使う（with_capacity で事前確保）
+
+```rust
+let count = cur.read_i32::<LittleEndian>().map_err(map_io)?;
+if count < 0 {
+    return Err(ScanError::InvalidData("negative count".into()));
+}
+let mut entries = Vec::with_capacity(count as usize);
+for _ in 0..count {
+    entries.push(parse_entry(&mut cur)?);
 }
 ```
 
-### 固定長配列には `nom::multi::count` を使う
+### I/O エラーは `map_io` でドメインエラーに変換する
 
 ```rust
-use nom::multi::count;
-
-fn parse_import_table(input: &[u8], n: usize) -> IResult<&[u8], Vec<FObjectImport>> {
-    count(parse_import_entry, n)(input)
+fn map_io(e: std::io::Error) -> ScanError {
+    if e.kind() == std::io::ErrorKind::UnexpectedEof {
+        ScanError::UnexpectedEof
+    } else {
+        ScanError::Io(e)
+    }
 }
 ```
 
-### ドメイン型への変換には `map_res` を使う
+### カーソル移動には `advance()` ヘルパーを使う（bounds check 込み）
+
+直接 `set_position()` を呼ばない。必ず `advance()` 経由で移動し、
+バッファ終端を超えた場合に `ScanError::UnexpectedEof` を返す。
 
 ```rust
-use nom::combinator::map_res;
-
-fn parse_asset_path(input: &[u8]) -> IResult<&[u8], AssetPath> {
-    map_res(parse_fstring, AssetPath::new)(input)
+fn advance(cur: &mut Cursor<&[u8]>, n: u64) -> Result<(), ScanError> {
+    let new_pos = cur.position() + n;
+    if new_pos > cur.get_ref().len() as u64 {
+        return Err(ScanError::UnexpectedEof);
+    }
+    cur.set_position(new_pos);
+    Ok(())
 }
 ```
 
@@ -83,11 +108,10 @@ fn parse_asset_path(input: &[u8]) -> IResult<&[u8], AssetPath> {
 
 ```rust
 // ❌ FORBIDDEN
-let (rest, val) = le_u32(input).unwrap();
+let val = cur.read_u32::<LittleEndian>().unwrap();
 
-// ✅ ? または明示的なエラーマッピング
-let (rest, val) = le_u32(input)
-    .map_err(|_| ScanError::UnexpectedEof)?;
+// ✅ map_err でドメインエラーへ変換
+let val = cur.read_u32::<LittleEndian>().map_err(map_io)?;
 ```
 
 ---
@@ -100,15 +124,10 @@ let (rest, val) = le_u32(input)
 ```rust
 const UE_MAGIC: u32 = 0x9E2A83C1;
 
-fn check_magic(data: &[u8]) -> Result<(), ScanError> {
-    if data.len() < 4 {
-        return Err(ScanError::UnexpectedEof);
-    }
-    let magic = u32::from_le_bytes(data[..4].try_into().unwrap());
-    if magic != UE_MAGIC {
-        return Err(ScanError::InvalidMagic(magic));
-    }
-    Ok(())
+let mut cur = Cursor::new(data);
+let magic = cur.read_u32::<LittleEndian>().map_err(map_io)?;
+if magic != UE_MAGIC {
+    return Err(ScanError::InvalidMagic(magic));
 }
 ```
 
@@ -140,25 +159,24 @@ FString バイナリ形式:
 ```
 
 ```rust
-fn parse_fstring(input: &[u8]) -> IResult<&[u8], String> {
-    let (input, len) = le_i32(input)?;
+fn parse_fstring(cur: &mut Cursor<&[u8]>) -> Result<String, ScanError> {
+    let len = cur.read_i32::<LittleEndian>().map_err(map_io)?;
     if len == 0 {
-        return Ok((input, String::new()));
+        return Ok(String::new());
     }
     if len < 0 {
-        // UTF-16LE: Phase 1 では未対応 — エラーとして返す
-        return Err(nom::Err::Error(
-            nom::error::Error::new(input, nom::error::ErrorKind::Tag)
-        ));
+        // UTF-16LE: Phase 1 では未対応 — スキップして空文字列を返す
+        advance(cur, (-len as u64) * 2)?;
+        return Ok(String::new());
     }
-    let (input, bytes) = take(len as usize)(input)?;
+    let pos = cur.position() as usize;
+    advance(cur, len as u64)?;
+    let bytes = &cur.get_ref()[pos..pos + len as usize];
     // null 終端を除いて UTF-8 デコード
     let s = std::str::from_utf8(&bytes[..bytes.len().saturating_sub(1)])
-        .map_err(|_| nom::Err::Error(
-            nom::error::Error::new(input, nom::error::ErrorKind::Char)
-        ))?
+        .map_err(|_| ScanError::InvalidData("invalid UTF-8 in FString".into()))?
         .to_owned();
-    Ok((input, s))
+    Ok(s)
 }
 ```
 
@@ -204,10 +222,10 @@ for skip in &skipped {
 
 ```rust
 // UE5 の条件: legacy_version == -8 かつ file_version_ue5 > 0
-if !version.is_ue5() {
+if file_version_ue5 <= 0 {
     return Err(ScanError::UnsupportedVersion(
-        version.legacy_version,
-        version.file_version_ue5,
+        legacy_version,
+        file_version_ue5 as u32,
     ));
 }
 ```

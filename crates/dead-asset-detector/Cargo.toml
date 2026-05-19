@@ -1,5 +1,6 @@
 [package]
 name    = "dead-asset-detector"
+publish = false
 version.workspace = true
 edition.workspace = true
 
