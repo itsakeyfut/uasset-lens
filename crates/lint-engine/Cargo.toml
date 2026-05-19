@@ -1,5 +1,6 @@
 [package]
 name    = "lint-engine"
+publish = false
 version.workspace = true
 edition.workspace = true
 

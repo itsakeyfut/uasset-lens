@@ -247,7 +247,7 @@ thiserror = { workspace = true }
 ### 設計方針
 
 - `.uasset` / `.umap` 解析ロジックは完全自前実装（既存の UE 解析クレートは不使用）
-- バイナリ解析には `nom` + `byteorder` を使用する
+- バイナリ解析には `byteorder` + `Cursor` を使用する
 - ファイル単位で `rayon` による CPU 並列スキャンを行う
 - 破損ファイル・未知バージョンは警告ログを出してスキップし、スキャン全体は継続する
 
@@ -358,7 +358,6 @@ pub enum ScanError {
 ```toml
 [dependencies]
 shared    = { path = "../shared" }
-nom       = { workspace = true }
 byteorder = { workspace = true }
 rayon     = { workspace = true }
 thiserror = { workspace = true }

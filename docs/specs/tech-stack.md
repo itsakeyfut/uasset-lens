@@ -24,7 +24,7 @@
 ## .uasset パーサー実装方針
 
 - **`.uasset` 解析ロジックは完全自前実装**（既存の `.uasset` / UE 解析クレートは使用しない）
-- バイナリ解析の汎用ユーティリティ（`nom`・`byteorder`）は積極的に使用する
+- バイナリ解析の汎用ユーティリティ（`byteorder` + `Cursor`）は積極的に使用する
 - Binary Parsing スキルのポートフォリオ価値を最大化するため
 - Asset Registry（`AssetRegistry.bin`）は補助的に参照する（存在する場合のみ）
 

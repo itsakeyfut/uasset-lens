@@ -27,7 +27,7 @@
 
 ## Binary Parsing Performance
 
-nom の使用パターンは `docs/rules/binary-parser.md` を参照。
+バイナリパーサーのパターンは `docs/rules/binary-parser.md` を参照。
 
 ### ファイルを 1 回だけ読む
 

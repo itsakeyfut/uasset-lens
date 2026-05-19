@@ -181,7 +181,7 @@ proptest! {
 ## What NOT to Test
 
 - 内部フィールド名・プライベート構造体のレイアウト
-- サードパーティクレートの内部（`rusqlite`・`petgraph`・`nom`）
+- サードパーティクレートの内部（`rusqlite`・`petgraph`）
 - プラットフォーム固有のファイルシステム挙動（抽象パスでテストする）
 - マクロが生成したコード
 - ロジックを含まない trivial な getter/setter

@@ -1,0 +1,7 @@
+[advisories]
+ignore = [
+    # False positive: RUSTSEC-2025-0033 targets the crates.io `scanner` crate
+    # (a binary-signature scanner), not this local workspace crate. Our `scanner`
+    # has publish = false and is unrelated to the published package.
+    "RUSTSEC-2025-0033",
+]

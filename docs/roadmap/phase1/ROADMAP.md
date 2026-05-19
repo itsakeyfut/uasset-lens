@@ -30,7 +30,7 @@
 
 - [ ] ルート `Cargo.toml` 作成（workspace 宣言、`resolver = "2"`、`edition = "2021"`）
 - [ ] `[workspace.dependencies]` に全依存バージョンを一元定義
-  - `thiserror`・`serde`・`nom`・`byteorder`・`rayon`・`walkdir`
+  - `thiserror`・`serde`・`byteorder`・`rayon`・`walkdir`
   - `rusqlite`（`features = ["bundled"]`）・`clap`・`anyhow`・`tracing`・`petgraph`
   - `serde_json`・`toml`
 - [ ] `.gitignore` に `target/`・`.uasset-lens/` を追加
