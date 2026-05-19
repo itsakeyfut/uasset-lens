@@ -1,3 +1,6 @@
+mod diff;
+mod format_time;
+
 use std::collections::{HashMap, HashSet};
 use std::io::{self, IsTerminal, Write};
 use std::path::{Path, PathBuf};
@@ -23,43 +26,19 @@ struct SkippedEntry {
     reason: String,
 }
 
-#[derive(serde::Serialize)]
-struct BpRegressionEntry {
-    path: String,
-    old_node_count: u32,
-    new_node_count: u32,
-    old_event_tick_count: u32,
-    new_event_tick_count: u32,
+pub struct ScanOptions<'a> {
+    pub full_scan: bool,
+    pub diff: bool,
+    pub yes: bool,
+    pub save_baseline: Option<&'a str>,
+    pub diff_from: Option<&'a str>,
 }
 
-#[derive(serde::Serialize)]
-struct SizeIncreaseEntry {
-    path: String,
-    old_size: u64,
-    new_size: u64,
-    pct_increase: u64,
-}
-
-#[derive(serde::Serialize)]
-struct ScanDiffOutput {
-    prev_scanned_at: Option<u64>,
-    baseline_name: Option<String>,
-    new_assets: Vec<String>,
-    deleted_assets: Vec<String>,
-    regressions: Vec<BpRegressionEntry>,
-    size_increases: Vec<SizeIncreaseEntry>,
-}
-
-#[allow(clippy::too_many_arguments)]
 pub fn handle_scan(
     project_dir: &Path,
-    full_scan: bool,
-    diff: bool,
     db_path: &Path,
     format: &FormatKind,
-    yes: bool,
-    save_baseline: Option<&str>,
-    diff_from: Option<&str>,
+    opts: &ScanOptions<'_>,
 ) -> anyhow::Result<i32> {
     let use_color = matches!(format, FormatKind::Text)
         && std::io::stdout().is_terminal()
@@ -72,7 +51,7 @@ pub fn handle_scan(
     let mut db = asset_db::AssetDb::open(db_path).context("Failed to open database")?;
 
     // Fail fast before expensive walkdir if the requested baseline doesn't exist.
-    let loaded_baseline = if let Some(name) = diff_from {
+    let loaded_baseline = if let Some(name) = opts.diff_from {
         Some(db.load_baseline(name).map_err(|e| match e {
             asset_db::DbError::BaselineNotFound(_) => anyhow::anyhow!(
                 "Baseline '{}' not found. Run 'scan --save-baseline {}' first.",
@@ -97,7 +76,7 @@ pub fn handle_scan(
     let config = crate::config::load_config(project_dir);
     let excluded = config.scan.exclude_paths;
 
-    let effective_diff = diff || diff_from.is_some();
+    let effective_diff = opts.diff || opts.diff_from.is_some();
 
     // Capture per-asset metrics before upsert so we can compute the diff afterwards.
     let (old_bp, old_sizes) = if effective_diff {
@@ -165,7 +144,7 @@ pub fn handle_scan(
 
     let total_file_count = all_files.len();
 
-    let paths_to_scan: Vec<PathBuf> = if full_scan {
+    let paths_to_scan: Vec<PathBuf> = if opts.full_scan {
         all_files.into_iter().map(|(p, _)| p).collect()
     } else {
         db.filter_changed(&all_files)
@@ -176,7 +155,7 @@ pub fn handle_scan(
         "{}",
         scan_header(
             &content_root,
-            full_scan,
+            opts.full_scan,
             total_file_count,
             paths_to_scan.len()
         )
@@ -224,7 +203,7 @@ pub fn handle_scan(
     let removed_count = if stale.is_empty() {
         0
     } else {
-        let confirmed = if yes {
+        let confirmed = if opts.yes {
             true
         } else {
             eprintln!();
@@ -268,7 +247,7 @@ pub fn handle_scan(
     let snapshot_id = db
         .record_scan_snapshot()
         .context("Failed to record scan snapshot")?;
-    if let Some(name) = save_baseline {
+    if let Some(name) = opts.save_baseline {
         db.save_baseline(name, snapshot_id)
             .context("Failed to save baseline")?;
         eprintln!("Baseline '{}' saved.", name);
@@ -276,7 +255,6 @@ pub fn handle_scan(
     let assets_total = db_files.len() + new_count - removed_count;
 
     if effective_diff {
-        crate::maybe_hint_github_actions(format);
         let prev_scanned_at = if let Some(ref snap) = loaded_baseline {
             Some(snap.scanned_at)
         } else {
@@ -287,154 +265,22 @@ pub fn handle_scan(
                 .nth(1)
                 .map(|s| s.scanned_at)
         };
-
-        let threshold = config.diff.size_increase_threshold_pct;
-
-        let regressions = compute_regressions(result.assets.iter(), &old_bp);
-        let size_increases = compute_size_increases(result.assets.iter(), &old_sizes, threshold);
-
-        let new_asset_paths: Vec<String> = result
-            .assets
-            .iter()
-            .filter(|a| !db_files.contains(&a.file_path))
-            .map(|a| a.asset_path.as_str().to_owned())
-            .collect();
-
-        let deleted_asset_paths: Vec<String> = stale
-            .iter()
-            .filter_map(|p| shared::AssetPath::from_fs_path(&content_root, p).ok())
-            .map(|ap| ap.as_str().to_owned())
-            .collect();
-
-        let has_regressions = !regressions.is_empty();
-        let has_size_increases = !size_increases.is_empty();
-
-        match format {
-            FormatKind::GithubActions => {
-                let path_lookup: HashMap<&str, &std::path::Path> = result
-                    .assets
-                    .iter()
-                    .map(|m| (m.asset_path.as_str(), m.file_path.as_path()))
-                    .collect();
-                for p in &new_asset_paths {
-                    println!("::notice title=NewAsset::{p}");
-                }
-                for p in &deleted_asset_paths {
-                    println!("::warning title=DeletedAsset::{p}");
-                }
-                for r in &regressions {
-                    let rel = path_lookup
-                        .get(r.path.as_str())
-                        .map(|&fp| crate::rel_path_for_annotation(fp, project_dir))
-                        .unwrap_or_default();
-                    let node_delta = r.new_node_count - r.old_node_count;
-                    let msg = format!(
-                        "node_count {} \u{2192} {} (+{node_delta})",
-                        r.old_node_count, r.new_node_count
-                    );
-                    println!(
-                        "{}",
-                        crate::format_gh_annotation("error", &rel, "BlueprintRegression", &msg)
-                    );
-                }
-                for s in &size_increases {
-                    let rel = path_lookup
-                        .get(s.path.as_str())
-                        .map(|&fp| crate::rel_path_for_annotation(fp, project_dir))
-                        .unwrap_or_default();
-                    let msg = format!(
-                        "{} \u{2192} {} (+{}%)",
-                        crate::format_size(s.old_size),
-                        crate::format_size(s.new_size),
-                        s.pct_increase
-                    );
-                    println!(
-                        "{}",
-                        crate::format_gh_annotation("error", &rel, "AssetSizeIncrease", &msg)
-                    );
-                }
-            }
-            FormatKind::Json => {
-                let out = ScanDiffOutput {
-                    prev_scanned_at,
-                    baseline_name: diff_from.map(|s| s.to_owned()), // clone required: ScanDiffOutput owns the name
-                    new_assets: new_asset_paths,
-                    deleted_assets: deleted_asset_paths,
-                    regressions,
-                    size_increases,
-                };
-                println!(
-                    "{}",
-                    serde_json::to_string_pretty(&out)
-                        .context("Failed to serialize diff output to JSON")?
-                );
-            }
-            FormatKind::Text => {
-                println!();
-                match (prev_scanned_at, diff_from) {
-                    (Some(ts), Some(name)) => {
-                        println!("Diff vs baseline \"{}\" ({}):", name, format_utc(ts))
-                    }
-                    (Some(ts), None) => println!("Diff vs previous scan ({}):", format_utc(ts)),
-                    (None, _) => println!("Diff: (no previous scan to compare against)"),
-                }
-                if !new_asset_paths.is_empty() {
-                    println!("  + {} new asset(s):", new_asset_paths.len());
-                    for p in &new_asset_paths {
-                        println!("      {p}");
-                    }
-                }
-                if !deleted_asset_paths.is_empty() {
-                    println!("  - {} deleted asset(s):", deleted_asset_paths.len());
-                    for p in &deleted_asset_paths {
-                        println!("      {p}");
-                    }
-                }
-                if !regressions.is_empty() {
-                    println!(
-                        "  {} {} blueprint(s) regressed (node count increased):",
-                        sym("!", "\x1b[31m!\x1b[0m", use_color),
-                        regressions.len()
-                    );
-                    for r in &regressions {
-                        let node_delta = r.new_node_count - r.old_node_count;
-                        let tick_delta =
-                            r.new_event_tick_count as i64 - r.old_event_tick_count as i64;
-                        let tick_suffix = if tick_delta > 0 {
-                            format!("  [EventTick +{tick_delta}]")
-                        } else {
-                            String::new()
-                        };
-                        println!(
-                            "      {}  {} → {} nodes  (+{node_delta}){tick_suffix}",
-                            r.path, r.old_node_count, r.new_node_count
-                        );
-                    }
-                }
-                if !size_increases.is_empty() {
-                    println!(
-                        "  ^ {} asset(s) grew by ≥{}%:",
-                        size_increases.len(),
-                        threshold
-                    );
-                    for s in &size_increases {
-                        println!(
-                            "      {}  {} → {} (+{}%)",
-                            s.path,
-                            crate::format_size(s.old_size),
-                            crate::format_size(s.new_size),
-                            s.pct_increase
-                        );
-                    }
-                }
-            }
-        }
-
-        // In GH Actions mode size increases are annotated as ::error → exit 1.
-        // In Text/JSON mode they are informational only → exit 0.
-        let exit_1 =
-            has_regressions || (matches!(format, FormatKind::GithubActions) && has_size_increases);
-        return if exit_1 { Ok(1) } else { Ok(0) };
+        return diff::print_diff(
+            diff::DiffInput {
+                assets: &result.assets,
+                old_bp,
+                old_sizes,
+                db_files: &db_files,
+                stale: &stale,
+                content_root: &content_root,
+                project_dir,
+                threshold: config.diff.size_increase_threshold_pct,
+                diff_from: opts.diff_from,
+                prev_scanned_at,
+            },
+            format,
+            use_color,
+        );
     }
 
     match format {
@@ -499,107 +345,6 @@ fn sym(plain: &'static str, colored: &'static str, use_color: bool) -> &'static 
     if use_color { colored } else { plain }
 }
 
-fn compute_regressions<'a>(
-    assets: impl Iterator<Item = &'a scanner::AssetMetadata>,
-    old_bp: &HashMap<shared::AssetPath, (u32, u32)>,
-) -> Vec<BpRegressionEntry> {
-    let mut v: Vec<BpRegressionEntry> = assets
-        .filter_map(|a| {
-            let bm = a.blueprint_metrics.as_ref()?;
-            let &(old_nodes, old_tick) = old_bp.get(&a.asset_path)?;
-            if bm.node_count > old_nodes {
-                Some(BpRegressionEntry {
-                    path: a.asset_path.as_str().to_owned(),
-                    old_node_count: old_nodes,
-                    new_node_count: bm.node_count,
-                    old_event_tick_count: old_tick,
-                    new_event_tick_count: bm.event_tick_count,
-                })
-            } else {
-                None
-            }
-        })
-        .collect();
-    v.sort_by(|a, b| a.path.cmp(&b.path));
-    v
-}
-
-fn compute_size_increases<'a>(
-    assets: impl Iterator<Item = &'a scanner::AssetMetadata>,
-    old_sizes: &HashMap<shared::AssetPath, u64>,
-    threshold: u64,
-) -> Vec<SizeIncreaseEntry> {
-    let mut v: Vec<SizeIncreaseEntry> = assets
-        .filter_map(|a| {
-            let &old_size = old_sizes.get(&a.asset_path)?;
-            if old_size == 0 {
-                return None;
-            }
-            let new_size = a.file_size;
-            let pct = new_size.saturating_sub(old_size).saturating_mul(100) / old_size;
-            if pct >= threshold {
-                Some(SizeIncreaseEntry {
-                    path: a.asset_path.as_str().to_owned(),
-                    old_size,
-                    new_size,
-                    pct_increase: pct,
-                })
-            } else {
-                None
-            }
-        })
-        .collect();
-    v.sort_by(|a, b| a.path.cmp(&b.path));
-    v
-}
-
-fn format_utc(unix_secs: u64) -> String {
-    let s = unix_secs % 60;
-    let m = (unix_secs / 60) % 60;
-    let h = (unix_secs / 3600) % 24;
-    let mut rem_days = unix_secs / 86400;
-
-    let mut year = 1970u64;
-    loop {
-        let dy = if is_leap_year(year) { 366u64 } else { 365u64 };
-        if rem_days < dy {
-            break;
-        }
-        rem_days -= dy;
-        year += 1;
-    }
-
-    let month_lengths: [u64; 12] = [
-        31,
-        if is_leap_year(year) { 29 } else { 28 },
-        31,
-        30,
-        31,
-        30,
-        31,
-        31,
-        30,
-        31,
-        30,
-        31,
-    ];
-    let mut month = 1u64;
-    for &ml in &month_lengths {
-        if rem_days < ml {
-            break;
-        }
-        rem_days -= ml;
-        month += 1;
-    }
-    let day = rem_days + 1;
-
-    format!("{year:04}-{month:02}-{day:02} {h:02}:{m:02}:{s:02} UTC")
-}
-
-fn is_leap_year(y: u64) -> bool {
-    (y.is_multiple_of(4) && !y.is_multiple_of(100)) || y.is_multiple_of(400)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -653,13 +398,15 @@ mod tests {
 
         let result = handle_scan(
             &dir,
-            false,
-            false,
             &db_path,
             &FormatKind::Text,
-            false,
-            None,
-            None,
+            &ScanOptions {
+                full_scan: false,
+                diff: false,
+                yes: false,
+                save_baseline: None,
+                diff_from: None,
+            },
         )
         .unwrap();
         assert_eq!(result, 0);
@@ -685,13 +432,15 @@ mod tests {
         std::fs::write(excluded_dir.join("Dummy.uasset"), b"not a real uasset").unwrap();
         let _ = handle_scan(
             &dir,
-            false,
-            false,
             &db_path,
             &FormatKind::Text,
-            false,
-            None,
-            None,
+            &ScanOptions {
+                full_scan: false,
+                diff: false,
+                yes: false,
+                save_baseline: None,
+                diff_from: None,
+            },
         )
         .unwrap();
 
@@ -710,13 +459,15 @@ mod tests {
 
         let result = handle_scan(
             &dir,
-            false,
-            false,
             &db_path,
             &FormatKind::Text,
-            false,
-            None,
-            None,
+            &ScanOptions {
+                full_scan: false,
+                diff: false,
+                yes: false,
+                save_baseline: None,
+                diff_from: None,
+            },
         )
         .unwrap();
 
@@ -737,13 +488,15 @@ mod tests {
 
         let result = handle_scan(
             &dir,
-            false,
-            false,
             &db_path,
             &FormatKind::Text,
-            true,
-            None,
-            None,
+            &ScanOptions {
+                full_scan: false,
+                diff: false,
+                yes: true,
+                save_baseline: None,
+                diff_from: None,
+            },
         )
         .unwrap();
 
@@ -775,13 +528,15 @@ mod tests {
         // trim() is "" → not "y" → confirmed=false → record preserved → exit code 0.
         let result = handle_scan(
             &dir,
-            false,
-            false,
             &db_path,
             &FormatKind::Text,
-            false,
-            None,
-            None,
+            &ScanOptions {
+                full_scan: false,
+                diff: false,
+                yes: false,
+                save_baseline: None,
+                diff_from: None,
+            },
         )
         .unwrap();
 
@@ -806,13 +561,15 @@ mod tests {
 
         let result = handle_scan(
             &dir,
-            false,
-            true,
             &db_path,
             &FormatKind::Text,
-            false,
-            None,
-            None,
+            &ScanOptions {
+                full_scan: false,
+                diff: true,
+                yes: false,
+                save_baseline: None,
+                diff_from: None,
+            },
         )
         .unwrap();
 
@@ -831,26 +588,30 @@ mod tests {
         // First scan to populate scan_history
         handle_scan(
             &dir,
-            false,
-            false,
             &db_path,
             &FormatKind::Text,
-            false,
-            None,
-            None,
+            &ScanOptions {
+                full_scan: false,
+                diff: false,
+                yes: false,
+                save_baseline: None,
+                diff_from: None,
+            },
         )
         .unwrap();
 
         // Second scan with --diff; no .uasset files → no scanned assets → no regressions
         let result = handle_scan(
             &dir,
-            false,
-            true,
             &db_path,
             &FormatKind::Text,
-            false,
-            None,
-            None,
+            &ScanOptions {
+                full_scan: false,
+                diff: true,
+                yes: false,
+                save_baseline: None,
+                diff_from: None,
+            },
         )
         .unwrap();
 
@@ -865,25 +626,29 @@ mod tests {
 
         handle_scan(
             &dir,
-            false,
-            false,
             &db_path,
             &FormatKind::Text,
-            false,
-            None,
-            None,
+            &ScanOptions {
+                full_scan: false,
+                diff: false,
+                yes: false,
+                save_baseline: None,
+                diff_from: None,
+            },
         )
         .unwrap();
 
         let result = handle_scan(
             &dir,
-            false,
-            true,
             &db_path,
             &FormatKind::Json,
-            false,
-            None,
-            None,
+            &ScanOptions {
+                full_scan: false,
+                diff: true,
+                yes: false,
+                save_baseline: None,
+                diff_from: None,
+            },
         )
         .unwrap();
 
@@ -904,25 +669,29 @@ mod tests {
         .unwrap();
         handle_scan(
             &dir,
-            false,
-            false,
             &db_path,
             &FormatKind::Text,
-            false,
-            None,
-            None,
+            &ScanOptions {
+                full_scan: false,
+                diff: false,
+                yes: false,
+                save_baseline: None,
+                diff_from: None,
+            },
         )
         .unwrap();
 
         let result = handle_scan(
             &dir,
-            false,
-            true,
             &db_path,
             &FormatKind::Text,
-            false,
-            None,
-            None,
+            &ScanOptions {
+                full_scan: false,
+                diff: true,
+                yes: false,
+                save_baseline: None,
+                diff_from: None,
+            },
         )
         .unwrap();
 
@@ -940,25 +709,29 @@ mod tests {
 
         handle_scan(
             &dir,
-            false,
-            false,
             &db_path,
             &FormatKind::Text,
-            false,
-            None,
-            None,
+            &ScanOptions {
+                full_scan: false,
+                diff: false,
+                yes: false,
+                save_baseline: None,
+                diff_from: None,
+            },
         )
         .unwrap();
 
         let result = handle_scan(
             &dir,
-            false,
-            true,
             &db_path,
             &FormatKind::GithubActions,
-            false,
-            None,
-            None,
+            &ScanOptions {
+                full_scan: false,
+                diff: true,
+                yes: false,
+                save_baseline: None,
+                diff_from: None,
+            },
         )
         .unwrap();
 
@@ -967,169 +740,21 @@ mod tests {
         let _ = std::fs::remove_dir_all(&dir);
     }
 
-    fn make_bp_meta(
-        asset_path: &str,
-        node_count: u32,
-        event_tick_count: u32,
-    ) -> scanner::AssetMetadata {
-        let bm = scanner::BlueprintMetrics {
-            node_count,
-            event_tick_count,
-            cast_count: 0,
-            dependency_depth: 0,
-        };
-        scanner::AssetMetadata {
-            file_path: PathBuf::from(format!("/proj/Content/{}.uasset", asset_path)),
-            file_size: 1024,
-            last_modified: 0,
-            blueprint_metrics: Some(bm),
-            ..scanner::make_meta(asset_path, AssetType::Blueprint)
-        }
-    }
-
-    #[test]
-    fn compute_regressions_should_detect_node_count_increase() {
-        let mut old_bp = HashMap::new();
-        old_bp.insert(AssetPath::new("/Game/BP_A").unwrap(), (10u32, 0u32));
-        let meta = make_bp_meta("/Game/BP_A", 50, 2);
-
-        let result = compute_regressions(std::iter::once(&meta), &old_bp);
-
-        assert_eq!(result.len(), 1);
-        assert_eq!(result[0].old_node_count, 10);
-        assert_eq!(result[0].new_node_count, 50);
-        assert_eq!(result[0].old_event_tick_count, 0);
-        assert_eq!(result[0].new_event_tick_count, 2);
-    }
-
-    #[test]
-    fn compute_regressions_should_not_flag_unchanged_node_count() {
-        let mut old_bp = HashMap::new();
-        old_bp.insert(AssetPath::new("/Game/BP_A").unwrap(), (10u32, 0u32));
-        let meta = make_bp_meta("/Game/BP_A", 10, 0);
-
-        let result = compute_regressions(std::iter::once(&meta), &old_bp);
-
-        assert!(result.is_empty());
-    }
-
-    #[test]
-    fn compute_regressions_should_not_flag_node_count_decrease() {
-        let mut old_bp = HashMap::new();
-        old_bp.insert(AssetPath::new("/Game/BP_A").unwrap(), (50u32, 0u32));
-        let meta = make_bp_meta("/Game/BP_A", 10, 0);
-
-        let result = compute_regressions(std::iter::once(&meta), &old_bp);
-
-        assert!(result.is_empty());
-    }
-
-    #[test]
-    fn compute_regressions_should_not_flag_new_asset_with_no_previous_record() {
-        let old_bp: HashMap<AssetPath, (u32, u32)> = HashMap::new();
-        let meta = make_bp_meta("/Game/BP_New", 42, 0);
-
-        let result = compute_regressions(std::iter::once(&meta), &old_bp);
-
-        assert!(result.is_empty());
-    }
-
-    #[test]
-    fn compute_regressions_should_sort_results_by_path() {
-        let mut old_bp = HashMap::new();
-        old_bp.insert(AssetPath::new("/Game/Z_BP").unwrap(), (1u32, 0u32));
-        old_bp.insert(AssetPath::new("/Game/A_BP").unwrap(), (1u32, 0u32));
-        let meta_z = make_bp_meta("/Game/Z_BP", 99, 0);
-        let meta_a = make_bp_meta("/Game/A_BP", 99, 0);
-
-        let result = compute_regressions([&meta_z, &meta_a].into_iter(), &old_bp);
-
-        assert_eq!(result.len(), 2);
-        assert!(result[0].path < result[1].path);
-    }
-
-    #[test]
-    fn compute_size_increases_should_detect_increase_above_threshold() {
-        let mut old_sizes = HashMap::new();
-        old_sizes.insert(AssetPath::new("/Game/T_Rock").unwrap(), 1000u64);
-        let meta = scanner::AssetMetadata {
-            file_path: PathBuf::from("/proj/Content/T_Rock.uasset"),
-            file_size: 1200,
-            last_modified: 0,
-            ..scanner::make_meta("/Game/T_Rock", AssetType::Texture2D)
-        };
-
-        let result = compute_size_increases(std::iter::once(&meta), &old_sizes, 10);
-
-        assert_eq!(result.len(), 1);
-        assert_eq!(result[0].old_size, 1000);
-        assert_eq!(result[0].new_size, 1200);
-        assert_eq!(result[0].pct_increase, 20);
-    }
-
-    #[test]
-    fn compute_size_increases_should_ignore_increase_below_threshold() {
-        let mut old_sizes = HashMap::new();
-        old_sizes.insert(AssetPath::new("/Game/T_Rock").unwrap(), 1000u64);
-        let meta = scanner::AssetMetadata {
-            file_path: PathBuf::from("/proj/Content/T_Rock.uasset"),
-            file_size: 1050,
-            last_modified: 0,
-            ..scanner::make_meta("/Game/T_Rock", AssetType::Texture2D)
-        };
-
-        let result = compute_size_increases(std::iter::once(&meta), &old_sizes, 10);
-
-        assert!(result.is_empty());
-    }
-
-    #[test]
-    fn compute_size_increases_should_ignore_asset_with_no_previous_size() {
-        let old_sizes: HashMap<AssetPath, u64> = HashMap::new();
-        let meta = scanner::AssetMetadata {
-            file_path: PathBuf::from("/proj/Content/T_New.uasset"),
-            file_size: 5000,
-            last_modified: 0,
-            ..scanner::make_meta("/Game/T_New", AssetType::Texture2D)
-        };
-
-        let result = compute_size_increases(std::iter::once(&meta), &old_sizes, 10);
-
-        assert!(result.is_empty());
-    }
-
-    #[test]
-    fn format_utc_should_format_epoch_zero_as_unix_origin() {
-        assert_eq!(format_utc(0), "1970-01-01 00:00:00 UTC");
-    }
-
-    #[test]
-    fn format_utc_should_format_one_day_correctly() {
-        assert_eq!(format_utc(86400), "1970-01-02 00:00:00 UTC");
-    }
-
-    #[test]
-    fn format_utc_should_handle_leap_year_correctly() {
-        // 1972 is a leap year; 1972-02-29 exists
-        // days from 1970-01-01 to 1972-02-29:
-        //   1970: 365, 1971: 365, then 31 (Jan) + 29 (Feb day 29) - 1 = 59 days into 1972
-        //   total = 365 + 365 + 59 = 789 days → epoch 789 * 86400 = 68169600
-        assert_eq!(format_utc(68_169_600), "1972-02-29 00:00:00 UTC");
-    }
-
     #[test]
     fn handle_scan_should_save_baseline_when_flag_provided() {
         let (dir, db_path) = test_db_in_tempdir("scan_baseline");
 
         let result = handle_scan(
             &dir,
-            false,
-            false,
             &db_path,
             &FormatKind::Text,
-            false,
-            Some("main"),
-            None,
+            &ScanOptions {
+                full_scan: false,
+                diff: false,
+                yes: false,
+                save_baseline: Some("main"),
+                diff_from: None,
+            },
         )
         .unwrap();
         assert_eq!(result, 0);
@@ -1147,25 +772,29 @@ mod tests {
 
         handle_scan(
             &dir,
-            false,
-            false,
             &db_path,
             &FormatKind::Text,
-            false,
-            Some("main"),
-            None,
+            &ScanOptions {
+                full_scan: false,
+                diff: false,
+                yes: false,
+                save_baseline: Some("main"),
+                diff_from: None,
+            },
         )
         .unwrap();
 
         let result = handle_scan(
             &dir,
-            false,
-            false,
             &db_path,
             &FormatKind::Text,
-            false,
-            None,
-            Some("main"),
+            &ScanOptions {
+                full_scan: false,
+                diff: false,
+                yes: false,
+                save_baseline: None,
+                diff_from: Some("main"),
+            },
         )
         .unwrap();
         assert_eq!(result, 0, "diff-from baseline with no regressions exits 0");
@@ -1179,25 +808,29 @@ mod tests {
 
         handle_scan(
             &dir,
-            false,
-            false,
             &db_path,
             &FormatKind::Text,
-            false,
-            None,
-            None,
+            &ScanOptions {
+                full_scan: false,
+                diff: false,
+                yes: false,
+                save_baseline: None,
+                diff_from: None,
+            },
         )
         .unwrap();
 
         let result = handle_scan(
             &dir,
-            false,
-            false,
             &db_path,
             &FormatKind::Text,
-            false,
-            None,
-            Some("ghost"),
+            &ScanOptions {
+                full_scan: false,
+                diff: false,
+                yes: false,
+                save_baseline: None,
+                diff_from: Some("ghost"),
+            },
         );
         assert!(
             result.is_err(),
