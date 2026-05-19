@@ -13,13 +13,15 @@ pub fn handle_watch(project_dir: &Path, db_path: &Path) -> anyhow::Result<i32> {
     eprintln!("Running initial scan...");
     super::scan::handle_scan(
         project_dir,
-        false,
-        false,
         db_path,
         &crate::FormatKind::Text,
-        true, // yes=true: non-interactive startup, auto-remove stale records
-        None,
-        None,
+        &super::scan::ScanOptions {
+            full_scan: false,
+            diff: false,
+            yes: true, // non-interactive startup, auto-remove stale records
+            save_baseline: None,
+            diff_from: None,
+        },
     )?;
 
     let content_root = crate::resolve_content_root(project_dir);

@@ -261,13 +261,15 @@ fn dispatch(cli: &Cli) -> anyhow::Result<i32> {
             let db_path = resolve_db_path(project_dir, cli.db.as_deref());
             commands::scan::handle_scan(
                 project_dir,
-                *full_scan,
-                *diff,
                 &db_path,
                 &cli.format,
-                cli.yes,
-                save_baseline.as_deref(),
-                diff_from.as_deref(),
+                &commands::scan::ScanOptions {
+                    full_scan: *full_scan,
+                    diff: *diff,
+                    yes: cli.yes,
+                    save_baseline: save_baseline.as_deref(),
+                    diff_from: diff_from.as_deref(),
+                },
             )
         }
         Commands::Graph {
