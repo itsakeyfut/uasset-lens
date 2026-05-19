@@ -1,5 +1,4 @@
 use byteorder::{LittleEndian, ReadBytesExt};
-use shared::FPackageVersion;
 use std::io::Cursor;
 
 use super::{map_io, skip_fstring};
@@ -12,7 +11,6 @@ const VER_UE5_ADD_SOFTOBJECTPATH_LIST: i32 = 1008;
 
 #[derive(Debug)]
 pub struct FPackageFileSummary {
-    pub version: FPackageVersion,
     pub name_count: usize,
     pub name_offset: u64,
     pub soft_object_path_count: usize,
@@ -40,16 +38,11 @@ pub fn parse_header(data: &[u8]) -> Result<FPackageFileSummary, ScanError> {
     // LegacyUE3Version (always present when legacy_version < -4)
     let _legacy_ue3 = cur.read_i32::<LittleEndian>().map_err(map_io)?;
 
-    let file_version_ue4 = cur.read_i32::<LittleEndian>().map_err(map_io)?;
+    let _file_version_ue4 = cur.read_i32::<LittleEndian>().map_err(map_io)?;
     let file_version_ue5 = cur.read_i32::<LittleEndian>().map_err(map_io)?;
 
-    let version = FPackageVersion {
-        legacy_version,
-        file_version_ue4: file_version_ue4 as u32,
-        file_version_ue5: file_version_ue5 as u32,
-    };
-
-    if !version.is_ue5() {
+    // legacy_version == -8 already verified above; only need file_version_ue5 > 0
+    if file_version_ue5 <= 0 {
         return Err(ScanError::UnsupportedVersion(
             legacy_version,
             file_version_ue5 as u32,
@@ -132,7 +125,6 @@ pub fn parse_header(data: &[u8]) -> Result<FPackageFileSummary, ScanError> {
     }
 
     Ok(FPackageFileSummary {
-        version,
         name_count: name_count as usize,
         name_offset: name_offset as u64,
         soft_object_path_count,
@@ -169,7 +161,6 @@ mod tests {
     fn parse_header_should_succeed_for_bp_simple_fixture() {
         let data = read_fixture("valid/BP_Simple.uasset");
         let header = parse_header(&data).unwrap();
-        assert!(header.version.is_ue5());
         // Validated against raw binary: offset 272 in BP_Simple.uasset
         assert_eq!(header.name_count, 113);
         assert_eq!(header.name_offset, 537);
@@ -188,7 +179,6 @@ mod tests {
     fn parse_header_should_succeed_for_t_rock_fixture() {
         let data = read_fixture("valid/T_Rock.uasset");
         let header = parse_header(&data).unwrap();
-        assert!(header.version.is_ue5());
         assert!(header.name_offset < data.len() as u64);
         assert!(header.import_offset < data.len() as u64);
         assert!(header.export_offset < data.len() as u64);
@@ -202,7 +192,6 @@ mod tests {
     fn parse_header_should_succeed_for_sm_cube_fixture() {
         let data = read_fixture("valid/SM_Cube.uasset");
         let header = parse_header(&data).unwrap();
-        assert!(header.version.is_ue5());
         assert!(header.name_offset < data.len() as u64);
         assert!(header.import_offset < data.len() as u64);
         assert!(header.export_offset < data.len() as u64);
@@ -216,7 +205,6 @@ mod tests {
     fn parse_header_should_succeed_for_m_basic_fixture() {
         let data = read_fixture("valid/M_Basic.uasset");
         let header = parse_header(&data).unwrap();
-        assert!(header.version.is_ue5());
         assert!(header.name_offset < data.len() as u64);
         assert!(header.import_offset < data.len() as u64);
         assert!(header.export_offset < data.len() as u64);
@@ -230,7 +218,6 @@ mod tests {
     fn parse_header_should_succeed_for_redirect_fixture() {
         let data = read_fixture("valid/Redirect.uasset");
         let header = parse_header(&data).unwrap();
-        assert!(header.version.is_ue5());
         assert!(header.name_offset < data.len() as u64);
         assert!(header.import_offset < data.len() as u64);
         assert!(header.export_offset < data.len() as u64);
@@ -244,7 +231,6 @@ mod tests {
     fn parse_header_should_succeed_for_l_test_map_fixture() {
         let data = read_fixture("valid/L_TestMap.umap");
         let header = parse_header(&data).unwrap();
-        assert!(header.version.is_ue5());
         assert!(header.name_offset < data.len() as u64);
         assert!(header.import_offset < data.len() as u64);
         assert!(header.export_offset < data.len() as u64);
