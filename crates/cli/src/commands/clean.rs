@@ -303,7 +303,7 @@ fn delete_sidecars(file_path: &Path, errors: &mut usize) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::commands::make_meta;
+    use crate::commands::{make_meta, test_db_in_tempdir};
     use shared::{AssetPath, AssetType};
 
     fn make_uasset(dir: &Path, name: &str) -> std::path::PathBuf {
@@ -314,11 +314,8 @@ mod tests {
 
     #[test]
     fn handle_clean_should_return_err_when_db_does_not_exist() {
-        let db_path = std::env::temp_dir().join(format!(
-            "uasset_lens_clean160_missing_{}.db",
-            std::process::id()
-        ));
-        let _ = std::fs::remove_file(&db_path);
+        let (dir, db_path) = test_db_in_tempdir("clean160_missing");
+        let _ = std::fs::remove_dir_all(&dir);
 
         let result = handle_clean(
             Path::new("/proj"),
@@ -335,10 +332,7 @@ mod tests {
 
     #[test]
     fn handle_clean_should_return_0_when_no_dead_assets() {
-        let dir =
-            std::env::temp_dir().join(format!("uasset_lens_clean160_empty_{}", std::process::id()));
-        std::fs::create_dir_all(&dir).unwrap();
-        let db_path = dir.join("test.db");
+        let (dir, db_path) = test_db_in_tempdir("clean160_empty");
         asset_db::AssetDb::open(&db_path).unwrap();
 
         let result = handle_clean(
@@ -358,12 +352,7 @@ mod tests {
 
     #[test]
     fn handle_clean_dry_run_should_return_0_and_not_delete_files() {
-        let dir = std::env::temp_dir().join(format!(
-            "uasset_lens_clean160_dryrun_{}",
-            std::process::id()
-        ));
-        std::fs::create_dir_all(&dir).unwrap();
-        let db_path = dir.join("test.db");
+        let (dir, db_path) = test_db_in_tempdir("clean160_dryrun");
         let uasset = make_uasset(&dir, "Orphan");
 
         {
@@ -396,12 +385,7 @@ mod tests {
 
     #[test]
     fn handle_clean_yes_should_delete_dead_asset_file() {
-        let dir = std::env::temp_dir().join(format!(
-            "uasset_lens_clean160_yes_del_{}",
-            std::process::id()
-        ));
-        std::fs::create_dir_all(&dir).unwrap();
-        let db_path = dir.join("test.db");
+        let (dir, db_path) = test_db_in_tempdir("clean160_yes_del");
         let uasset = make_uasset(&dir, "Orphan");
 
         {
@@ -433,12 +417,7 @@ mod tests {
 
     #[test]
     fn handle_clean_yes_should_return_0_after_deletion() {
-        let dir = std::env::temp_dir().join(format!(
-            "uasset_lens_clean160_yes_rc_{}",
-            std::process::id()
-        ));
-        std::fs::create_dir_all(&dir).unwrap();
-        let db_path = dir.join("test.db");
+        let (dir, db_path) = test_db_in_tempdir("clean160_yes_rc");
         let uasset = make_uasset(&dir, "Orphan");
 
         {
@@ -470,12 +449,7 @@ mod tests {
 
     #[test]
     fn handle_clean_yes_should_remove_asset_from_db() {
-        let dir = std::env::temp_dir().join(format!(
-            "uasset_lens_clean160_yes_db_{}",
-            std::process::id()
-        ));
-        std::fs::create_dir_all(&dir).unwrap();
-        let db_path = dir.join("test.db");
+        let (dir, db_path) = test_db_in_tempdir("clean160_yes_db");
         let uasset = make_uasset(&dir, "Orphan");
         let asset_path = AssetPath::new("/Game/Orphan").unwrap();
 
@@ -511,12 +485,7 @@ mod tests {
 
     #[test]
     fn handle_clean_yes_should_delete_sidecar_files_when_present() {
-        let dir = std::env::temp_dir().join(format!(
-            "uasset_lens_clean160_sidecar_{}",
-            std::process::id()
-        ));
-        std::fs::create_dir_all(&dir).unwrap();
-        let db_path = dir.join("test.db");
+        let (dir, db_path) = test_db_in_tempdir("clean160_sidecar");
         let uasset = make_uasset(&dir, "Orphan");
         let uexp = dir.join("Orphan.uexp");
         let ubulk = dir.join("Orphan.ubulk");
@@ -556,12 +525,7 @@ mod tests {
 
     #[test]
     fn handle_clean_min_size_filter_should_skip_small_assets() {
-        let dir = std::env::temp_dir().join(format!(
-            "uasset_lens_clean160_minsize_{}",
-            std::process::id()
-        ));
-        std::fs::create_dir_all(&dir).unwrap();
-        let db_path = dir.join("test.db");
+        let (dir, db_path) = test_db_in_tempdir("clean160_minsize");
         let small = make_uasset(&dir, "Small");
         let large = make_uasset(&dir, "Large");
 
@@ -610,10 +574,7 @@ mod tests {
 
     #[test]
     fn handle_clean_exclude_pattern_should_skip_matching_path() {
-        let dir =
-            std::env::temp_dir().join(format!("uasset_lens_clean160_excl_{}", std::process::id()));
-        std::fs::create_dir_all(&dir).unwrap();
-        let db_path = dir.join("test.db");
+        let (dir, db_path) = test_db_in_tempdir("clean160_excl");
         let tp = make_uasset(&dir, "BP_ThirdPerson");
         let hero = make_uasset(&dir, "BP_Hero");
 
@@ -660,10 +621,7 @@ mod tests {
 
     #[test]
     fn handle_clean_path_filter_should_keep_non_matching_assets() {
-        let dir =
-            std::env::temp_dir().join(format!("uasset_lens_clean160_path_{}", std::process::id()));
-        std::fs::create_dir_all(&dir).unwrap();
-        let db_path = dir.join("test.db");
+        let (dir, db_path) = test_db_in_tempdir("clean160_path");
         let char_asset = make_uasset(&dir, "BP_Hero");
         let env_asset = make_uasset(&dir, "SM_Rock");
 
@@ -712,12 +670,7 @@ mod tests {
 
     #[test]
     fn handle_clean_dry_run_json_should_output_targets_array() {
-        let dir = std::env::temp_dir().join(format!(
-            "uasset_lens_clean160_dryjson_{}",
-            std::process::id()
-        ));
-        std::fs::create_dir_all(&dir).unwrap();
-        let db_path = dir.join("test.db");
+        let (dir, db_path) = test_db_in_tempdir("clean160_dryjson");
         let uasset = make_uasset(&dir, "Orphan");
 
         {
@@ -765,12 +718,7 @@ mod tests {
 
     #[test]
     fn handle_clean_yes_json_should_output_summary_with_required_keys() {
-        let dir = std::env::temp_dir().join(format!(
-            "uasset_lens_clean160_yesjson_{}",
-            std::process::id()
-        ));
-        std::fs::create_dir_all(&dir).unwrap();
-        let db_path = dir.join("test.db");
+        let (dir, db_path) = test_db_in_tempdir("clean160_yesjson");
         let uasset = make_uasset(&dir, "Orphan");
 
         {

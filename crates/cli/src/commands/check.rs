@@ -326,16 +326,13 @@ fn check_display_name(name: &str) -> &str {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::commands::make_meta;
+    use crate::commands::{make_meta, test_db_in_tempdir};
     use shared::{AssetPath, AssetType};
 
     #[test]
     fn handle_check_should_return_err_when_db_does_not_exist() {
-        let db_path = std::env::temp_dir().join(format!(
-            "uasset_lens_check159_missing_{}.db",
-            std::process::id()
-        ));
-        let _ = std::fs::remove_file(&db_path);
+        let (dir, db_path) = test_db_in_tempdir("check159_missing");
+        let _ = std::fs::remove_dir_all(&dir);
 
         let result = handle_check(Path::new("/proj"), &[], &[], &db_path, &FormatKind::Text);
         assert!(result.is_err(), "missing DB should return an error");
@@ -343,10 +340,7 @@ mod tests {
 
     #[test]
     fn handle_check_should_return_0_when_db_is_empty() {
-        let dir =
-            std::env::temp_dir().join(format!("uasset_lens_check159_empty_{}", std::process::id()));
-        std::fs::create_dir_all(&dir).unwrap();
-        let db_path = dir.join("test.db");
+        let (dir, db_path) = test_db_in_tempdir("check159_empty");
         asset_db::AssetDb::open(&db_path).unwrap();
 
         let result = handle_check(&dir, &[], &[], &db_path, &FormatKind::Text).unwrap();
@@ -356,10 +350,7 @@ mod tests {
 
     #[test]
     fn handle_check_should_return_1_when_dead_asset_exists() {
-        let dir =
-            std::env::temp_dir().join(format!("uasset_lens_check159_dead_{}", std::process::id()));
-        std::fs::create_dir_all(&dir).unwrap();
-        let db_path = dir.join("test.db");
+        let (dir, db_path) = test_db_in_tempdir("check159_dead");
 
         {
             let mut db = asset_db::AssetDb::open(&db_path).unwrap();
@@ -381,10 +372,7 @@ mod tests {
 
     #[test]
     fn handle_check_should_return_1_when_cycle_exists() {
-        let dir =
-            std::env::temp_dir().join(format!("uasset_lens_check159_cycle_{}", std::process::id()));
-        std::fs::create_dir_all(&dir).unwrap();
-        let db_path = dir.join("test.db");
+        let (dir, db_path) = test_db_in_tempdir("check159_cycle");
 
         {
             let mut db = asset_db::AssetDb::open(&db_path).unwrap();
@@ -414,10 +402,7 @@ mod tests {
 
     #[test]
     fn handle_check_json_should_contain_passed_and_checks_keys() {
-        let dir =
-            std::env::temp_dir().join(format!("uasset_lens_check159_json_{}", std::process::id()));
-        std::fs::create_dir_all(&dir).unwrap();
-        let db_path = dir.join("test.db");
+        let (dir, db_path) = test_db_in_tempdir("check159_json");
         asset_db::AssetDb::open(&db_path).unwrap();
 
         // CheckOutput is the exact type handle_check serializes; verify its JSON schema.
@@ -442,10 +427,7 @@ mod tests {
 
     #[test]
     fn handle_check_only_filter_should_run_only_specified_checks() {
-        let dir =
-            std::env::temp_dir().join(format!("uasset_lens_check159_only_{}", std::process::id()));
-        std::fs::create_dir_all(&dir).unwrap();
-        let db_path = dir.join("test.db");
+        let (dir, db_path) = test_db_in_tempdir("check159_only");
 
         {
             let mut db = asset_db::AssetDb::open(&db_path).unwrap();
@@ -468,10 +450,7 @@ mod tests {
 
     #[test]
     fn handle_check_skip_filter_should_skip_specified_checks() {
-        let dir =
-            std::env::temp_dir().join(format!("uasset_lens_check159_skip_{}", std::process::id()));
-        std::fs::create_dir_all(&dir).unwrap();
-        let db_path = dir.join("test.db");
+        let (dir, db_path) = test_db_in_tempdir("check159_skip");
 
         {
             let mut db = asset_db::AssetDb::open(&db_path).unwrap();
@@ -493,23 +472,19 @@ mod tests {
 
     #[test]
     fn handle_check_should_return_err_for_unknown_only_check_name() {
-        let db_path = std::env::temp_dir().join(format!(
-            "uasset_lens_check159_unk_only_{}.db",
-            std::process::id()
-        ));
+        let (dir, db_path) = test_db_in_tempdir("check159_unk_only");
         let only = vec!["bogus".to_owned()];
         let result = handle_check(Path::new("/proj"), &only, &[], &db_path, &FormatKind::Text);
         assert!(result.is_err(), "unknown check name in --only should error");
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
     fn handle_check_should_return_err_for_unknown_skip_check_name() {
-        let db_path = std::env::temp_dir().join(format!(
-            "uasset_lens_check159_unk_skip_{}.db",
-            std::process::id()
-        ));
+        let (dir, db_path) = test_db_in_tempdir("check159_unk_skip");
         let skip = vec!["bogus".to_owned()];
         let result = handle_check(Path::new("/proj"), &[], &skip, &db_path, &FormatKind::Text);
         assert!(result.is_err(), "unknown check name in --skip should error");
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }

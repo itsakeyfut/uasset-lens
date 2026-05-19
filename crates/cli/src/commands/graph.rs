@@ -81,16 +81,13 @@ pub fn handle_graph(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::commands::make_meta;
+    use crate::commands::{make_meta, test_db_in_tempdir};
     use shared::{AssetPath, AssetType};
 
     #[test]
     fn handle_graph_should_return_err_when_db_does_not_exist() {
-        let db_path = std::env::temp_dir().join(format!(
-            "uasset_lens_graph21_missing_{}.db",
-            std::process::id()
-        ));
-        let _ = std::fs::remove_file(&db_path);
+        let (dir, db_path) = test_db_in_tempdir("graph21_missing");
+        let _ = std::fs::remove_dir_all(&dir);
 
         let result = handle_graph(Path::new("/proj"), false, &db_path, &FormatKind::Text);
         assert!(result.is_err(), "missing DB should return an error");
@@ -98,10 +95,7 @@ mod tests {
 
     #[test]
     fn handle_graph_should_return_0_when_db_is_empty() {
-        let dir =
-            std::env::temp_dir().join(format!("uasset_lens_graph21_empty_{}", std::process::id()));
-        std::fs::create_dir_all(&dir).unwrap();
-        let db_path = dir.join("test.db");
+        let (dir, db_path) = test_db_in_tempdir("graph21_empty");
         asset_db::AssetDb::open(&db_path).unwrap();
 
         let result = handle_graph(&dir, false, &db_path, &FormatKind::Text).unwrap();
@@ -111,12 +105,7 @@ mod tests {
 
     #[test]
     fn handle_graph_cycles_only_should_return_0_when_no_cycles() {
-        let dir = std::env::temp_dir().join(format!(
-            "uasset_lens_graph21_nocycle_{}",
-            std::process::id()
-        ));
-        std::fs::create_dir_all(&dir).unwrap();
-        let db_path = dir.join("test.db");
+        let (dir, db_path) = test_db_in_tempdir("graph21_nocycle");
         asset_db::AssetDb::open(&db_path).unwrap();
 
         let result = handle_graph(&dir, true, &db_path, &FormatKind::Text).unwrap();
@@ -126,10 +115,7 @@ mod tests {
 
     #[test]
     fn handle_graph_cycles_only_should_return_1_when_cycles_present() {
-        let dir =
-            std::env::temp_dir().join(format!("uasset_lens_graph21_cycle_{}", std::process::id()));
-        std::fs::create_dir_all(&dir).unwrap();
-        let db_path = dir.join("test.db");
+        let (dir, db_path) = test_db_in_tempdir("graph21_cycle");
 
         {
             let mut db = asset_db::AssetDb::open(&db_path).unwrap();
@@ -159,12 +145,7 @@ mod tests {
 
     #[test]
     fn handle_graph_without_cycles_only_should_return_0_even_with_cycles() {
-        let dir = std::env::temp_dir().join(format!(
-            "uasset_lens_graph21_cycle_no_flag_{}",
-            std::process::id()
-        ));
-        std::fs::create_dir_all(&dir).unwrap();
-        let db_path = dir.join("test.db");
+        let (dir, db_path) = test_db_in_tempdir("graph21_cycle_no_flag");
 
         {
             let mut db = asset_db::AssetDb::open(&db_path).unwrap();
@@ -197,10 +178,7 @@ mod tests {
 
     #[test]
     fn handle_graph_json_should_output_required_keys_when_db_is_empty() {
-        let dir =
-            std::env::temp_dir().join(format!("uasset_lens_graph21_json_{}", std::process::id()));
-        std::fs::create_dir_all(&dir).unwrap();
-        let db_path = dir.join("test.db");
+        let (dir, db_path) = test_db_in_tempdir("graph21_json");
         asset_db::AssetDb::open(&db_path).unwrap();
 
         // Verify that JSON serialization succeeds and the GraphOutput struct
@@ -212,12 +190,7 @@ mod tests {
 
     #[test]
     fn handle_graph_json_cycles_only_should_return_1_when_cycles_present() {
-        let dir = std::env::temp_dir().join(format!(
-            "uasset_lens_graph21_json_cycle_{}",
-            std::process::id()
-        ));
-        std::fs::create_dir_all(&dir).unwrap();
-        let db_path = dir.join("test.db");
+        let (dir, db_path) = test_db_in_tempdir("graph21_json_cycle");
 
         {
             let mut db = asset_db::AssetDb::open(&db_path).unwrap();

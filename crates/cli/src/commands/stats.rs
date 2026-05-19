@@ -252,16 +252,13 @@ pub fn handle_stats(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::commands::make_meta;
+    use crate::commands::{make_meta, test_db_in_tempdir};
     use shared::{AssetPath, AssetType};
 
     #[test]
     fn handle_stats_should_return_err_when_db_does_not_exist() {
-        let db_path = std::env::temp_dir().join(format!(
-            "uasset_lens_stats158_missing_{}.db",
-            std::process::id()
-        ));
-        let _ = std::fs::remove_file(&db_path);
+        let (dir, db_path) = test_db_in_tempdir("stats158_missing");
+        let _ = std::fs::remove_dir_all(&dir);
 
         let result = handle_stats(Path::new("/proj"), None, &db_path, &FormatKind::Text);
         assert!(result.is_err(), "missing DB should return an error");
@@ -269,10 +266,7 @@ mod tests {
 
     #[test]
     fn handle_stats_should_return_0_when_db_is_empty() {
-        let dir =
-            std::env::temp_dir().join(format!("uasset_lens_stats158_empty_{}", std::process::id()));
-        std::fs::create_dir_all(&dir).unwrap();
-        let db_path = dir.join("test.db");
+        let (dir, db_path) = test_db_in_tempdir("stats158_empty");
         asset_db::AssetDb::open(&db_path).unwrap();
 
         let result = handle_stats(&dir, None, &db_path, &FormatKind::Text).unwrap();
@@ -282,10 +276,7 @@ mod tests {
 
     #[test]
     fn handle_stats_should_return_0_when_assets_exist() {
-        let dir =
-            std::env::temp_dir().join(format!("uasset_lens_stats158_found_{}", std::process::id()));
-        std::fs::create_dir_all(&dir).unwrap();
-        let db_path = dir.join("test.db");
+        let (dir, db_path) = test_db_in_tempdir("stats158_found");
 
         {
             let mut db = asset_db::AssetDb::open(&db_path).unwrap();
@@ -306,10 +297,7 @@ mod tests {
 
     #[test]
     fn handle_stats_json_should_contain_required_top_level_keys() {
-        let dir =
-            std::env::temp_dir().join(format!("uasset_lens_stats158_json_{}", std::process::id()));
-        std::fs::create_dir_all(&dir).unwrap();
-        let db_path = dir.join("test.db");
+        let (dir, db_path) = test_db_in_tempdir("stats158_json");
 
         {
             let mut db = asset_db::AssetDb::open(&db_path).unwrap();
@@ -362,10 +350,7 @@ mod tests {
 
     #[test]
     fn handle_stats_json_should_compute_graph_stats_correctly() {
-        let dir =
-            std::env::temp_dir().join(format!("uasset_lens_stats158_graph_{}", std::process::id()));
-        std::fs::create_dir_all(&dir).unwrap();
-        let db_path = dir.join("test.db");
+        let (dir, db_path) = test_db_in_tempdir("stats158_graph");
 
         {
             let mut db = asset_db::AssetDb::open(&db_path).unwrap();
@@ -414,10 +399,7 @@ mod tests {
 
     #[test]
     fn handle_stats_top_should_limit_folder_and_asset_output() {
-        let dir =
-            std::env::temp_dir().join(format!("uasset_lens_stats158_top_{}", std::process::id()));
-        std::fs::create_dir_all(&dir).unwrap();
-        let db_path = dir.join("test.db");
+        let (dir, db_path) = test_db_in_tempdir("stats158_top");
 
         {
             let mut db = asset_db::AssetDb::open(&db_path).unwrap();

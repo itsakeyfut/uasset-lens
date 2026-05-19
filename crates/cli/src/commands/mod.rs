@@ -35,3 +35,11 @@ pub(crate) fn make_meta(
         material_texture_samples: None,
     }
 }
+
+#[cfg(test)]
+pub(crate) fn test_db_in_tempdir(tag: &str) -> (std::path::PathBuf, std::path::PathBuf) {
+    let dir = std::env::temp_dir().join(format!("uasset_lens_{}_{}", tag, std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let db_path = dir.join("test.db");
+    (dir, db_path)
+}

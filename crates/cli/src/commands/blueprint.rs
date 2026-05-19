@@ -115,6 +115,7 @@ fn truncate_path(path: &str, max_len: usize) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::commands::test_db_in_tempdir;
     use shared::{AssetPath, AssetType};
     use std::path::PathBuf;
 
@@ -160,9 +161,7 @@ mod tests {
 
     #[test]
     fn handle_blueprint_github_actions_should_return_0() {
-        let dir = std::env::temp_dir().join(format!("uasset_lens_bp_ga_{}", std::process::id()));
-        std::fs::create_dir_all(&dir).unwrap();
-        let db_path = dir.join("test.db");
+        let (dir, db_path) = test_db_in_tempdir("bp_ga");
 
         make_db_with_blueprints(&db_path);
 
@@ -174,18 +173,15 @@ mod tests {
 
     #[test]
     fn handle_blueprint_should_return_err_when_db_does_not_exist() {
-        let path =
-            std::env::temp_dir().join(format!("uasset_lens_bp_missing_{}.db", std::process::id()));
-        let _ = std::fs::remove_file(&path);
-        let result = handle_blueprint(std::path::Path::new("."), &path, &FormatKind::Text);
+        let (dir, db_path) = test_db_in_tempdir("bp_missing");
+        let _ = std::fs::remove_dir_all(&dir);
+        let result = handle_blueprint(std::path::Path::new("."), &db_path, &FormatKind::Text);
         assert!(result.is_err());
     }
 
     #[test]
     fn handle_blueprint_should_return_0_when_no_blueprint_assets() {
-        let dir = std::env::temp_dir().join(format!("uasset_lens_bp_empty_{}", std::process::id()));
-        std::fs::create_dir_all(&dir).unwrap();
-        let db_path = dir.join("test.db");
+        let (dir, db_path) = test_db_in_tempdir("bp_empty");
         asset_db::AssetDb::open(&db_path).unwrap();
 
         let result = handle_blueprint(&dir, &db_path, &FormatKind::Text).unwrap();
@@ -196,9 +192,7 @@ mod tests {
 
     #[test]
     fn handle_blueprint_should_return_0_with_blueprint_assets() {
-        let dir = std::env::temp_dir().join(format!("uasset_lens_bp_json_{}", std::process::id()));
-        std::fs::create_dir_all(&dir).unwrap();
-        let db_path = dir.join("test.db");
+        let (dir, db_path) = test_db_in_tempdir("bp_json");
 
         make_db_with_blueprints(&db_path);
 
@@ -210,9 +204,7 @@ mod tests {
 
     #[test]
     fn blueprint_rows_should_be_sorted_by_node_count_descending() {
-        let dir = std::env::temp_dir().join(format!("uasset_lens_bp_sort_{}", std::process::id()));
-        std::fs::create_dir_all(&dir).unwrap();
-        let db_path = dir.join("test.db");
+        let (dir, db_path) = test_db_in_tempdir("bp_sort");
 
         let db = make_db_with_blueprints(&db_path);
 

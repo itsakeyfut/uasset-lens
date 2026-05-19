@@ -603,6 +603,7 @@ fn is_leap_year(y: u64) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::commands::test_db_in_tempdir;
     use shared::{AssetPath, AssetType};
 
     #[test]
@@ -648,10 +649,7 @@ mod tests {
 
     #[test]
     fn handle_scan_should_record_scan_snapshot_after_upsert() {
-        let dir =
-            std::env::temp_dir().join(format!("uasset_lens_scan_history_{}", std::process::id()));
-        std::fs::create_dir_all(&dir).unwrap();
-        let db_path = dir.join("test.db");
+        let (dir, db_path) = test_db_in_tempdir("scan_history");
 
         let result = handle_scan(
             &dir,
@@ -675,8 +673,7 @@ mod tests {
 
     #[test]
     fn handle_scan_should_not_index_files_under_excluded_path() {
-        let dir =
-            std::env::temp_dir().join(format!("uasset_lens_scan25_exclude_{}", std::process::id()));
+        let (dir, db_path) = test_db_in_tempdir("scan25_exclude");
         let excluded_dir = dir.join("Content").join("Dev");
         std::fs::create_dir_all(&excluded_dir).unwrap();
 
@@ -686,8 +683,6 @@ mod tests {
         )
         .unwrap();
         std::fs::write(excluded_dir.join("Dummy.uasset"), b"not a real uasset").unwrap();
-
-        let db_path = dir.join("test.db");
         let _ = handle_scan(
             &dir,
             false,
@@ -711,10 +706,7 @@ mod tests {
 
     #[test]
     fn handle_scan_should_return_0_when_db_is_empty_and_dir_has_no_assets() {
-        let dir =
-            std::env::temp_dir().join(format!("uasset_lens_scan14_empty_{}", std::process::id()));
-        std::fs::create_dir_all(&dir).unwrap();
-        let db_path = dir.join("test.db");
+        let (dir, db_path) = test_db_in_tempdir("scan14_empty");
 
         let result = handle_scan(
             &dir,
@@ -734,10 +726,7 @@ mod tests {
 
     #[test]
     fn handle_scan_should_remove_stale_asset_and_return_1_when_yes_flag_set() {
-        let dir =
-            std::env::temp_dir().join(format!("uasset_lens_scan14_stale_{}", std::process::id()));
-        std::fs::create_dir_all(&dir).unwrap();
-        let db_path = dir.join("test.db");
+        let (dir, db_path) = test_db_in_tempdir("scan14_stale");
 
         // Insert a record whose file does NOT exist on disk.
         {
@@ -774,10 +763,7 @@ mod tests {
 
     #[test]
     fn handle_scan_should_preserve_record_when_stdin_empty_and_no_yes_flag() {
-        let dir =
-            std::env::temp_dir().join(format!("uasset_lens_scan14_decline_{}", std::process::id()));
-        std::fs::create_dir_all(&dir).unwrap();
-        let db_path = dir.join("test.db");
+        let (dir, db_path) = test_db_in_tempdir("scan14_decline");
 
         {
             let db = asset_db::AssetDb::open(&db_path).unwrap();
@@ -816,12 +802,7 @@ mod tests {
 
     #[test]
     fn handle_scan_diff_should_return_0_when_no_previous_scan() {
-        let dir = std::env::temp_dir().join(format!(
-            "uasset_lens_scan_diff_noprev_{}",
-            std::process::id()
-        ));
-        std::fs::create_dir_all(&dir).unwrap();
-        let db_path = dir.join("test.db");
+        let (dir, db_path) = test_db_in_tempdir("scan_diff_noprev");
 
         let result = handle_scan(
             &dir,
@@ -845,12 +826,7 @@ mod tests {
 
     #[test]
     fn handle_scan_diff_should_return_0_when_no_regressions() {
-        let dir = std::env::temp_dir().join(format!(
-            "uasset_lens_scan_diff_noreg_{}",
-            std::process::id()
-        ));
-        std::fs::create_dir_all(&dir).unwrap();
-        let db_path = dir.join("test.db");
+        let (dir, db_path) = test_db_in_tempdir("scan_diff_noreg");
 
         // First scan to populate scan_history
         handle_scan(
@@ -885,10 +861,7 @@ mod tests {
 
     #[test]
     fn handle_scan_diff_json_should_include_diff_fields() {
-        let dir =
-            std::env::temp_dir().join(format!("uasset_lens_scan_diff_json_{}", std::process::id()));
-        std::fs::create_dir_all(&dir).unwrap();
-        let db_path = dir.join("test.db");
+        let (dir, db_path) = test_db_in_tempdir("scan_diff_json");
 
         handle_scan(
             &dir,
@@ -921,11 +894,7 @@ mod tests {
 
     #[test]
     fn handle_scan_diff_should_return_0_with_configurable_threshold() {
-        let dir = std::env::temp_dir().join(format!(
-            "uasset_lens_scan_diff_thresh_{}",
-            std::process::id()
-        ));
-        std::fs::create_dir_all(&dir).unwrap();
+        let (dir, db_path) = test_db_in_tempdir("scan_diff_thresh");
 
         // Write config with non-default threshold
         std::fs::write(
@@ -933,8 +902,6 @@ mod tests {
             "[diff]\nsize_increase_threshold_pct = 25\n",
         )
         .unwrap();
-
-        let db_path = dir.join("test.db");
         handle_scan(
             &dir,
             false,
@@ -969,10 +936,7 @@ mod tests {
 
     #[test]
     fn handle_scan_diff_github_actions_should_return_0_when_no_regressions() {
-        let dir =
-            std::env::temp_dir().join(format!("uasset_lens_scan_diff_ga_{}", std::process::id()));
-        std::fs::create_dir_all(&dir).unwrap();
-        let db_path = dir.join("test.db");
+        let (dir, db_path) = test_db_in_tempdir("scan_diff_ga");
 
         handle_scan(
             &dir,
@@ -1155,10 +1119,7 @@ mod tests {
 
     #[test]
     fn handle_scan_should_save_baseline_when_flag_provided() {
-        let dir =
-            std::env::temp_dir().join(format!("uasset_lens_scan_baseline_{}", std::process::id()));
-        std::fs::create_dir_all(&dir).unwrap();
-        let db_path = dir.join("test.db");
+        let (dir, db_path) = test_db_in_tempdir("scan_baseline");
 
         let result = handle_scan(
             &dir,
@@ -1182,10 +1143,7 @@ mod tests {
 
     #[test]
     fn handle_scan_diff_from_baseline_should_return_0_when_no_regressions() {
-        let dir =
-            std::env::temp_dir().join(format!("uasset_lens_scan_diff_from_{}", std::process::id()));
-        std::fs::create_dir_all(&dir).unwrap();
-        let db_path = dir.join("test.db");
+        let (dir, db_path) = test_db_in_tempdir("scan_diff_from");
 
         handle_scan(
             &dir,
@@ -1217,12 +1175,7 @@ mod tests {
 
     #[test]
     fn handle_scan_diff_from_missing_baseline_should_return_error() {
-        let dir = std::env::temp_dir().join(format!(
-            "uasset_lens_scan_no_baseline_{}",
-            std::process::id()
-        ));
-        std::fs::create_dir_all(&dir).unwrap();
-        let db_path = dir.join("test.db");
+        let (dir, db_path) = test_db_in_tempdir("scan_no_baseline");
 
         handle_scan(
             &dir,

@@ -58,16 +58,13 @@ pub fn handle_redirectors(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::commands::make_meta;
+    use crate::commands::{make_meta, test_db_in_tempdir};
     use shared::AssetType;
 
     #[test]
     fn handle_redirectors_should_return_err_when_db_does_not_exist() {
-        let db_path = std::env::temp_dir().join(format!(
-            "uasset_lens_redir26_missing_{}.db",
-            std::process::id()
-        ));
-        let _ = std::fs::remove_file(&db_path);
+        let (dir, db_path) = test_db_in_tempdir("redir26_missing");
+        let _ = std::fs::remove_dir_all(&dir);
 
         let result = handle_redirectors(Path::new("/proj"), &db_path, &FormatKind::Text);
         assert!(result.is_err(), "missing DB should return an error");
@@ -75,10 +72,7 @@ mod tests {
 
     #[test]
     fn handle_redirectors_should_return_0_when_no_redirectors_found() {
-        let dir =
-            std::env::temp_dir().join(format!("uasset_lens_redir26_empty_{}", std::process::id()));
-        std::fs::create_dir_all(&dir).unwrap();
-        let db_path = dir.join("test.db");
+        let (dir, db_path) = test_db_in_tempdir("redir26_empty");
 
         {
             let mut db = asset_db::AssetDb::open(&db_path).unwrap();
@@ -99,10 +93,7 @@ mod tests {
 
     #[test]
     fn handle_redirectors_should_return_1_when_redirectors_found() {
-        let dir =
-            std::env::temp_dir().join(format!("uasset_lens_redir26_found_{}", std::process::id()));
-        std::fs::create_dir_all(&dir).unwrap();
-        let db_path = dir.join("test.db");
+        let (dir, db_path) = test_db_in_tempdir("redir26_found");
 
         {
             let mut db = asset_db::AssetDb::open(&db_path).unwrap();
@@ -123,12 +114,7 @@ mod tests {
 
     #[test]
     fn handle_redirectors_json_should_return_0_when_no_redirectors_found() {
-        let dir = std::env::temp_dir().join(format!(
-            "uasset_lens_redir26_json_empty_{}",
-            std::process::id()
-        ));
-        std::fs::create_dir_all(&dir).unwrap();
-        let db_path = dir.join("test.db");
+        let (dir, db_path) = test_db_in_tempdir("redir26_json_empty");
         asset_db::AssetDb::open(&db_path).unwrap();
 
         let result = handle_redirectors(&dir, &db_path, &FormatKind::Json).unwrap();
@@ -138,12 +124,7 @@ mod tests {
 
     #[test]
     fn handle_redirectors_json_should_return_1_when_redirectors_found() {
-        let dir = std::env::temp_dir().join(format!(
-            "uasset_lens_redir26_json_found_{}",
-            std::process::id()
-        ));
-        std::fs::create_dir_all(&dir).unwrap();
-        let db_path = dir.join("test.db");
+        let (dir, db_path) = test_db_in_tempdir("redir26_json_found");
 
         {
             let mut db = asset_db::AssetDb::open(&db_path).unwrap();

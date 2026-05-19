@@ -75,6 +75,7 @@ fn resolve_content_root_for_game_path(override_path: Option<&Path>) -> anyhow::R
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::commands::test_db_in_tempdir;
 
     fn make_content_dir(base: &Path) -> PathBuf {
         let content = base.join("Content");
@@ -84,8 +85,7 @@ mod tests {
 
     #[test]
     fn handle_path_conv_should_convert_fs_path_to_game_path() {
-        let dir =
-            std::env::temp_dir().join(format!("uasset_path_conv_fs2game_{}", std::process::id()));
+        let (dir, _) = test_db_in_tempdir("path_conv_fs2game");
         let content = make_content_dir(&dir);
         let chars = content.join("Characters");
         std::fs::create_dir_all(&chars).unwrap();
@@ -104,8 +104,7 @@ mod tests {
 
     #[test]
     fn handle_path_conv_should_convert_game_path_to_fs_path() {
-        let dir =
-            std::env::temp_dir().join(format!("uasset_path_conv_game2fs_{}", std::process::id()));
+        let (dir, _) = test_db_in_tempdir("path_conv_game2fs");
         let content = make_content_dir(&dir);
 
         let result = handle_path_conv(
@@ -120,8 +119,7 @@ mod tests {
 
     #[test]
     fn handle_path_conv_to_file_flag_should_force_game_to_fs_conversion() {
-        let dir =
-            std::env::temp_dir().join(format!("uasset_path_conv_to_file_{}", std::process::id()));
+        let (dir, _) = test_db_in_tempdir("path_conv_to_file");
         let content = make_content_dir(&dir);
 
         let result = handle_path_conv(
@@ -136,8 +134,7 @@ mod tests {
 
     #[test]
     fn handle_path_conv_should_return_err_when_fs_path_outside_content_root() {
-        let dir =
-            std::env::temp_dir().join(format!("uasset_path_conv_outside_{}", std::process::id()));
+        let (dir, _) = test_db_in_tempdir("path_conv_outside");
         let content = make_content_dir(&dir);
         let other = dir.join("Other");
         std::fs::create_dir_all(&other).unwrap();
@@ -156,8 +153,7 @@ mod tests {
 
     #[test]
     fn handle_path_conv_should_auto_detect_content_root_from_fs_path() {
-        let dir =
-            std::env::temp_dir().join(format!("uasset_path_conv_auto_{}", std::process::id()));
+        let (dir, _) = test_db_in_tempdir("path_conv_auto");
         let content = make_content_dir(&dir);
         let chars = content.join("Characters");
         std::fs::create_dir_all(&chars).unwrap();
@@ -182,8 +178,7 @@ mod tests {
 
     #[test]
     fn handle_path_conv_json_should_succeed() {
-        let dir =
-            std::env::temp_dir().join(format!("uasset_path_conv_json_{}", std::process::id()));
+        let (dir, _) = test_db_in_tempdir("path_conv_json");
         let content = make_content_dir(&dir);
         let chars = content.join("Characters");
         std::fs::create_dir_all(&chars).unwrap();

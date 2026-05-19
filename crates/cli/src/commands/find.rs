@@ -140,16 +140,13 @@ pub fn handle_find(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::commands::make_meta;
+    use crate::commands::{make_meta, test_db_in_tempdir};
     use shared::{AssetPath, AssetType};
 
     #[test]
     fn handle_find_should_return_err_when_db_does_not_exist() {
-        let db_path = std::env::temp_dir().join(format!(
-            "uasset_lens_find28_missing_{}.db",
-            std::process::id()
-        ));
-        let _ = std::fs::remove_file(&db_path);
+        let (dir, db_path) = test_db_in_tempdir("find28_missing");
+        let _ = std::fs::remove_dir_all(&dir);
 
         let result = handle_find(
             Path::new("/proj"),
@@ -169,10 +166,7 @@ mod tests {
 
     #[test]
     fn handle_find_should_return_0_when_no_results_found() {
-        let dir =
-            std::env::temp_dir().join(format!("uasset_lens_find28_empty_{}", std::process::id()));
-        std::fs::create_dir_all(&dir).unwrap();
-        let db_path = dir.join("test.db");
+        let (dir, db_path) = test_db_in_tempdir("find28_empty");
         asset_db::AssetDb::open(&db_path).unwrap();
 
         let result = handle_find(
@@ -195,10 +189,7 @@ mod tests {
 
     #[test]
     fn handle_find_should_return_0_when_results_found() {
-        let dir =
-            std::env::temp_dir().join(format!("uasset_lens_find28_found_{}", std::process::id()));
-        std::fs::create_dir_all(&dir).unwrap();
-        let db_path = dir.join("test.db");
+        let (dir, db_path) = test_db_in_tempdir("find28_found");
 
         {
             let mut db = asset_db::AssetDb::open(&db_path).unwrap();
@@ -232,10 +223,7 @@ mod tests {
 
     #[test]
     fn handle_find_should_filter_by_asset_type() {
-        let dir =
-            std::env::temp_dir().join(format!("uasset_lens_find28_type_{}", std::process::id()));
-        std::fs::create_dir_all(&dir).unwrap();
-        let db_path = dir.join("test.db");
+        let (dir, db_path) = test_db_in_tempdir("find28_type");
 
         {
             let mut db = asset_db::AssetDb::open(&db_path).unwrap();
@@ -278,10 +266,7 @@ mod tests {
 
     #[test]
     fn handle_find_should_filter_unreferenced_only() {
-        let dir =
-            std::env::temp_dir().join(format!("uasset_lens_find28_unref_{}", std::process::id()));
-        std::fs::create_dir_all(&dir).unwrap();
-        let db_path = dir.join("test.db");
+        let (dir, db_path) = test_db_in_tempdir("find28_unref");
 
         {
             let mut db = asset_db::AssetDb::open(&db_path).unwrap();
@@ -333,10 +318,7 @@ mod tests {
 
     #[test]
     fn handle_find_json_should_return_0_with_results() {
-        let dir =
-            std::env::temp_dir().join(format!("uasset_lens_find28_json_{}", std::process::id()));
-        std::fs::create_dir_all(&dir).unwrap();
-        let db_path = dir.join("test.db");
+        let (dir, db_path) = test_db_in_tempdir("find28_json");
 
         {
             let mut db = asset_db::AssetDb::open(&db_path).unwrap();
@@ -372,12 +354,7 @@ mod tests {
     // referenced assets (in_degree >= 1) must be excluded; orphans must be included.
     #[test]
     fn find_unreferenced_filter_should_exclude_referenced_assets_and_include_orphans() {
-        let dir = std::env::temp_dir().join(format!(
-            "uasset_lens_find28_unref_logic_{}",
-            std::process::id()
-        ));
-        std::fs::create_dir_all(&dir).unwrap();
-        let db_path = dir.join("test.db");
+        let (dir, db_path) = test_db_in_tempdir("find28_unref_logic");
 
         {
             let mut db = asset_db::AssetDb::open(&db_path).unwrap();
@@ -431,10 +408,7 @@ mod tests {
 
     #[test]
     fn handle_find_should_return_0_when_filtering_by_larger_than() {
-        let dir =
-            std::env::temp_dir().join(format!("uasset_lens_find28_larger_{}", std::process::id()));
-        std::fs::create_dir_all(&dir).unwrap();
-        let db_path = dir.join("test.db");
+        let (dir, db_path) = test_db_in_tempdir("find28_larger");
 
         {
             let mut db = asset_db::AssetDb::open(&db_path).unwrap();
@@ -477,10 +451,7 @@ mod tests {
 
     #[test]
     fn handle_find_should_return_0_when_filtering_by_smaller_than() {
-        let dir =
-            std::env::temp_dir().join(format!("uasset_lens_find28_smaller_{}", std::process::id()));
-        std::fs::create_dir_all(&dir).unwrap();
-        let db_path = dir.join("test.db");
+        let (dir, db_path) = test_db_in_tempdir("find28_smaller");
 
         {
             let mut db = asset_db::AssetDb::open(&db_path).unwrap();
@@ -523,10 +494,7 @@ mod tests {
 
     #[test]
     fn handle_find_should_return_0_when_filtering_by_path_pattern() {
-        let dir =
-            std::env::temp_dir().join(format!("uasset_lens_find28_path_{}", std::process::id()));
-        std::fs::create_dir_all(&dir).unwrap();
-        let db_path = dir.join("test.db");
+        let (dir, db_path) = test_db_in_tempdir("find28_path");
 
         {
             let mut db = asset_db::AssetDb::open(&db_path).unwrap();
@@ -569,10 +537,7 @@ mod tests {
 
     #[test]
     fn handle_find_sort_by_size_should_return_0_and_order_results_largest_first() {
-        let dir =
-            std::env::temp_dir().join(format!("uasset_lens_find28_sort_{}", std::process::id()));
-        std::fs::create_dir_all(&dir).unwrap();
-        let db_path = dir.join("test.db");
+        let (dir, db_path) = test_db_in_tempdir("find28_sort");
 
         {
             let mut db = asset_db::AssetDb::open(&db_path).unwrap();
@@ -636,10 +601,7 @@ mod tests {
 
     #[test]
     fn handle_find_refs_should_return_0_filtering_to_referencing_assets() {
-        let dir =
-            std::env::temp_dir().join(format!("uasset_lens_find28_refs_{}", std::process::id()));
-        std::fs::create_dir_all(&dir).unwrap();
-        let db_path = dir.join("test.db");
+        let (dir, db_path) = test_db_in_tempdir("find28_refs");
 
         {
             let mut db = asset_db::AssetDb::open(&db_path).unwrap();
@@ -720,10 +682,7 @@ mod tests {
 
     #[test]
     fn handle_find_deps_should_return_0_filtering_to_dependency_assets() {
-        let dir =
-            std::env::temp_dir().join(format!("uasset_lens_find28_deps_{}", std::process::id()));
-        std::fs::create_dir_all(&dir).unwrap();
-        let db_path = dir.join("test.db");
+        let (dir, db_path) = test_db_in_tempdir("find28_deps");
 
         {
             let mut db = asset_db::AssetDb::open(&db_path).unwrap();
@@ -805,12 +764,7 @@ mod tests {
 
     #[test]
     fn handle_find_json_should_include_total_count_and_total_bytes() {
-        let dir = std::env::temp_dir().join(format!(
-            "uasset_lens_find28_json_totals_{}",
-            std::process::id()
-        ));
-        std::fs::create_dir_all(&dir).unwrap();
-        let db_path = dir.join("test.db");
+        let (dir, db_path) = test_db_in_tempdir("find28_json_totals");
 
         {
             let mut db = asset_db::AssetDb::open(&db_path).unwrap();

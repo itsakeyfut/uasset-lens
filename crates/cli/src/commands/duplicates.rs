@@ -111,25 +111,20 @@ pub fn handle_duplicates(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::commands::test_db_in_tempdir;
     use shared::AssetType;
 
     #[test]
     fn handle_duplicates_should_return_err_when_db_does_not_exist() {
-        let path = std::env::temp_dir().join(format!(
-            "uasset_lens_dupes_missing_{}.db",
-            std::process::id()
-        ));
-        let _ = std::fs::remove_file(&path);
-        let result = handle_duplicates(std::path::Path::new("."), &path, &FormatKind::Text);
+        let (dir, db_path) = test_db_in_tempdir("dupes_missing");
+        let _ = std::fs::remove_dir_all(&dir);
+        let result = handle_duplicates(std::path::Path::new("."), &db_path, &FormatKind::Text);
         assert!(result.is_err());
     }
 
     #[test]
     fn handle_duplicates_should_return_0_when_no_assets_in_db() {
-        let dir =
-            std::env::temp_dir().join(format!("uasset_lens_dupes_empty_{}", std::process::id()));
-        std::fs::create_dir_all(&dir).unwrap();
-        let db_path = dir.join("test.db");
+        let (dir, db_path) = test_db_in_tempdir("dupes_empty");
         asset_db::AssetDb::open(&db_path).unwrap();
 
         let result = handle_duplicates(&dir, &db_path, &FormatKind::Text).unwrap();
@@ -140,10 +135,7 @@ mod tests {
 
     #[test]
     fn handle_duplicates_should_return_0_when_all_assets_are_unique() {
-        let dir =
-            std::env::temp_dir().join(format!("uasset_lens_dupes_unique_{}", std::process::id()));
-        std::fs::create_dir_all(&dir).unwrap();
-        let db_path = dir.join("test.db");
+        let (dir, db_path) = test_db_in_tempdir("dupes_unique");
 
         {
             let mut db = asset_db::AssetDb::open(&db_path).unwrap();
@@ -168,10 +160,7 @@ mod tests {
 
     #[test]
     fn handle_duplicates_should_return_1_when_same_name_duplicates_found() {
-        let dir =
-            std::env::temp_dir().join(format!("uasset_lens_dupes_name_{}", std::process::id()));
-        std::fs::create_dir_all(&dir).unwrap();
-        let db_path = dir.join("test.db");
+        let (dir, db_path) = test_db_in_tempdir("dupes_name");
 
         {
             let mut db = asset_db::AssetDb::open(&db_path).unwrap();
@@ -196,10 +185,7 @@ mod tests {
 
     #[test]
     fn handle_duplicates_should_return_1_when_texture_duplicates_found() {
-        let dir =
-            std::env::temp_dir().join(format!("uasset_lens_dupes_tex_{}", std::process::id()));
-        std::fs::create_dir_all(&dir).unwrap();
-        let db_path = dir.join("test.db");
+        let (dir, db_path) = test_db_in_tempdir("dupes_tex");
 
         {
             let mut db = asset_db::AssetDb::open(&db_path).unwrap();
@@ -224,10 +210,7 @@ mod tests {
 
     #[test]
     fn handle_duplicates_json_should_return_1_when_duplicates_found() {
-        let dir =
-            std::env::temp_dir().join(format!("uasset_lens_dupes_json_{}", std::process::id()));
-        std::fs::create_dir_all(&dir).unwrap();
-        let db_path = dir.join("test.db");
+        let (dir, db_path) = test_db_in_tempdir("dupes_json");
 
         {
             let mut db = asset_db::AssetDb::open(&db_path).unwrap();
@@ -252,10 +235,7 @@ mod tests {
 
     #[test]
     fn handle_duplicates_should_label_texture_dup_not_same_name_when_same_name_and_size() {
-        let dir =
-            std::env::temp_dir().join(format!("uasset_lens_dupes_dedup_{}", std::process::id()));
-        std::fs::create_dir_all(&dir).unwrap();
-        let db_path = dir.join("test.db");
+        let (dir, db_path) = test_db_in_tempdir("dupes_dedup");
 
         {
             let mut db = asset_db::AssetDb::open(&db_path).unwrap();

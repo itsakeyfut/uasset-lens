@@ -191,7 +191,7 @@ fn format_dead_summary(count: usize, total_bytes: u64) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::commands::make_meta;
+    use crate::commands::{make_meta, test_db_in_tempdir};
     use shared::{AssetPath, AssetType};
 
     #[test]
@@ -241,11 +241,8 @@ mod tests {
 
     #[test]
     fn handle_dead_assets_should_return_err_when_db_does_not_exist() {
-        let db_path = std::env::temp_dir().join(format!(
-            "uasset_lens_dead22_missing_{}.db",
-            std::process::id()
-        ));
-        let _ = std::fs::remove_file(&db_path);
+        let (dir, db_path) = test_db_in_tempdir("dead22_missing");
+        let _ = std::fs::remove_dir_all(&dir);
 
         let result = handle_dead_assets(
             Path::new("/proj"),
@@ -262,10 +259,7 @@ mod tests {
 
     #[test]
     fn handle_dead_assets_should_return_0_when_db_has_no_assets() {
-        let dir =
-            std::env::temp_dir().join(format!("uasset_lens_dead22_empty_{}", std::process::id()));
-        std::fs::create_dir_all(&dir).unwrap();
-        let db_path = dir.join("test.db");
+        let (dir, db_path) = test_db_in_tempdir("dead22_empty");
         asset_db::AssetDb::open(&db_path).unwrap();
 
         let result = handle_dead_assets(
@@ -285,10 +279,7 @@ mod tests {
 
     #[test]
     fn handle_dead_assets_should_return_0_when_all_nodes_form_cycle() {
-        let dir =
-            std::env::temp_dir().join(format!("uasset_lens_dead22_cycle_{}", std::process::id()));
-        std::fs::create_dir_all(&dir).unwrap();
-        let db_path = dir.join("test.db");
+        let (dir, db_path) = test_db_in_tempdir("dead22_cycle");
 
         {
             let mut db = asset_db::AssetDb::open(&db_path).unwrap();
@@ -329,10 +320,7 @@ mod tests {
 
     #[test]
     fn handle_dead_assets_should_return_1_when_unreferenced_asset_exists() {
-        let dir =
-            std::env::temp_dir().join(format!("uasset_lens_dead22_found_{}", std::process::id()));
-        std::fs::create_dir_all(&dir).unwrap();
-        let db_path = dir.join("test.db");
+        let (dir, db_path) = test_db_in_tempdir("dead22_found");
 
         {
             let mut db = asset_db::AssetDb::open(&db_path).unwrap();
@@ -363,12 +351,7 @@ mod tests {
 
     #[test]
     fn handle_dead_assets_type_filter_should_return_0_when_no_type_match() {
-        let dir = std::env::temp_dir().join(format!(
-            "uasset_lens_dead22_filter_miss_{}",
-            std::process::id()
-        ));
-        std::fs::create_dir_all(&dir).unwrap();
-        let db_path = dir.join("test.db");
+        let (dir, db_path) = test_db_in_tempdir("dead22_filter_miss");
 
         {
             let mut db = asset_db::AssetDb::open(&db_path).unwrap();
@@ -402,12 +385,7 @@ mod tests {
 
     #[test]
     fn handle_dead_assets_type_filter_should_return_1_when_type_matches() {
-        let dir = std::env::temp_dir().join(format!(
-            "uasset_lens_dead22_filter_hit_{}",
-            std::process::id()
-        ));
-        std::fs::create_dir_all(&dir).unwrap();
-        let db_path = dir.join("test.db");
+        let (dir, db_path) = test_db_in_tempdir("dead22_filter_hit");
 
         {
             let mut db = asset_db::AssetDb::open(&db_path).unwrap();
@@ -447,12 +425,7 @@ mod tests {
 
     #[test]
     fn handle_dead_assets_json_should_return_0_when_no_dead_assets() {
-        let dir = std::env::temp_dir().join(format!(
-            "uasset_lens_dead22_json_empty_{}",
-            std::process::id()
-        ));
-        std::fs::create_dir_all(&dir).unwrap();
-        let db_path = dir.join("test.db");
+        let (dir, db_path) = test_db_in_tempdir("dead22_json_empty");
         asset_db::AssetDb::open(&db_path).unwrap();
 
         let result = handle_dead_assets(
@@ -472,12 +445,7 @@ mod tests {
 
     #[test]
     fn handle_dead_assets_json_should_return_1_when_dead_assets_exist() {
-        let dir = std::env::temp_dir().join(format!(
-            "uasset_lens_dead22_json_found_{}",
-            std::process::id()
-        ));
-        std::fs::create_dir_all(&dir).unwrap();
-        let db_path = dir.join("test.db");
+        let (dir, db_path) = test_db_in_tempdir("dead22_json_found");
 
         {
             let mut db = asset_db::AssetDb::open(&db_path).unwrap();
@@ -508,12 +476,7 @@ mod tests {
 
     #[test]
     fn handle_dead_assets_sort_by_size_should_return_1_when_dead_assets_exist() {
-        let dir = std::env::temp_dir().join(format!(
-            "uasset_lens_dead22_sort_size_{}",
-            std::process::id()
-        ));
-        std::fs::create_dir_all(&dir).unwrap();
-        let db_path = dir.join("test.db");
+        let (dir, db_path) = test_db_in_tempdir("dead22_sort_size");
 
         {
             let mut db = asset_db::AssetDb::open(&db_path).unwrap();
@@ -585,12 +548,7 @@ mod tests {
 
     #[test]
     fn handle_dead_assets_min_size_should_exclude_assets_below_threshold() {
-        let dir = std::env::temp_dir().join(format!(
-            "uasset_lens_dead22_min_size_hit_{}",
-            std::process::id()
-        ));
-        std::fs::create_dir_all(&dir).unwrap();
-        let db_path = dir.join("test.db");
+        let (dir, db_path) = test_db_in_tempdir("dead22_min_size_hit");
 
         {
             let mut db = asset_db::AssetDb::open(&db_path).unwrap();
@@ -630,12 +588,7 @@ mod tests {
 
     #[test]
     fn handle_dead_assets_min_size_should_return_0_when_no_assets_meet_threshold() {
-        let dir = std::env::temp_dir().join(format!(
-            "uasset_lens_dead22_min_size_miss_{}",
-            std::process::id()
-        ));
-        std::fs::create_dir_all(&dir).unwrap();
-        let db_path = dir.join("test.db");
+        let (dir, db_path) = test_db_in_tempdir("dead22_min_size_miss");
 
         {
             let mut db = asset_db::AssetDb::open(&db_path).unwrap();
@@ -666,12 +619,7 @@ mod tests {
 
     #[test]
     fn handle_dead_assets_exclude_pattern_should_exclude_matching_assets() {
-        let dir = std::env::temp_dir().join(format!(
-            "uasset_lens_dead22_excl_hit_{}",
-            std::process::id()
-        ));
-        std::fs::create_dir_all(&dir).unwrap();
-        let db_path = dir.join("test.db");
+        let (dir, db_path) = test_db_in_tempdir("dead22_excl_hit");
 
         {
             let mut db = asset_db::AssetDb::open(&db_path).unwrap();
@@ -712,12 +660,7 @@ mod tests {
 
     #[test]
     fn handle_dead_assets_exclude_pattern_should_return_0_when_all_match() {
-        let dir = std::env::temp_dir().join(format!(
-            "uasset_lens_dead22_excl_all_{}",
-            std::process::id()
-        ));
-        std::fs::create_dir_all(&dir).unwrap();
-        let db_path = dir.join("test.db");
+        let (dir, db_path) = test_db_in_tempdir("dead22_excl_all");
 
         {
             let mut db = asset_db::AssetDb::open(&db_path).unwrap();
@@ -769,12 +712,7 @@ mod tests {
 
     #[test]
     fn handle_dead_assets_group_type_should_aggregate_by_asset_type() {
-        let dir = std::env::temp_dir().join(format!(
-            "uasset_lens_dead22_group_type_{}",
-            std::process::id()
-        ));
-        std::fs::create_dir_all(&dir).unwrap();
-        let db_path = dir.join("test.db");
+        let (dir, db_path) = test_db_in_tempdir("dead22_group_type");
 
         {
             let mut db = asset_db::AssetDb::open(&db_path).unwrap();
@@ -821,12 +759,7 @@ mod tests {
 
     #[test]
     fn handle_dead_assets_group_dir_should_aggregate_by_directory() {
-        let dir = std::env::temp_dir().join(format!(
-            "uasset_lens_dead22_group_dir_{}",
-            std::process::id()
-        ));
-        std::fs::create_dir_all(&dir).unwrap();
-        let db_path = dir.join("test.db");
+        let (dir, db_path) = test_db_in_tempdir("dead22_group_dir");
 
         {
             let mut db = asset_db::AssetDb::open(&db_path).unwrap();
@@ -866,12 +799,7 @@ mod tests {
 
     #[test]
     fn handle_dead_assets_group_type_json_should_return_1_when_dead_assets_exist() {
-        let dir = std::env::temp_dir().join(format!(
-            "uasset_lens_dead22_group_json_{}",
-            std::process::id()
-        ));
-        std::fs::create_dir_all(&dir).unwrap();
-        let db_path = dir.join("test.db");
+        let (dir, db_path) = test_db_in_tempdir("dead22_group_json");
 
         {
             let mut db = asset_db::AssetDb::open(&db_path).unwrap();
@@ -902,12 +830,7 @@ mod tests {
 
     #[test]
     fn handle_dead_assets_group_should_return_0_when_no_dead_assets() {
-        let dir = std::env::temp_dir().join(format!(
-            "uasset_lens_dead22_group_empty_{}",
-            std::process::id()
-        ));
-        std::fs::create_dir_all(&dir).unwrap();
-        let db_path = dir.join("test.db");
+        let (dir, db_path) = test_db_in_tempdir("dead22_group_empty");
         asset_db::AssetDb::open(&db_path).unwrap();
 
         let result = handle_dead_assets(
@@ -927,12 +850,7 @@ mod tests {
 
     #[test]
     fn handle_dead_assets_exclude_pattern_multiple_patterns_should_or_combine() {
-        let dir = std::env::temp_dir().join(format!(
-            "uasset_lens_dead22_excl_multi_{}",
-            std::process::id()
-        ));
-        std::fs::create_dir_all(&dir).unwrap();
-        let db_path = dir.join("test.db");
+        let (dir, db_path) = test_db_in_tempdir("dead22_excl_multi");
 
         {
             let mut db = asset_db::AssetDb::open(&db_path).unwrap();

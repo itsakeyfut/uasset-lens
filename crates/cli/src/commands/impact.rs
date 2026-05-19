@@ -202,16 +202,13 @@ fn print_tree_node(node: &TreeNode, prefix: &str, is_last: bool, parent_short: O
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::commands::make_meta;
+    use crate::commands::{make_meta, test_db_in_tempdir};
     use shared::{AssetPath, AssetType};
 
     #[test]
     fn handle_impact_should_return_err_when_db_does_not_exist() {
-        let db_path = std::env::temp_dir().join(format!(
-            "uasset_lens_impact23_missing_{}.db",
-            std::process::id()
-        ));
-        let _ = std::fs::remove_file(&db_path);
+        let (dir, db_path) = test_db_in_tempdir("impact23_missing");
+        let _ = std::fs::remove_dir_all(&dir);
 
         let result = handle_impact(
             Path::new("/Game/Target"),
@@ -224,12 +221,7 @@ mod tests {
 
     #[test]
     fn handle_impact_should_return_err_when_target_not_in_graph() {
-        let dir = std::env::temp_dir().join(format!(
-            "uasset_lens_impact23_notfound_{}",
-            std::process::id()
-        ));
-        std::fs::create_dir_all(&dir).unwrap();
-        let db_path = dir.join("test.db");
+        let (dir, db_path) = test_db_in_tempdir("impact23_notfound");
         asset_db::AssetDb::open(&db_path).unwrap();
 
         let result = handle_impact(
@@ -247,12 +239,7 @@ mod tests {
 
     #[test]
     fn handle_impact_should_return_0_when_no_referencing_assets() {
-        let dir = std::env::temp_dir().join(format!(
-            "uasset_lens_impact23_no_refs_{}",
-            std::process::id()
-        ));
-        std::fs::create_dir_all(&dir).unwrap();
-        let db_path = dir.join("test.db");
+        let (dir, db_path) = test_db_in_tempdir("impact23_no_refs");
 
         {
             let mut db = asset_db::AssetDb::open(&db_path).unwrap();
@@ -279,12 +266,7 @@ mod tests {
 
     #[test]
     fn handle_impact_should_return_1_when_direct_references_exist() {
-        let dir = std::env::temp_dir().join(format!(
-            "uasset_lens_impact23_direct_{}",
-            std::process::id()
-        ));
-        std::fs::create_dir_all(&dir).unwrap();
-        let db_path = dir.join("test.db");
+        let (dir, db_path) = test_db_in_tempdir("impact23_direct");
 
         {
             let mut db = asset_db::AssetDb::open(&db_path).unwrap();
@@ -321,12 +303,7 @@ mod tests {
 
     #[test]
     fn handle_impact_should_correctly_separate_direct_and_transitive() {
-        let dir = std::env::temp_dir().join(format!(
-            "uasset_lens_impact23_transitive_{}",
-            std::process::id()
-        ));
-        std::fs::create_dir_all(&dir).unwrap();
-        let db_path = dir.join("test.db");
+        let (dir, db_path) = test_db_in_tempdir("impact23_transitive");
 
         {
             let mut db = asset_db::AssetDb::open(&db_path).unwrap();
@@ -370,12 +347,7 @@ mod tests {
 
     #[test]
     fn handle_impact_json_should_return_0_when_no_impact() {
-        let dir = std::env::temp_dir().join(format!(
-            "uasset_lens_impact23_json_empty_{}",
-            std::process::id()
-        ));
-        std::fs::create_dir_all(&dir).unwrap();
-        let db_path = dir.join("test.db");
+        let (dir, db_path) = test_db_in_tempdir("impact23_json_empty");
 
         {
             let mut db = asset_db::AssetDb::open(&db_path).unwrap();
@@ -402,12 +374,7 @@ mod tests {
 
     #[test]
     fn handle_impact_json_should_return_1_when_impact_exists() {
-        let dir = std::env::temp_dir().join(format!(
-            "uasset_lens_impact23_json_found_{}",
-            std::process::id()
-        ));
-        std::fs::create_dir_all(&dir).unwrap();
-        let db_path = dir.join("test.db");
+        let (dir, db_path) = test_db_in_tempdir("impact23_json_found");
 
         {
             let mut db = asset_db::AssetDb::open(&db_path).unwrap();
@@ -443,10 +410,7 @@ mod tests {
 
     #[test]
     fn find_project_dir_should_find_uasset_lens_dir_in_ancestor() {
-        let dir = std::env::temp_dir().join(format!(
-            "uasset_lens_impact23_projdir_{}",
-            std::process::id()
-        ));
+        let (dir, _) = test_db_in_tempdir("impact23_projdir");
         let sub = dir.join("Content").join("Characters");
         std::fs::create_dir_all(&sub).unwrap();
         std::fs::create_dir_all(dir.join(".uasset-lens")).unwrap();
@@ -472,12 +436,7 @@ mod tests {
 
     #[test]
     fn handle_impact_tree_should_return_0_when_no_impact() {
-        let dir = std::env::temp_dir().join(format!(
-            "uasset_lens_impact163_tree_empty_{}",
-            std::process::id()
-        ));
-        std::fs::create_dir_all(&dir).unwrap();
-        let db_path = dir.join("test.db");
+        let (dir, db_path) = test_db_in_tempdir("impact163_tree_empty");
 
         {
             let mut db = asset_db::AssetDb::open(&db_path).unwrap();
@@ -504,12 +463,7 @@ mod tests {
 
     #[test]
     fn handle_impact_tree_should_return_1_when_direct_references_exist() {
-        let dir = std::env::temp_dir().join(format!(
-            "uasset_lens_impact163_tree_direct_{}",
-            std::process::id()
-        ));
-        std::fs::create_dir_all(&dir).unwrap();
-        let db_path = dir.join("test.db");
+        let (dir, db_path) = test_db_in_tempdir("impact163_tree_direct");
 
         {
             let mut db = asset_db::AssetDb::open(&db_path).unwrap();
@@ -545,12 +499,7 @@ mod tests {
 
     #[test]
     fn handle_impact_tree_json_should_return_1_when_reference_exists() {
-        let dir = std::env::temp_dir().join(format!(
-            "uasset_lens_impact163_tree_json_{}",
-            std::process::id()
-        ));
-        std::fs::create_dir_all(&dir).unwrap();
-        let db_path = dir.join("test.db");
+        let (dir, db_path) = test_db_in_tempdir("impact163_tree_json");
 
         {
             let mut db = asset_db::AssetDb::open(&db_path).unwrap();
@@ -586,12 +535,7 @@ mod tests {
 
     #[test]
     fn handle_impact_tree_should_not_infinite_loop_on_cycle() {
-        let dir = std::env::temp_dir().join(format!(
-            "uasset_lens_impact163_tree_cycle_{}",
-            std::process::id()
-        ));
-        std::fs::create_dir_all(&dir).unwrap();
-        let db_path = dir.join("test.db");
+        let (dir, db_path) = test_db_in_tempdir("impact163_tree_cycle");
 
         {
             let mut db = asset_db::AssetDb::open(&db_path).unwrap();
