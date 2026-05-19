@@ -1,7 +1,6 @@
 #[derive(Debug, Clone, Copy)]
 pub struct FPackageVersion {
     pub legacy_version: i32,
-    pub file_version_ue4: u32,
     pub file_version_ue5: u32,
 }
 
@@ -19,7 +18,6 @@ mod tests {
     fn is_ue5_should_return_true_for_ue5_package() {
         let v = FPackageVersion {
             legacy_version: -8,
-            file_version_ue4: 0,
             file_version_ue5: 1005,
         };
         assert!(v.is_ue5());
@@ -29,7 +27,6 @@ mod tests {
     fn is_ue5_should_return_false_when_legacy_version_is_not_minus_8() {
         let v = FPackageVersion {
             legacy_version: -7,
-            file_version_ue4: 0,
             file_version_ue5: 1005,
         };
         assert!(!v.is_ue5());
@@ -39,7 +36,6 @@ mod tests {
     fn is_ue5_should_return_false_when_file_version_ue5_is_zero() {
         let v = FPackageVersion {
             legacy_version: -8,
-            file_version_ue4: 0,
             file_version_ue5: 0,
         };
         assert!(!v.is_ue5());
