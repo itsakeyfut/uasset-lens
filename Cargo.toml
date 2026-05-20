@@ -20,11 +20,15 @@ members = [
 ]
 
 [workspace.package]
-version    = "0.1.0"
-edition    = "2024"
-authors    = ["itsakeyfut"]
-license    = "MIT"
-repository = "https://github.com/itsakeyfut/uasset-lens"
+version     = "0.1.0"
+edition     = "2024"
+authors     = ["itsakeyfut"]
+license     = "MIT"
+repository  = "https://github.com/itsakeyfut/uasset-lens"
+homepage    = "https://github.com/itsakeyfut/uasset-lens"
+description = "Fast, CLI-first static analyzer for Unreal Engine 5 .uasset / .umap files"
+keywords    = ["unreal-engine", "uasset", "static-analysis", "game-development"]
+categories  = ["development-tools", "command-line-utilities"]
 
 [workspace.dependencies]
 thiserror  = "2.0.18"

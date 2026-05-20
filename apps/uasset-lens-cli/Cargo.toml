@@ -1,8 +1,12 @@
 [package]
-name    = "uasset-lens-cli"
-publish = false
-version.workspace = true
-edition.workspace = true
+name                = "uasset-lens-cli"
+publish             = false
+version.workspace   = true
+edition.workspace   = true
+description.workspace = true
+homepage.workspace  = true
+keywords.workspace  = true
+categories.workspace = true
 
 [[bin]]
 name = "uasset-lens"
