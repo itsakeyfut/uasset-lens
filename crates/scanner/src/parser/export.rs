@@ -29,7 +29,8 @@ pub fn parse_export_table(
     offset: u64,
     count: usize,
     depends_offset: u64,
-    import_class_names: &[String],
+    import_class_name_idxs: &[usize],
+    name_table: &[String],
 ) -> Result<AssetType, ScanError> {
     if count == 0 || depends_offset <= offset {
         return Ok(AssetType::Unknown(String::new()));
@@ -59,7 +60,10 @@ pub fn parse_export_table(
         }
 
         let imp_i = (-class_index - 1) as usize;
-        if let Some(class_name) = import_class_names.get(imp_i) {
+        if let Some(class_name) = import_class_name_idxs
+            .get(imp_i)
+            .and_then(|&idx| name_table.get(idx))
+        {
             if first_class_name.is_none() {
                 first_class_name = Some(class_name.clone());
             }
@@ -109,14 +113,15 @@ mod tests {
         let data = read_fixture("valid/BP_Simple.uasset");
         let hdr = parse_header(&data).unwrap();
         let names = parse_name_table(&data, hdr.name_offset, hdr.name_count).unwrap();
-        let (cls_names, _) =
+        let (cls_idxs, _) =
             parse_import_entries(&data, hdr.import_offset, hdr.import_count, &names).unwrap();
         let result = parse_export_table(
             &data,
             hdr.export_offset,
             hdr.export_count,
             hdr.depends_offset,
-            &cls_names,
+            &cls_idxs,
+            &names,
         )
         .unwrap();
         assert_eq!(result, AssetType::Blueprint);
@@ -127,14 +132,15 @@ mod tests {
         let data = read_fixture("valid/T_Rock.uasset");
         let hdr = parse_header(&data).unwrap();
         let names = parse_name_table(&data, hdr.name_offset, hdr.name_count).unwrap();
-        let (cls_names, _) =
+        let (cls_idxs, _) =
             parse_import_entries(&data, hdr.import_offset, hdr.import_count, &names).unwrap();
         let result = parse_export_table(
             &data,
             hdr.export_offset,
             hdr.export_count,
             hdr.depends_offset,
-            &cls_names,
+            &cls_idxs,
+            &names,
         )
         .unwrap();
         assert_eq!(result, AssetType::Texture2D);
@@ -145,14 +151,15 @@ mod tests {
         let data = read_fixture("valid/Redirect.uasset");
         let hdr = parse_header(&data).unwrap();
         let names = parse_name_table(&data, hdr.name_offset, hdr.name_count).unwrap();
-        let (cls_names, _) =
+        let (cls_idxs, _) =
             parse_import_entries(&data, hdr.import_offset, hdr.import_count, &names).unwrap();
         let result = parse_export_table(
             &data,
             hdr.export_offset,
             hdr.export_count,
             hdr.depends_offset,
-            &cls_names,
+            &cls_idxs,
+            &names,
         )
         .unwrap();
         assert_eq!(result, AssetType::ObjectRedirector);
@@ -161,7 +168,7 @@ mod tests {
     #[test]
     fn parse_export_table_should_return_unknown_for_empty_count() {
         let data = vec![0u8; 64];
-        let result = parse_export_table(&data, 0, 0, 0, &[]).unwrap();
+        let result = parse_export_table(&data, 0, 0, 0, &[], &[]).unwrap();
         assert!(matches!(result, AssetType::Unknown(_)));
     }
 

@@ -16,7 +16,8 @@ pub(crate) fn extract_texture_sample_count(
     export_offset: u64,
     export_count: usize,
     depends_offset: u64,
-    import_class_names: &[String],
+    import_class_name_idxs: &[usize],
+    name_table: &[String],
 ) -> u32 {
     if export_count == 0 || depends_offset <= export_offset {
         return 0;
@@ -41,11 +42,12 @@ pub(crate) fn extract_texture_sample_count(
             continue;
         }
         let imp_i = (-class_index - 1) as usize;
-        if import_class_names
+        let matches = import_class_name_idxs
             .get(imp_i)
+            .and_then(|&idx| name_table.get(idx))
             .map(|s| s == "MaterialExpressionTextureSample")
-            .unwrap_or(false)
-        {
+            .unwrap_or(false);
+        if matches {
             count += 1;
         }
     }
@@ -68,29 +70,44 @@ mod tests {
 
     #[test]
     fn extract_texture_sample_count_should_count_only_texture_sample_class_exports() {
-        let class_names = vec![
+        let name_table = vec![
             "Material".to_string(),
             "MaterialExpressionTextureSample".to_string(),
             "MaterialExpressionMultiply".to_string(),
         ];
-        // -1 → Material (skip), -2 → TextureSample (count), -3 → Multiply (skip), -2 again (count)
+        let import_class_name_idxs: Vec<usize> = vec![0, 1, 2];
+        // -1 → import[0]→Material (skip), -2 → TextureSample (count), -3 → Multiply (skip), -2 (count)
         let bytes_per: usize = 4;
         let class_indices = [-1i32, -2, -3, -2];
         let data = make_export_table(&class_indices, bytes_per);
         let export_count = class_indices.len();
         let depends_offset = export_count as u64 * bytes_per as u64;
 
-        let result =
-            extract_texture_sample_count(&data, 0, export_count, depends_offset, &class_names);
+        let result = extract_texture_sample_count(
+            &data,
+            0,
+            export_count,
+            depends_offset,
+            &import_class_name_idxs,
+            &name_table,
+        );
         assert_eq!(result, 2);
     }
 
     #[test]
     fn extract_texture_sample_count_should_return_zero_when_no_exports_match() {
-        let class_names = vec!["Material".to_string()];
+        let name_table = vec!["Material".to_string()];
+        let import_class_name_idxs: Vec<usize> = vec![0];
         let bytes_per: usize = 4;
         let data = make_export_table(&[-1i32], bytes_per);
-        let result = extract_texture_sample_count(&data, 0, 1, bytes_per as u64, &class_names);
+        let result = extract_texture_sample_count(
+            &data,
+            0,
+            1,
+            bytes_per as u64,
+            &import_class_name_idxs,
+            &name_table,
+        );
         assert_eq!(result, 0);
     }
 
