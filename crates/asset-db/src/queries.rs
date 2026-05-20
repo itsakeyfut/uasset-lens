@@ -93,9 +93,10 @@ impl AssetDb {
         stmt.query_map([], |row| {
             Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
         })?
-        .collect::<Result<Vec<_>, _>>()?
-        .into_iter()
-        .map(|(from, to)| Ok((AssetPath::new(&from)?, AssetPath::new(&to)?)))
+        .map(|r| {
+            let (from, to) = r?;
+            Ok((AssetPath::new(&from)?, AssetPath::new(&to)?))
+        })
         .collect()
     }
 
