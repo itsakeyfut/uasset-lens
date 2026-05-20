@@ -1,0 +1,69 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Release (${{ matrix.target }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            archive: uasset-lens-linux-x86_64.tar.gz
+          - os: macos-13  # macos-14+ is ARM64; stay on Intel for x86_64-apple-darwin
+            target: x86_64-apple-darwin
+            archive: uasset-lens-macos-x86_64.tar.gz
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            archive: uasset-lens-windows-x86_64.zip
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Cache Cargo registry
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: ${{ runner.os }}-cargo-release-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-release-
+            ${{ runner.os }}-cargo-
+
+      - name: Build release binary
+        run: cargo build --release --target ${{ matrix.target }} -p uasset-lens-cli
+
+      - name: Create archive (Linux / macOS)
+        if: matrix.os != 'windows-latest'
+        run: |
+          cp target/${{ matrix.target }}/release/uasset-lens uasset-lens
+          tar czf ${{ matrix.archive }} uasset-lens
+          rm uasset-lens
+
+      - name: Create archive (Windows)
+        if: matrix.os == 'windows-latest'
+        shell: pwsh
+        run: |
+          Copy-Item "target\${{ matrix.target }}\release\uasset-lens.exe" "uasset-lens.exe"
+          Compress-Archive -Path "uasset-lens.exe" -DestinationPath "${{ matrix.archive }}"
+          Remove-Item "uasset-lens.exe"
+
+      - name: Upload release asset
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ${{ matrix.archive }}
+          generate_release_notes: true

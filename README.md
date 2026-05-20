@@ -54,21 +54,27 @@ these soft references explicitly.
 
 ## Installation
 
-> **Note:** Not yet published to crates.io. Build from source until the first release:
+### Prebuilt binaries (recommended)
+
+Download the latest binary from [GitHub Releases](https://github.com/itsakeyfut/uasset-lens/releases/latest):
+
+| Platform | File |
+|---|---|
+| Linux x86_64 | `uasset-lens-linux-x86_64.tar.gz` |
+| macOS x86_64 | `uasset-lens-macos-x86_64.tar.gz` |
+| Windows x86_64 | `uasset-lens-windows-x86_64.zip` |
+
+Extract the archive and place the binary (`uasset-lens` / `uasset-lens.exe`) in a directory on your `PATH`.
+
+### Build from source
+
+Requires Rust 1.85+ (edition 2024):
 
 ```bash
 git clone https://github.com/itsakeyfut/uasset-lens
 cd uasset-lens
 cargo install --path apps/uasset-lens-cli
 ```
-
-Once published to crates.io:
-
-```bash
-cargo install uasset-lens
-```
-
-Requires Rust 1.85+ (edition 2024).
 
 ---
 
