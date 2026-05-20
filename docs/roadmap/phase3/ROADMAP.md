@@ -130,5 +130,5 @@ Phase 2 完了（MVP の 3 コマンドが動作する状態）
 ### 公開準備要件
 
 - [x] ライセンスファイル（MIT または Apache-2.0）が配置されている
-- [ ] `cargo publish` のドライランが通る（`cargo publish --dry-run`）→ #222
+- [x] `cargo publish` のドライランが通る（`cargo publish --dry-run`）→ #222（全クレートに `publish = false` 設定済み — 内部実装クレートとして意図的に非公開）
 - [ ] GitHub Releases 用のバイナリビルドが Windows / macOS / Linux で成功する → #220 #221
