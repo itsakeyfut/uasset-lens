@@ -29,23 +29,23 @@ Phase 2 完了（MVP の 3 コマンドが動作する状態）
 
 ### 1. `crates/redirector-analyzer` 実装
 
-- [ ] `detect(graph: &DependencyGraph) -> Vec<AssetPath>` 実装
+- [x] `detect(graph: &DependencyGraph) -> Vec<AssetPath>` 実装
   - `graph.nodes()` を走査し `asset_type == AssetType::ObjectRedirector` を収集
-- [ ] 単体テスト（ObjectRedirector あり / なし / 混在型）
+- [x] 単体テスト（ObjectRedirector あり / なし / 混在型）
 
 ---
 
 ### 2. `.uasset-lens.toml` 設定ファイル対応
 
-- [ ] `ConfigFile` 構造体定義（`cli` クレート内、または専用モジュール）
+- [x] `ConfigFile` 構造体定義（`cli` クレート内、または専用モジュール）
   ```toml
   [scan]
   exclude_paths = ["Content/Dev/", "Content/Test/"]
   ```
-- [ ] プロジェクトルートから `.uasset-lens.toml` を自動検索するロジック
+- [x] プロジェクトルートから `.uasset-lens.toml` を自動検索するロジック
   - `<project_dir>/.uasset-lens.toml` が存在すれば読み込む
   - 存在しない場合はデフォルト設定で動作（エラーにしない）
-- [ ] `scan` コマンドの `exclude_paths` 適用
+- [x] `scan` コマンドの `exclude_paths` 適用
   - walkdir のディレクトリ列挙時に前方一致で除外
   - content_root からの相対パスで比較
 
@@ -53,20 +53,20 @@ Phase 2 完了（MVP の 3 コマンドが動作する状態）
 
 ### 3. `crates/cli` — `redirectors` コマンド
 
-- [ ] ハンドラ実装
+- [x] ハンドラ実装
   - `load_graph()` → `redirector_analyzer::detect()` → テキスト出力
   - 件数 + パス一覧を表示
-- [ ] テキスト出力実装（`docs/specs/cli-design.md` の `redirectors` 仕様に準拠）
-- [ ] JSON 出力実装（ObjectRedirector パス配列）
-- [ ] フェーズ 1 スコープ注記をテキスト出力末尾に表示
+- [x] テキスト出力実装（`docs/specs/cli-design.md` の `redirectors` 仕様に準拠）
+- [x] JSON 出力実装（ObjectRedirector パス配列）
+- [x] フェーズ 1 スコープ注記をテキスト出力末尾に表示
   - `Note: redirect target resolution is available in Phase 4 analysis.`
-- [ ] exit codes: Redirector あり → `1`、なし → `0`
+- [x] exit codes: Redirector あり → `1`、なし → `0`
 
 ---
 
 ### 4. `crates/asset-db` — `find_assets()` glob 対応
 
-- [ ] `AssetFilter.path_pattern` の glob マッチ実装
+- [x] `AssetFilter.path_pattern` の glob マッチ実装
   - `--path "**/Characters/**"` のようなパターンに対応
   - `glob` または `globset` クレートを使用
   - SQL の LIKE ではなく Rust 側でフィルタリング（シンプルさを優先）
@@ -75,29 +75,29 @@ Phase 2 完了（MVP の 3 コマンドが動作する状態）
 
 ### 5. `crates/cli` — `find` コマンド
 
-- [ ] ハンドラ実装
+- [x] ハンドラ実装
   - `AssetFilter` を CLI オプションから構築
   - `db.find_assets(&filter)` を呼び出す
   - `--unreferenced` フラグ: グラフを構築して dead_asset_detector::detect() と交差
-- [ ] CLI オプション実装
+- [x] CLI オプション実装
   - `--type <AssetType>`（例: `Texture2D`・`Blueprint`）
   - `--larger-than <bytes>` / `--smaller-than <bytes>`（ファイルサイズフィルタ）
   - `--unreferenced`（未参照 Asset のみ）
   - `--path <pattern>`（glob パターン）
-- [ ] テキスト出力実装（パス + 型 + サイズ一覧）
-- [ ] JSON 出力実装（`docs/specs/cli-design.md` の `find` JSON スキーマに準拠）
-- [ ] ゼロ件でも正常終了（exit 0）
+- [x] テキスト出力実装（パス + 型 + サイズ一覧）
+- [x] JSON 出力実装（`docs/specs/cli-design.md` の `find` JSON スキーマに準拠）
+- [x] ゼロ件でも正常終了（exit 0）
 
 ---
 
 ### 6. README 作成
 
-- [ ] プロジェクト概要（コンセプト・解決する課題）
-- [ ] インストール方法（`cargo install` / GitHub Releases）
-- [ ] クイックスタート（scan → impact の最短手順）
-- [ ] 全コマンドのリファレンス（オプション・出力例）
-- [ ] `.uasset-lens.toml` 設定例
-- [ ] システム要件（対応 UE バージョン・OS）
+- [x] プロジェクト概要（コンセプト・解決する課題）
+- [x] インストール方法（`cargo install` / GitHub Releases）
+- [x] クイックスタート（scan → impact の最短手順）
+- [x] 全コマンドのリファレンス（オプション・出力例）
+- [x] `.uasset-lens.toml` 設定例
+- [x] システム要件（対応 UE バージョン・OS）
 
 ---
 
@@ -105,30 +105,30 @@ Phase 2 完了（MVP の 3 コマンドが動作する状態）
 
 ### 機能要件
 
-- [ ] `uasset-lens redirectors ./Project` が ObjectRedirector Asset を列挙する
-- [ ] `uasset-lens find ./Project --type Texture2D --larger-than 4194304` が動作する
-- [ ] `uasset-lens find ./Project --unreferenced --type StaticMesh` が動作する
-- [ ] `uasset-lens find ./Project --path "**/Characters/**"` が glob パターンで絞り込める
-- [ ] `.uasset-lens.toml` の `exclude_paths` が `scan` 時に正しく適用される
-- [ ] 設定ファイルが存在しない場合はデフォルト設定で正常動作する
-- [ ] 全 6 コマンドで `--format json` が仕様スキーマに準拠した出力を返す
+- [x] `uasset-lens redirectors ./Project` が ObjectRedirector Asset を列挙する
+- [x] `uasset-lens find ./Project --type Texture2D --larger-than 4194304` が動作する
+- [x] `uasset-lens find ./Project --unreferenced --type StaticMesh` が動作する
+- [x] `uasset-lens find ./Project --path "**/Characters/**"` が glob パターンで絞り込める
+- [x] `.uasset-lens.toml` の `exclude_paths` が `scan` 時に正しく適用される
+- [x] 設定ファイルが存在しない場合はデフォルト設定で正常動作する
+- [x] 全 6 コマンドで `--format json` が仕様スキーマに準拠した出力を返す
 
 ### テスト要件
 
-- [ ] `cargo test --workspace` が全プラットフォームでパスする
-- [ ] `redirector-analyzer` の全単体テストがパスする
-- [ ] `find` コマンドの各フィルタオプションが個別・複合でテストされている
-- [ ] `exclude_paths` が正しくスキャン除外される統合テストがある
-- [ ] `.uasset-lens.toml` の parse / デフォルトフォールバックがテストされている
+- [x] `cargo test --workspace` が Linux でパスする（Windows / macOS は #221 で対応予定）
+- [x] `redirector-analyzer` の全単体テストがパスする
+- [x] `find` コマンドの各フィルタオプションが個別・複合でテストされている
+- [x] `exclude_paths` が正しくスキャン除外される統合テストがある
+- [x] `.uasset-lens.toml` の parse / デフォルトフォールバックがテストされている
 
 ### 品質要件
 
-- [ ] `cargo clippy --workspace -- -D warnings` が警告ゼロでパスする
-- [ ] `cargo fmt --check` がパスする
-- [ ] README が英語で記述されている（OSS として公開することを想定）
+- [x] `cargo clippy --workspace -- -D warnings` が警告ゼロでパスする
+- [x] `cargo fmt --check` がパスする
+- [x] README が英語で記述されている（OSS として公開することを想定）
 
 ### 公開準備要件
 
-- [ ] ライセンスファイル（MIT または Apache-2.0）が配置されている
-- [ ] `cargo publish` のドライランが通る（`cargo publish --dry-run`）
-- [ ] GitHub Releases 用のバイナリビルドが Windows / macOS / Linux で成功する
+- [x] ライセンスファイル（MIT または Apache-2.0）が配置されている
+- [ ] `cargo publish` のドライランが通る（`cargo publish --dry-run`）→ #222
+- [ ] GitHub Releases 用のバイナリビルドが Windows / macOS / Linux で成功する → #220 #221

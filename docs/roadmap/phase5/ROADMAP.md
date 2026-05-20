@@ -27,30 +27,30 @@ Phase 4 完了（静的解析コマンド群が動作）
 
 ### 1. `crates/watcher` 実装
 
-- [ ] `notify` クレートを使用したファイルシステム監視
-- [ ] `.uasset` / `.umap` の変更・作成・削除イベントを検知
-- [ ] デバウンス処理（短時間の連続変更を 1 イベントにまとめる）
-- [ ] 変更ファイルを `scanner::scan_files()` に渡して即時再スキャン
-- [ ] 再スキャン後に新たな問題（新しい dead asset・新しいサイクル等）を通知
-- [ ] 単体テスト（モックファイルシステムイベントで動作確認）
+- [x] `notify` クレートを使用したファイルシステム監視
+- [x] `.uasset` / `.umap` の変更・作成・削除イベントを検知
+- [x] デバウンス処理（300 ms、短時間の連続変更を 1 イベントにまとめる）
+- [x] 変更ファイルを `scanner::scan_files()` に渡して即時再スキャン
+- [x] 再スキャン後に新たな問題（新しい dead asset・新しいサイクル等）を通知
+- [x] 単体テスト（合成イベントによるデバウンス動作確認）
 
 ---
 
 ### 2. `crates/git-diff` 実装
 
-- [ ] `git show HEAD:path/to/asset.uasset` で以前のバージョンのバイナリを取得
-- [ ] 旧バージョン・新バージョン双方を `scanner` でパースして比較
-- [ ] `AssetDiff` 構造体定義
+- [x] `git show HEAD:path/to/asset.uasset` で以前のバージョンのバイナリを取得
+- [x] 旧バージョン・新バージョン双方を `scanner` でパースして比較
+- [x] `AssetDiff` 構造体定義
   - 依存関係の追加 / 削除
   - AssetType の変更
   - Blueprint メトリクスの変化（node_count・event_tick 等）
-- [ ] 差分出力フォーマット定義
+- [x] 差分出力フォーマット定義（`diff_asset()` + `compute_diff()`）
 
 ---
 
 ### 3. `crates/cli` — `watch` コマンド追加
 
-- [ ] `watch <project_dir>` コマンドハンドラ
+- [x] `watch <project_dir>` コマンドハンドラ
   - 起動時に初回スキャンを実行
   - ファイル変更を監視してインクリメンタル更新
   - 変更のたびに問題一覧を再表示
@@ -60,15 +60,15 @@ Phase 4 完了（静的解析コマンド群が動作）
 
 ### 4. CI 統合ドキュメント
 
-- [ ] GitHub Actions ワークフローの設定例を作成
+- [x] GitHub Actions ワークフローの設定例を作成（`docs/ci/github-actions.yml`・`.github/workflows/asset-quality-gate.yml`）
   ```yaml
   - name: Check circular dependencies
     run: uasset-lens graph --cycles-only ./Project
   - name: Lint assets
     run: uasset-lens lint ./Project
   ```
-- [ ] CI での `.uasset` ファイルの扱いに関するガイド（Git LFS vs 直接コミット）
-- [ ] `docs/` または `README.md` に CI Integration セクションを追加
+- [x] CI での `.uasset` ファイルの扱いに関するガイド（`docs/ci/git-lfs-guide.md`）
+- [x] `README.md` に CI Integration セクションを追加
 
 ---
 
@@ -76,18 +76,18 @@ Phase 4 完了（静的解析コマンド群が動作）
 
 ### 機能要件
 
-- [ ] `uasset-lens watch ./Project` が起動し、ファイル変更を検知して再分析する
-- [ ] Watch Mode で新たな問題が発生すると即時に通知される
-- [ ] `Ctrl+C` で Watch Mode が正常終了する
-- [ ] GitHub Actions サンプルワークフローが実際のリポジトリで動作する
-- [ ] `uasset-lens lint` が CI で exit code `1` を返してパイプラインを止められる
+- [x] `uasset-lens watch ./Project` が起動し、ファイル変更を検知して再分析する
+- [x] Watch Mode で新たな問題が発生すると即時に通知される
+- [x] `Ctrl+C` で Watch Mode が正常終了する
+- [x] GitHub Actions サンプルワークフローが実際のリポジトリで動作する
+- [x] `uasset-lens lint` が CI で exit code `1` を返してパイプラインを止められる
 
 ### テスト要件
 
-- [ ] `cargo test --workspace` がパスする
-- [ ] Watch Mode のデバウンス処理がテストされている
+- [x] `cargo test --workspace` がパスする
+- [x] Watch Mode のデバウンス処理がテストされている（合成イベントによる単体テスト 5 件）
 
 ### 品質要件
 
-- [ ] `cargo clippy --workspace -- -D warnings` が警告ゼロ
-- [ ] CI 統合ドキュメントが実際に動作する設定例を含んでいる
+- [x] `cargo clippy --workspace -- -D warnings` が警告ゼロ
+- [x] CI 統合ドキュメントが実際に動作する設定例を含んでいる
