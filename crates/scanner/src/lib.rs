@@ -99,7 +99,7 @@ fn scan_single(file: &Path, content_root: &Path) -> Result<AssetMetadata, ScanEr
     let hdr = parse_header(&data)?;
     let name_table = parse_name_table(&data, hdr.name_offset, hdr.name_count)?;
 
-    let (cls_names, dependencies) =
+    let (cls_name_idxs, dependencies) =
         parse_import_entries(&data, hdr.import_offset, hdr.import_count, &name_table)?;
 
     let mut soft_dependencies = parse_soft_object_paths(
@@ -117,7 +117,8 @@ fn scan_single(file: &Path, content_root: &Path) -> Result<AssetMetadata, ScanEr
             hdr.export_offset,
             hdr.export_count,
             hdr.depends_offset,
-            &cls_names,
+            &cls_name_idxs,
+            &name_table,
         )?
     };
 
@@ -127,7 +128,7 @@ fn scan_single(file: &Path, content_root: &Path) -> Result<AssetMetadata, ScanEr
             hdr.export_offset,
             hdr.export_count,
             hdr.depends_offset,
-            &cls_names,
+            &cls_name_idxs,
             &dependencies,
             &name_table,
         ))
@@ -141,7 +142,8 @@ fn scan_single(file: &Path, content_root: &Path) -> Result<AssetMetadata, ScanEr
             hdr.export_offset,
             hdr.export_count,
             hdr.depends_offset,
-            &cls_names,
+            &cls_name_idxs,
+            &name_table,
         ))
     } else {
         None
@@ -153,7 +155,7 @@ fn scan_single(file: &Path, content_root: &Path) -> Result<AssetMetadata, ScanEr
             hdr.export_offset,
             hdr.export_count,
             hdr.depends_offset,
-            &cls_names,
+            &cls_name_idxs,
             &name_table,
         )
     } else {
@@ -168,7 +170,7 @@ fn scan_single(file: &Path, content_root: &Path) -> Result<AssetMetadata, ScanEr
             hdr.export_offset,
             hdr.export_count,
             hdr.depends_offset,
-            &cls_names,
+            &cls_name_idxs,
             &name_table,
         )
     } else {

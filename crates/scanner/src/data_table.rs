@@ -17,7 +17,7 @@ pub(crate) fn extract_data_table_soft_refs(
     export_offset: u64,
     export_count: usize,
     depends_offset: u64,
-    import_class_names: &[String],
+    import_class_name_idxs: &[usize],
     name_table: &[String],
 ) -> Vec<AssetPath> {
     if export_count == 0 || depends_offset <= export_offset {
@@ -47,8 +47,9 @@ pub(crate) fn extract_data_table_soft_refs(
         }
 
         let imp_i = (-class_index - 1) as usize;
-        let class_name = import_class_names
+        let class_name = import_class_name_idxs
             .get(imp_i)
+            .and_then(|&idx| name_table.get(idx))
             .map(String::as_str)
             .unwrap_or("");
         if class_name != "DataTable" {
@@ -290,6 +291,7 @@ mod tests {
     // 10 = "/Game/Meshes/SM_Cube"
     // 11 = "ObjectProperty"
     // 12 = "RowStruct"
+    // 13 = "Texture2D"
     fn name_table() -> Vec<String> {
         vec![
             "None".into(),
@@ -305,6 +307,7 @@ mod tests {
             "/Game/Meshes/SM_Cube".into(),
             "ObjectProperty".into(),
             "RowStruct".into(),
+            "Texture2D".into(),
         ]
     }
 
@@ -364,7 +367,7 @@ mod tests {
             0,
             1,
             112,
-            &["DataTable".to_string()],
+            &[1usize], // import[0] → name_table[1] = "DataTable"
             &name_table(),
         );
 
@@ -397,7 +400,7 @@ mod tests {
             0,
             1,
             112,
-            &["DataTable".to_string()],
+            &[1usize], // import[0] → name_table[1] = "DataTable"
             &name_table(),
         );
 
@@ -425,7 +428,7 @@ mod tests {
             0,
             1,
             112,
-            &["DataTable".to_string()],
+            &[1usize], // import[0] → name_table[1] = "DataTable"
             &name_table(),
         );
 
@@ -456,7 +459,7 @@ mod tests {
             0,
             1,
             112,
-            &["DataTable".to_string()],
+            &[1usize], // import[0] → name_table[1] = "DataTable"
             &name_table(),
         );
 
@@ -494,7 +497,7 @@ mod tests {
             0,
             1,
             112,
-            &["DataTable".to_string()],
+            &[1usize], // import[0] → name_table[1] = "DataTable"
             &name_table(),
         );
 
@@ -533,7 +536,7 @@ mod tests {
             0,
             1,
             112,
-            &["DataTable".to_string()],
+            &[1usize], // import[0] → name_table[1] = "DataTable"
             &name_table(),
         );
 
@@ -551,7 +554,7 @@ mod tests {
             0,
             1,
             112,
-            &["Texture2D".to_string()],
+            &[13usize], // import[0] → name_table[13] = "Texture2D"
             &name_table(),
         );
 

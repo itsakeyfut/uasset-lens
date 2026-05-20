@@ -6,7 +6,8 @@ use super::map_io;
 use crate::ScanError;
 
 // Parses the import table in a single pass, returning both:
-//   - class_names: ObjectName string for every entry (used by export parser for ClassIndex resolution)
+//   - class_name_idxs: raw ObjectName index (into name_table) per entry; resolved lazily
+//     by the export parser so no String is allocated here for class names
 //   - deps: filtered /Game/ package-level paths (the asset's hard-reference dependencies)
 //
 // FObjectImport layout (UE5, empirically verified at 40 bytes/entry):
@@ -22,11 +23,11 @@ pub(crate) fn parse_import_entries(
     offset: u64,
     count: usize,
     name_table: &[String],
-) -> Result<(Vec<String>, Vec<AssetPath>), ScanError> {
+) -> Result<(Vec<usize>, Vec<AssetPath>), ScanError> {
     let mut cur = Cursor::new(data);
     cur.set_position(offset);
 
-    let mut class_names = Vec::with_capacity(count);
+    let mut class_name_idxs = Vec::with_capacity(count);
     let mut deps = Vec::new();
 
     for _ in 0..count {
@@ -41,14 +42,14 @@ pub(crate) fn parse_import_entries(
         let _pn_num = cur.read_i32::<LittleEndian>().map_err(map_io)?;
         let _import_optional = cur.read_i32::<LittleEndian>().map_err(map_io)?;
 
+        // Store the raw name-table index; class name is resolved lazily by callers.
+        class_name_idxs.push(on_idx as usize);
+
+        // Only package-level entries (OuterIndex == 0) carry the full package path
         let name = name_table
             .get(on_idx as usize)
             .map(String::as_str)
             .unwrap_or("");
-
-        class_names.push(name.to_owned());
-
-        // Only package-level entries (OuterIndex == 0) carry the full package path
         if outer_index == 0 && name.starts_with("/Game/") {
             // Filter before allocating: discard /Script/ and /Engine/, keep only /Game/
             if let Ok(path) = AssetPath::new(name) {
@@ -57,7 +58,7 @@ pub(crate) fn parse_import_entries(
         }
     }
 
-    Ok((class_names, deps))
+    Ok((class_name_idxs, deps))
 }
 
 #[cfg(test)]
@@ -81,6 +82,20 @@ mod tests {
         buf.extend_from_slice(&0i32.to_le_bytes()); // PackageName num
         buf.extend_from_slice(&0i32.to_le_bytes()); // bImportOptional
         buf
+    }
+
+    #[test]
+    fn parse_import_entries_should_return_class_name_idxs_matching_on_idx_field() {
+        let name_table = vec![
+            "/Game/Characters/BP_Hero".to_string(), // idx 0
+            "Blueprint".to_string(),                // idx 1
+        ];
+        let mut data = Vec::new();
+        data.extend(make_import_entry(1, 0)); // ObjectName idx 1 → "Blueprint"
+        data.extend(make_import_entry(0, 0)); // ObjectName idx 0 → "/Game/Characters/BP_Hero"
+
+        let (cls_idxs, _) = parse_import_entries(&data, 0, 2, &name_table).unwrap();
+        assert_eq!(cls_idxs, vec![1usize, 0usize]);
     }
 
     #[test]

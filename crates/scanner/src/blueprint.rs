@@ -23,7 +23,7 @@ pub(crate) fn extract_blueprint_metrics(
     export_offset: u64,
     export_count: usize,
     depends_offset: u64,
-    import_class_names: &[String],
+    import_class_name_idxs: &[usize],
     dependencies: &[AssetPath],
     name_table: &[String],
 ) -> BlueprintMetrics {
@@ -70,8 +70,9 @@ pub(crate) fn extract_blueprint_metrics(
             continue;
         }
         let imp_i = (-class_index - 1) as usize;
-        let class_name = import_class_names
+        let class_name = import_class_name_idxs
             .get(imp_i)
+            .and_then(|&idx| name_table.get(idx))
             .map(String::as_str)
             .unwrap_or("");
         if class_name.starts_with("K2Node_") {
@@ -117,26 +118,29 @@ mod tests {
 
     #[test]
     fn extract_blueprint_metrics_should_count_k2node_exports() {
-        let import_class_names: Vec<String> = vec![
+        // name_table: class names first, then "ReceiveTick" for event-tick detection
+        let name_table: Vec<String> = vec![
             "Blueprint".into(),
             "K2Node_Event".into(),
             "K2Node_DynamicCast".into(),
             "K2Node_CallFunction".into(),
+            "ReceiveTick".into(),
         ];
-        // Exports: -1→Blueprint, -2→K2Node_Event, -3→K2Node_DynamicCast, -4→K2Node_CallFunction
+        // import[0..3] point to name_table[0..3]
+        let import_class_name_idxs: Vec<usize> = vec![0, 1, 2, 3];
+        // Exports: -1→import[0]→Blueprint, -2→K2Node_Event, -3→K2Node_DynamicCast, -4→K2Node_CallFunction
         let bytes_per_entry: usize = 4;
         let class_indices = [-1i32, -2, -3, -4];
         let data = make_export_table(&class_indices, bytes_per_entry);
         let export_count = class_indices.len();
         let depends_offset = export_count as u64 * bytes_per_entry as u64;
-        let name_table = vec!["ReceiveTick".to_string()];
 
         let metrics = extract_blueprint_metrics(
             &data,
             0,
             export_count,
             depends_offset,
-            &import_class_names,
+            &import_class_name_idxs,
             &[],
             &name_table,
         );
@@ -149,8 +153,8 @@ mod tests {
 
     #[test]
     fn extract_blueprint_metrics_should_not_count_non_k2node_exports() {
-        let import_class_names: Vec<String> =
-            vec!["Blueprint".into(), "BlueprintGeneratedClass".into()];
+        let name_table: Vec<String> = vec!["Blueprint".into(), "BlueprintGeneratedClass".into()];
+        let import_class_name_idxs: Vec<usize> = vec![0, 1];
         let bytes_per_entry: usize = 4;
         let class_indices = [-1i32, -2];
         let data = make_export_table(&class_indices, bytes_per_entry);
@@ -162,9 +166,9 @@ mod tests {
             0,
             export_count,
             depends_offset,
-            &import_class_names,
+            &import_class_name_idxs,
             &[],
-            &[],
+            &name_table,
         );
 
         assert_eq!(metrics.node_count, 0);
@@ -184,7 +188,7 @@ mod tests {
             0,
             &[],
             &[dep1, dep2],
-            &[],
+            &[], // name_table unused when export_count == 0
         );
 
         assert_eq!(metrics.dependency_depth, 2);
@@ -193,7 +197,8 @@ mod tests {
 
     #[test]
     fn extract_blueprint_metrics_should_not_set_event_tick_without_receive_tick_in_name_table() {
-        let import_class_names: Vec<String> = vec!["K2Node_Event".into()];
+        let name_table: Vec<String> = vec!["K2Node_Event".into()];
+        let import_class_name_idxs: Vec<usize> = vec![0];
         let bytes_per_entry: usize = 4;
         let data = make_export_table(&[-1i32], bytes_per_entry);
 
@@ -202,9 +207,9 @@ mod tests {
             0,
             1,
             bytes_per_entry as u64,
-            &import_class_names,
+            &import_class_name_idxs,
             &[],
-            &[], // no "ReceiveTick" in name table
+            &name_table, // no "ReceiveTick" in name table
         );
 
         assert_eq!(metrics.event_tick_count, 0);
