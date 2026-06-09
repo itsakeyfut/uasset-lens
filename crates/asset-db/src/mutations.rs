@@ -300,7 +300,11 @@ mod tests {
         }];
         assert!(db.upsert_all(&assets).is_ok());
         let edges = db.all_edges().unwrap();
-        assert_eq!(edges.len(), 1, "duplicate deps should be collapsed to one edge");
+        assert_eq!(
+            edges.len(),
+            1,
+            "duplicate deps should be collapsed to one edge"
+        );
     }
 
     #[test]
