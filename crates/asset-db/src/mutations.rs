@@ -52,20 +52,25 @@ impl AssetDb {
         let tx = self.conn.transaction()?;
         for meta in assets {
             let id = upsert_asset_conn(&tx, meta)?;
+            // INSERT OR REPLACE on assets cascade-deletes old dependencies via ON DELETE CASCADE;
+            // this explicit DELETE ensures a clean slate even if the rowid is reused.
             tx.execute("DELETE FROM dependencies WHERE from_id = ?1", [id])?;
+            let mut seen = std::collections::HashSet::new();
             for dep in &meta.dependencies {
-                tx.execute(
-                    "INSERT OR IGNORE INTO dependencies (from_id, to_path, is_soft) VALUES (?1, ?2, 0)",
-                    rusqlite::params![id, dep.as_str()],
-                )?;
+                if seen.insert(dep.as_str()) {
+                    tx.execute(
+                        "INSERT INTO dependencies (from_id, to_path, is_soft) VALUES (?1, ?2, 0)",
+                        rusqlite::params![id, dep.as_str()],
+                    )?;
+                }
             }
-            // OR IGNORE: if the same path is already a hard dep (is_soft=0), the soft insert
-            // is skipped. The hard reference is the stronger claim so is_soft=0 is correct.
             for dep in &meta.soft_dependencies {
-                tx.execute(
-                    "INSERT OR IGNORE INTO dependencies (from_id, to_path, is_soft) VALUES (?1, ?2, 1)",
-                    rusqlite::params![id, dep.as_str()],
-                )?;
+                if seen.insert(dep.as_str()) {
+                    tx.execute(
+                        "INSERT INTO dependencies (from_id, to_path, is_soft) VALUES (?1, ?2, 1)",
+                        rusqlite::params![id, dep.as_str()],
+                    )?;
+                }
             }
         }
         tx.commit()?;

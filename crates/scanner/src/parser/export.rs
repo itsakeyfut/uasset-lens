@@ -96,6 +96,11 @@ fn class_name_to_asset_type(name: &str) -> Option<AssetType> {
         "DataTable" => Some(AssetType::DataTable),
         "DataAsset" => Some(AssetType::DataAsset),
         "ObjectRedirector" => Some(AssetType::ObjectRedirector),
+        "NiagaraSystem" => Some(AssetType::NiagaraSystem),
+        "NiagaraEmitter" => Some(AssetType::NiagaraEmitter),
+        "IKRigDefinition" => Some(AssetType::IKRigDefinition),
+        "IKRetargeter" => Some(AssetType::IKRetargeter),
+        "DialogueWave" => Some(AssetType::DialogueWave),
         _ => None,
     }
 }
@@ -245,8 +250,23 @@ mod tests {
     }
 
     #[test]
+    fn class_name_to_asset_type_should_return_niagara_system_for_niagara_system() {
+        assert_eq!(
+            class_name_to_asset_type("NiagaraSystem"),
+            Some(AssetType::NiagaraSystem)
+        );
+    }
+
+    #[test]
+    fn class_name_to_asset_type_should_return_ik_rig_definition_for_ik_rig_definition() {
+        assert_eq!(
+            class_name_to_asset_type("IKRigDefinition"),
+            Some(AssetType::IKRigDefinition)
+        );
+    }
+
+    #[test]
     fn class_name_to_asset_type_should_return_none_for_unknown_class() {
-        assert_eq!(class_name_to_asset_type("NiagaraSystem"), None);
         assert_eq!(class_name_to_asset_type(""), None);
         assert_eq!(class_name_to_asset_type("SomeCustomClass"), None);
     }

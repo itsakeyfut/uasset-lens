@@ -99,7 +99,7 @@ fn scan_single(file: &Path, content_root: &Path) -> Result<AssetMetadata, ScanEr
     let hdr = parse_header(&data)?;
     let name_table = parse_name_table(&data, hdr.name_offset, hdr.name_count)?;
 
-    let (cls_name_idxs, dependencies) =
+    let (cls_name_idxs, mut dependencies) =
         parse_import_entries(&data, hdr.import_offset, hdr.import_count, &name_table)?;
 
     let mut soft_dependencies = parse_soft_object_paths(
@@ -192,6 +192,19 @@ fn scan_single(file: &Path, content_root: &Path) -> Result<AssetMetadata, ScanEr
     };
 
     soft_dependencies.extend(ls_soft_refs);
+
+    // Deduplicate: import table can reference the same package multiple times, and multiple
+    // soft-ref sources (DataTable, AnimMontage, LevelSequence) can overlap each other or the
+    // hard dep list. Hard deps take priority, so soft deps that duplicate a hard dep are dropped.
+    dependencies.sort_unstable_by(|a, b| a.as_str().cmp(b.as_str()));
+    dependencies.dedup_by(|a, b| a.as_str() == b.as_str());
+    {
+        use std::collections::HashSet;
+        let hard: HashSet<&str> = dependencies.iter().map(|d| d.as_str()).collect();
+        soft_dependencies.retain(|d| !hard.contains(d.as_str()));
+    }
+    soft_dependencies.sort_unstable_by(|a, b| a.as_str().cmp(b.as_str()));
+    soft_dependencies.dedup_by(|a, b| a.as_str() == b.as_str());
 
     let asset_path = AssetPath::from_fs_path(content_root, file)?;
 
