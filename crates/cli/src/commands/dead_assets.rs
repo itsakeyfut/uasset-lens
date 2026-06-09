@@ -35,6 +35,7 @@ pub fn handle_dead_assets(
     min_size: Option<u64>,
     exclude_patterns: &[String],
     group: Option<&GroupMode>,
+    include_all_types: bool,
     db_path: &Path,
     cfg: &crate::config::ConfigFile,
     format: &FormatKind,
@@ -42,7 +43,12 @@ pub fn handle_dead_assets(
     let db = crate::open_db(db_path)?;
     let graph = crate::load_graph(&db, &cfg.scan.external_roots)?;
 
-    let dead_paths = dead_asset_detector::detect(&graph, &[]);
+    let excluded = if include_all_types {
+        &[] as &[&str]
+    } else {
+        dead_asset_detector::DEFAULT_EXCLUDED_TYPES
+    };
+    let dead_paths = dead_asset_detector::detect(&graph, excluded);
 
     let type_map: HashMap<&shared::AssetPath, String> = graph
         .nodes()
@@ -251,6 +257,7 @@ mod tests {
             None,
             &[],
             None,
+            false,
             &db_path,
             &Default::default(),
             &FormatKind::Text,
@@ -270,6 +277,7 @@ mod tests {
             None,
             &[],
             None,
+            false,
             &db_path,
             &Default::default(),
             &FormatKind::Text,
@@ -312,6 +320,7 @@ mod tests {
             None,
             &[],
             None,
+            false,
             &db_path,
             &Default::default(),
             &FormatKind::Text,
@@ -344,6 +353,7 @@ mod tests {
             None,
             &[],
             None,
+            false,
             &db_path,
             &Default::default(),
             &FormatKind::Text,
@@ -376,6 +386,7 @@ mod tests {
             None,
             &[],
             None,
+            false,
             &db_path,
             &Default::default(),
             &FormatKind::Text,
@@ -420,6 +431,7 @@ mod tests {
             None,
             &[],
             None,
+            false,
             &db_path,
             &Default::default(),
             &FormatKind::Text,
@@ -441,6 +453,7 @@ mod tests {
             None,
             &[],
             None,
+            false,
             &db_path,
             &Default::default(),
             &FormatKind::Json,
@@ -473,6 +486,7 @@ mod tests {
             None,
             &[],
             None,
+            false,
             &db_path,
             &Default::default(),
             &FormatKind::Json,
@@ -521,6 +535,7 @@ mod tests {
             None,
             &[],
             None,
+            false,
             &db_path,
             &Default::default(),
             &FormatKind::Text,
@@ -587,6 +602,7 @@ mod tests {
             Some(1024),
             &[],
             None,
+            false,
             &db_path,
             &Default::default(),
             &FormatKind::Text,
@@ -619,6 +635,7 @@ mod tests {
             Some(1024),
             &[],
             None,
+            false,
             &db_path,
             &Default::default(),
             &FormatKind::Text,
@@ -661,6 +678,7 @@ mod tests {
             None,
             &patterns,
             None,
+            false,
             &db_path,
             &Default::default(),
             &FormatKind::Text,
@@ -694,6 +712,7 @@ mod tests {
             None,
             &patterns,
             None,
+            false,
             &db_path,
             &Default::default(),
             &FormatKind::Text,
@@ -762,6 +781,7 @@ mod tests {
             None,
             &[],
             Some(&GroupMode::Type),
+            false,
             &db_path,
             &Default::default(),
             &FormatKind::Text,
@@ -803,6 +823,7 @@ mod tests {
             None,
             &[],
             Some(&GroupMode::Dir),
+            false,
             &db_path,
             &Default::default(),
             &FormatKind::Text,
@@ -835,6 +856,7 @@ mod tests {
             None,
             &[],
             Some(&GroupMode::Type),
+            false,
             &db_path,
             &Default::default(),
             &FormatKind::Json,
@@ -856,12 +878,96 @@ mod tests {
             None,
             &[],
             Some(&GroupMode::Type),
+            false,
             &db_path,
             &Default::default(),
             &FormatKind::Text,
         )
         .unwrap();
         assert_eq!(result, 0);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn handle_dead_assets_should_exclude_sub_object_types_by_default() {
+        let (dir, db_path) = test_db_in_tempdir("dead235_default");
+        {
+            let mut db = asset_db::AssetDb::open(&db_path).unwrap();
+            db.upsert_all(&[
+                make_meta(
+                    "/Game/BP_Character",
+                    dir.join("BP_Character.uasset"),
+                    AssetType::Blueprint,
+                    4096,
+                    vec![],
+                ),
+                make_meta(
+                    "/Game/Meta",
+                    dir.join("Meta.uasset"),
+                    AssetType::Unknown("MetaData".to_owned()),
+                    512,
+                    vec![],
+                ),
+            ])
+            .unwrap();
+        }
+        let result = handle_dead_assets(
+            &dir,
+            None,
+            false,
+            None,
+            &[],
+            None,
+            false, // include_all_types = false → MetaData excluded
+            &db_path,
+            &Default::default(),
+            &FormatKind::Text,
+        )
+        .unwrap();
+        assert_eq!(
+            result, 1,
+            "MetaData is excluded; only Blueprint counts as dead"
+        );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn handle_dead_assets_should_include_sub_object_types_when_include_all_types_is_true() {
+        let (dir, db_path) = test_db_in_tempdir("dead235_all");
+        {
+            let mut db = asset_db::AssetDb::open(&db_path).unwrap();
+            db.upsert_all(&[
+                make_meta(
+                    "/Game/BP_Character",
+                    dir.join("BP_Character.uasset"),
+                    AssetType::Blueprint,
+                    4096,
+                    vec![],
+                ),
+                make_meta(
+                    "/Game/Meta",
+                    dir.join("Meta.uasset"),
+                    AssetType::Unknown("MetaData".to_owned()),
+                    512,
+                    vec![],
+                ),
+            ])
+            .unwrap();
+        }
+        let result = handle_dead_assets(
+            &dir,
+            None,
+            false,
+            None,
+            &[],
+            None,
+            true, // include_all_types = true → MetaData included
+            &db_path,
+            &Default::default(),
+            &FormatKind::Text,
+        )
+        .unwrap();
+        assert_eq!(result, 1, "both are dead; result is 1 (found)");
         let _ = std::fs::remove_dir_all(&dir);
     }
 
@@ -905,6 +1011,7 @@ mod tests {
             None,
             &patterns,
             None,
+            false,
             &db_path,
             &Default::default(),
             &FormatKind::Text,

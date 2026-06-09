@@ -92,6 +92,9 @@ pub enum Commands {
         /// Aggregate results by asset type or top-level directory
         #[arg(long)]
         group: Option<GroupMode>,
+        /// Include sub-object types excluded by default (MetaData, BillboardComponent, etc.)
+        #[arg(long)]
+        include_all_types: bool,
     },
     /// Show the forward dependency tree of an asset
     Deps {
@@ -320,6 +323,7 @@ fn dispatch(cli: &Cli) -> anyhow::Result<i32> {
             min_size,
             exclude_patterns,
             group,
+            include_all_types,
         } => {
             let db_path = resolve_db_path(project_dir, cli.db.as_deref());
             commands::dead_assets::handle_dead_assets(
@@ -329,6 +333,7 @@ fn dispatch(cli: &Cli) -> anyhow::Result<i32> {
                 *min_size,
                 exclude_patterns,
                 group.as_ref(),
+                *include_all_types,
                 &db_path,
                 &cfg,
                 &cli.format,
