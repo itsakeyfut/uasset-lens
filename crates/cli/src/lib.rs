@@ -8,7 +8,7 @@ use std::path::{Path, PathBuf};
 use anyhow::Context;
 use clap::{Parser, Subcommand, ValueEnum};
 
-pub(crate) use paths::{find_project_dir, resolve_target_and_db};
+pub(crate) use paths::{find_project_dir, resolve_asset_path};
 pub use paths::{resolve_content_root, resolve_db_path};
 
 #[derive(Debug, Clone, Default, PartialEq, ValueEnum)]
@@ -89,6 +89,7 @@ pub enum Commands {
     },
     /// Show the forward dependency tree of an asset
     Deps {
+        project_dir: PathBuf,
         asset_path: PathBuf,
         /// Maximum recursion depth (default: unlimited)
         #[arg(long)]
@@ -99,6 +100,7 @@ pub enum Commands {
     },
     /// Show which assets would break if the target asset were deleted or renamed
     Impact {
+        project_dir: PathBuf,
         asset_path: PathBuf,
         /// Show the full propagation tree instead of flat lists
         #[arg(long)]
@@ -300,18 +302,28 @@ fn dispatch(cli: &Cli) -> anyhow::Result<i32> {
             )
         }
         Commands::Deps {
+            project_dir,
             asset_path,
             depth,
             size_only,
-        } => commands::deps::handle_deps(
+        } => {
+            let db_path = resolve_db_path(project_dir, cli.db.as_deref());
+            commands::deps::handle_deps(
+                project_dir,
+                asset_path,
+                &db_path,
+                *depth,
+                *size_only,
+                &cli.format,
+            )
+        }
+        Commands::Impact {
+            project_dir,
             asset_path,
-            cli.db.as_deref(),
-            *depth,
-            *size_only,
-            &cli.format,
-        ),
-        Commands::Impact { asset_path, tree } => {
-            commands::impact::handle_impact(asset_path, cli.db.as_deref(), *tree, &cli.format)
+            tree,
+        } => {
+            let db_path = resolve_db_path(project_dir, cli.db.as_deref());
+            commands::impact::handle_impact(project_dir, asset_path, &db_path, *tree, &cli.format)
         }
         Commands::Redirectors { project_dir } => {
             let db_path = resolve_db_path(project_dir, cli.db.as_deref());

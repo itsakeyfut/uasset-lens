@@ -16,19 +16,16 @@ struct DepNode {
 }
 
 pub fn handle_deps(
+    project_dir: &Path,
     asset_path: &Path,
-    db_override: Option<&Path>,
+    db_path: &Path,
     depth: Option<u32>,
     size_only: bool,
     format: &FormatKind,
 ) -> anyhow::Result<i32> {
-    let (target, db_path) = crate::resolve_target_and_db(asset_path, db_override)?;
-    let db = crate::open_db(&db_path)?;
-    let config = db_path
-        .parent()
-        .and_then(|p| p.parent())
-        .map(crate::config::load_config)
-        .unwrap_or_default();
+    let target = crate::resolve_asset_path(project_dir, asset_path)?;
+    let db = crate::open_db(db_path)?;
+    let config = crate::config::load_config(project_dir);
     let graph = crate::load_graph(&db, &config.scan.external_roots)?;
 
     if !graph.contains(&target) {
@@ -287,8 +284,9 @@ mod tests {
         let _ = std::fs::remove_dir_all(&dir);
 
         let result = handle_deps(
+            &dir,
             Path::new("/Game/Target"),
-            Some(&db_path),
+            &db_path,
             None,
             false,
             &FormatKind::Text,
@@ -302,8 +300,9 @@ mod tests {
         asset_db::AssetDb::open(&db_path).unwrap();
 
         let result = handle_deps(
+            &dir,
             Path::new("/Game/NotInGraph"),
-            Some(&db_path),
+            &db_path,
             None,
             false,
             &FormatKind::Text,
@@ -332,8 +331,9 @@ mod tests {
         }
 
         let result = handle_deps(
+            &dir,
             Path::new("/Game/Leaf"),
-            Some(&db_path),
+            &db_path,
             None,
             false,
             &FormatKind::Text,
@@ -369,8 +369,9 @@ mod tests {
         }
 
         let result = handle_deps(
+            &dir,
             Path::new("/Game/Root"),
-            Some(&db_path),
+            &db_path,
             None,
             false,
             &FormatKind::Text,
@@ -406,8 +407,9 @@ mod tests {
         }
 
         let result = handle_deps(
+            &dir,
             Path::new("/Game/Root"),
-            Some(&db_path),
+            &db_path,
             None,
             false,
             &FormatKind::Json,
@@ -444,8 +446,9 @@ mod tests {
         }
 
         let result = handle_deps(
+            &dir,
             Path::new("/Game/A"),
-            Some(&db_path),
+            &db_path,
             None,
             false,
             &FormatKind::Text,
@@ -489,8 +492,9 @@ mod tests {
         }
 
         let result = handle_deps(
+            &dir,
             Path::new("/Game/A"),
-            Some(&db_path),
+            &db_path,
             Some(1),
             false,
             &FormatKind::Text,
@@ -576,8 +580,9 @@ mod tests {
         }
 
         let result = handle_deps(
+            &dir,
             Path::new("/Game/Root"),
-            Some(&db_path),
+            &db_path,
             None,
             true,
             &FormatKind::Text,
