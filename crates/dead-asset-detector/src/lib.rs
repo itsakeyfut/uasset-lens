@@ -1,11 +1,32 @@
 use dependency_graph::DependencyGraph;
 use shared::{AssetPath, is_ofpa_path};
 
-pub fn detect(graph: &DependencyGraph) -> Vec<AssetPath> {
+/// UE5 generates these sub-object types internally. They can never appear
+/// in another asset's import table by design, so in_degree == 0 is structural
+/// rather than a sign of an orphaned asset.
+pub const DEFAULT_EXCLUDED_TYPES: &[&str] = &[
+    "MetaData",
+    "AssetImportData",
+    "BillboardComponent",
+    "ActorFolder",
+    "ArrowComponent",
+    "BlueprintGeneratedClass",
+    "AnimCurveMetaData",
+    "BodySetup",
+];
+
+pub fn detect(graph: &DependencyGraph, excluded_type_names: &[&str]) -> Vec<AssetPath> {
     graph
         .nodes()
         .filter(|node| graph.in_degree(&node.path) == 0)
         .filter(|node| !is_ofpa_path(node.path.as_str()))
+        .filter(|node| {
+            if excluded_type_names.is_empty() {
+                return true;
+            }
+            let t = node.asset_type.to_string();
+            !excluded_type_names.contains(&t.as_str())
+        })
         .map(|node| node.path.clone()) // clone required: AssetPath is not Copy
         .collect()
 }
@@ -23,6 +44,13 @@ mod tests {
         }
     }
 
+    fn typed_node(path: &str, type_name: &str) -> AssetNode {
+        AssetNode {
+            path: AssetPath::new(path).unwrap(),
+            asset_type: AssetType::Unknown(type_name.to_owned()),
+        }
+    }
+
     fn ap(path: &str) -> AssetPath {
         AssetPath::new(path).unwrap()
     }
@@ -35,7 +63,7 @@ mod tests {
             &[] as &[&str],
         );
 
-        let mut result: Vec<_> = detect(&graph)
+        let mut result: Vec<_> = detect(&graph, &[])
             .into_iter()
             .map(|p| p.as_str().to_owned())
             .collect();
@@ -58,7 +86,7 @@ mod tests {
             &[] as &[&str],
         );
 
-        assert!(detect(&graph).is_empty());
+        assert!(detect(&graph, &[]).is_empty());
     }
 
     #[test]
@@ -72,7 +100,7 @@ mod tests {
             &[] as &[&str],
         );
 
-        let result: Vec<_> = detect(&graph)
+        let result: Vec<_> = detect(&graph, &[])
             .into_iter()
             .map(|p| p.as_str().to_owned())
             .collect();
@@ -90,7 +118,7 @@ mod tests {
             &[] as &[&str],
         );
 
-        let result: Vec<_> = detect(&graph)
+        let result: Vec<_> = detect(&graph, &[])
             .into_iter()
             .map(|p| p.as_str().to_owned())
             .collect();
@@ -105,7 +133,7 @@ mod tests {
             &[] as &[&str],
         );
 
-        let result: Vec<_> = detect(&graph)
+        let result: Vec<_> = detect(&graph, &[])
             .into_iter()
             .map(|p| p.as_str().to_owned())
             .collect();
@@ -122,11 +150,64 @@ mod tests {
             &[] as &[&str],
         );
 
-        let mut result: Vec<_> = detect(&graph)
+        let mut result: Vec<_> = detect(&graph, &[])
             .into_iter()
             .map(|p| p.as_str().to_owned())
             .collect();
         result.sort();
         assert_eq!(result, vec!["/Game/A", "/Game/C"]);
+    }
+
+    #[test]
+    fn detect_should_exclude_sub_object_type_when_type_is_in_excluded_list() {
+        let graph = DependencyGraph::build(
+            vec![
+                node("/Game/BP_Character"),
+                typed_node("/Game/Meta", "MetaData"),
+            ],
+            vec![],
+            &[] as &[&str],
+        );
+        let result: Vec<_> = detect(&graph, &["MetaData"])
+            .into_iter()
+            .map(|p| p.as_str().to_owned())
+            .collect();
+        assert_eq!(result, vec!["/Game/BP_Character"]);
+    }
+
+    #[test]
+    fn detect_should_include_sub_object_types_when_excluded_list_is_empty() {
+        let graph = DependencyGraph::build(
+            vec![
+                node("/Game/BP_Character"),
+                typed_node("/Game/Meta", "MetaData"),
+            ],
+            vec![],
+            &[] as &[&str],
+        );
+        let mut result: Vec<_> = detect(&graph, &[])
+            .into_iter()
+            .map(|p| p.as_str().to_owned())
+            .collect();
+        result.sort();
+        assert_eq!(result, vec!["/Game/BP_Character", "/Game/Meta"]);
+    }
+
+    #[test]
+    fn detect_should_not_exclude_blueprint_type_when_only_metadata_is_excluded() {
+        let graph = DependencyGraph::build(
+            vec![
+                node("/Game/BP_Character"),
+                typed_node("/Game/Meta", "MetaData"),
+            ],
+            vec![],
+            &[] as &[&str],
+        );
+        let result: Vec<_> = detect(&graph, &["MetaData"])
+            .into_iter()
+            .map(|p| p.as_str().to_owned())
+            .collect();
+        // Blueprint is not in the denylist, so it still appears
+        assert_eq!(result, vec!["/Game/BP_Character"]);
     }
 }

@@ -58,7 +58,7 @@ pub fn handle_find(
     };
 
     if unreferenced && let Some(g) = &graph {
-        let dead: HashSet<shared::AssetPath> = dead_asset_detector::detect(g).into_iter().collect();
+        let dead: HashSet<shared::AssetPath> = dead_asset_detector::detect(g, &[]).into_iter().collect();
         results.retain(|r| dead.contains(&r.asset_path));
     }
 
@@ -394,7 +394,7 @@ mod tests {
         let db = asset_db::AssetDb::open(&db_path).unwrap();
         let graph = crate::load_graph(&db, &[]).unwrap();
         let dead: std::collections::HashSet<AssetPath> =
-            dead_asset_detector::detect(&graph).into_iter().collect();
+            dead_asset_detector::detect(&graph, &[]).into_iter().collect();
 
         assert!(
             !dead.contains(&AssetPath::new("/Game/B").unwrap()),

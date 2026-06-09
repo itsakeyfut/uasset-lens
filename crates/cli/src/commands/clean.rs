@@ -55,7 +55,7 @@ pub fn handle_clean(
     let db = crate::open_db(db_path)?;
     let graph = crate::load_graph(&db, &cfg.scan.external_roots)?;
 
-    let dead_paths = dead_asset_detector::detect(&graph);
+    let dead_paths = dead_asset_detector::detect(&graph, &[]);
 
     let type_map: HashMap<&shared::AssetPath, String> = graph
         .nodes()
