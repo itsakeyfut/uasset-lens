@@ -484,4 +484,65 @@ mod tests {
         assert_eq!(largest[0].bytes, 8192, "largest asset is BP_One");
         let _ = std::fs::remove_dir_all(&dir);
     }
+
+    fn insert_11_types(dir: &Path, db_path: &Path) {
+        let mut db = asset_db::AssetDb::open(db_path).unwrap();
+        let metas: Vec<_> = (0..11_u64)
+            .map(|i| {
+                make_meta(
+                    &format!("/Game/Asset{i}"),
+                    dir.join(format!("Asset{i}.uasset")),
+                    AssetType::Unknown(format!("Type{i}")),
+                    1024 * (i + 1),
+                    vec![],
+                )
+            })
+            .collect();
+        db.upsert_all(&metas).unwrap();
+    }
+
+    #[test]
+    fn handle_stats_top_default_should_show_up_to_10_types_without_panicking() {
+        // 11 distinct types; default top (10) must not panic or truncate to old hardcoded 3
+        let (dir, db_path) = test_db_in_tempdir("stats238_default");
+        insert_11_types(&dir, &db_path);
+        let result =
+            handle_stats(&dir, None, &db_path, &Default::default(), &FormatKind::Text).unwrap();
+        assert_eq!(result, 0);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn handle_stats_top_zero_should_show_all_types_without_panicking() {
+        // top=Some(0) means "show all"; must not panic with 11 types
+        let (dir, db_path) = test_db_in_tempdir("stats238_zero");
+        insert_11_types(&dir, &db_path);
+        let result = handle_stats(
+            &dir,
+            Some(0),
+            &db_path,
+            &Default::default(),
+            &FormatKind::Text,
+        )
+        .unwrap();
+        assert_eq!(result, 0);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn handle_stats_top_custom_should_limit_type_display_without_panicking() {
+        // top=Some(3) with 11 types; must not panic
+        let (dir, db_path) = test_db_in_tempdir("stats238_custom");
+        insert_11_types(&dir, &db_path);
+        let result = handle_stats(
+            &dir,
+            Some(3),
+            &db_path,
+            &Default::default(),
+            &FormatKind::Text,
+        )
+        .unwrap();
+        assert_eq!(result, 0);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 }
