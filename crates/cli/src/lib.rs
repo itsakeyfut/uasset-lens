@@ -153,7 +153,8 @@ pub enum Commands {
     /// Show a size and composition overview of the project
     Stats {
         project_dir: PathBuf,
-        /// Number of folders and largest assets to show (default: 5 folders, 10 assets)
+        /// Number of asset types, folders, and largest assets to show
+        /// (default: 10 types, 5 folders, 10 assets); 0 = show all
         #[arg(long)]
         top: Option<usize>,
     },

@@ -58,8 +58,16 @@ pub fn handle_stats(
         .context("Failed to read assets from database")?;
     let graph = crate::load_graph(&db, &cfg.scan.external_roots)?;
 
-    let folder_limit = top.unwrap_or(5);
-    let asset_limit = top.unwrap_or(10);
+    let folder_limit = match top {
+        Some(0) => usize::MAX,
+        Some(n) => n,
+        None => 5,
+    };
+    let asset_limit = match top {
+        Some(0) => usize::MAX,
+        Some(n) => n,
+        None => 10,
+    };
 
     let total_assets = records.len();
     let total_bytes: u64 = records.iter().map(|r| r.file_size).sum();
@@ -80,6 +88,11 @@ pub fn handle_stats(
         })
         .collect();
     by_type.sort_unstable_by_key(|t| std::cmp::Reverse(t.bytes));
+    let type_limit = match top {
+        Some(0) => by_type.len(),
+        Some(n) => n,
+        None => 10,
+    };
 
     let mut folder_map: HashMap<String, u64> = HashMap::new();
     for r in &records {
@@ -104,6 +117,17 @@ pub fn handle_stats(
             bytes: r.file_size,
         })
         .collect();
+
+    let folder_display_limit = if folder_limit == usize::MAX {
+        by_folder.len()
+    } else {
+        folder_limit
+    };
+    let asset_display_limit = if asset_limit == usize::MAX {
+        largest.len()
+    } else {
+        asset_limit
+    };
 
     let total_edges = graph.edge_count();
     let avg_out_degree = if total_assets > 0 {
@@ -153,24 +177,27 @@ pub fn handle_stats(
                 crate::format_size(total_bytes)
             );
 
-            // By Type: always show top 3, then "(N more types)" if any remain
             println!();
-            println!("By Type:");
-            let top3 = &by_type[..by_type.len().min(3)];
-            if !top3.is_empty() {
-                let max_name = top3.iter().map(|t| t.asset_type.len()).max().unwrap_or(1);
-                let max_count = top3
+            println!("By Type (top {}):", type_limit);
+            let top_types = &by_type[..by_type.len().min(type_limit)];
+            if !top_types.is_empty() {
+                let max_name = top_types
+                    .iter()
+                    .map(|t| t.asset_type.len())
+                    .max()
+                    .unwrap_or(1);
+                let max_count = top_types
                     .iter()
                     .map(|t| crate::digit_count(t.count))
                     .max()
                     .unwrap_or(1);
-                let max_size_len = top3
+                let max_size_len = top_types
                     .iter()
                     .map(|t| crate::format_size(t.bytes).len())
                     .max()
                     .unwrap_or(1);
-                let max_bytes = top3.first().map(|t| t.bytes).unwrap_or(1).max(1);
-                for t in top3 {
+                let max_bytes = top_types.first().map(|t| t.bytes).unwrap_or(1).max(1);
+                for t in top_types {
                     let size_str = crate::format_size(t.bytes);
                     let filled = (24.0 * t.bytes as f64 / max_bytes as f64).round() as usize;
                     let bar = "\u{2588}".repeat(filled) + &"\u{2591}".repeat(24 - filled);
@@ -192,14 +219,14 @@ pub fn handle_stats(
                     );
                 }
             }
-            let remaining = by_type.len().saturating_sub(3);
+            let remaining = by_type.len().saturating_sub(type_limit);
             if remaining > 0 {
                 println!("  ({} more types)", remaining);
             }
 
             // By Folder
             println!();
-            println!("By Folder (top {} by size):", folder_limit);
+            println!("By Folder (top {} by size):", folder_display_limit);
             if !by_folder.is_empty() {
                 let max_folder = by_folder.iter().map(|f| f.folder.len()).max().unwrap_or(1);
                 for f in &by_folder {
@@ -214,7 +241,7 @@ pub fn handle_stats(
 
             // Largest Assets
             println!();
-            println!("Largest Assets (top {}):", asset_limit);
+            println!("Largest Assets (top {}):", asset_display_limit);
             for la in &largest {
                 let name = la.path.split('/').next_back().unwrap_or(la.path.as_str());
                 println!(
@@ -482,6 +509,67 @@ mod tests {
         assert!(by_folder.len() <= 2, "folder list capped at top limit");
         assert!(largest.len() <= 2, "largest list capped at top limit");
         assert_eq!(largest[0].bytes, 8192, "largest asset is BP_One");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    fn insert_11_types(dir: &Path, db_path: &Path) {
+        let mut db = asset_db::AssetDb::open(db_path).unwrap();
+        let metas: Vec<_> = (0..11_u64)
+            .map(|i| {
+                make_meta(
+                    &format!("/Game/Asset{i}"),
+                    dir.join(format!("Asset{i}.uasset")),
+                    AssetType::Unknown(format!("Type{i}")),
+                    1024 * (i + 1),
+                    vec![],
+                )
+            })
+            .collect();
+        db.upsert_all(&metas).unwrap();
+    }
+
+    #[test]
+    fn handle_stats_top_default_should_show_up_to_10_types_without_panicking() {
+        // smoke test: 11 distinct types must not cause a panic regardless of top
+        let (dir, db_path) = test_db_in_tempdir("stats238_default");
+        insert_11_types(&dir, &db_path);
+        let result =
+            handle_stats(&dir, None, &db_path, &Default::default(), &FormatKind::Text).unwrap();
+        assert_eq!(result, 0);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn handle_stats_top_zero_should_show_all_types_without_panicking() {
+        // smoke test: top=Some(0) must not panic with 11 types
+        let (dir, db_path) = test_db_in_tempdir("stats238_zero");
+        insert_11_types(&dir, &db_path);
+        let result = handle_stats(
+            &dir,
+            Some(0),
+            &db_path,
+            &Default::default(),
+            &FormatKind::Text,
+        )
+        .unwrap();
+        assert_eq!(result, 0);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn handle_stats_top_custom_should_limit_type_display_without_panicking() {
+        // smoke test: top=Some(3) with 11 types must not panic
+        let (dir, db_path) = test_db_in_tempdir("stats238_custom");
+        insert_11_types(&dir, &db_path);
+        let result = handle_stats(
+            &dir,
+            Some(3),
+            &db_path,
+            &Default::default(),
+            &FormatKind::Text,
+        )
+        .unwrap();
+        assert_eq!(result, 0);
         let _ = std::fs::remove_dir_all(&dir);
     }
 }
