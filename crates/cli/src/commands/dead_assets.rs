@@ -74,7 +74,7 @@ pub fn handle_dead_assets(
                 .map(|r| r.file_size)
                 .unwrap_or(0);
             DeadAssetEntry {
-                path: path.as_str().to_owned(), // clone required: AssetPath is not Copy
+                path: path.as_str().to_owned(), // to_owned() required: field needs owned String from &str
                 asset_type,
                 file_size,
             }
