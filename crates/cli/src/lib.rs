@@ -323,13 +323,7 @@ fn dispatch(cli: &Cli) -> anyhow::Result<i32> {
             tree,
         } => {
             let db_path = resolve_db_path(project_dir, cli.db.as_deref());
-            commands::impact::handle_impact(
-                project_dir,
-                asset_path,
-                &db_path,
-                *tree,
-                &cli.format,
-            )
+            commands::impact::handle_impact(project_dir, asset_path, &db_path, *tree, &cli.format)
         }
         Commands::Redirectors { project_dir } => {
             let db_path = resolve_db_path(project_dir, cli.db.as_deref());

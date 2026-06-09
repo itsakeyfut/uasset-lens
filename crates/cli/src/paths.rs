@@ -32,7 +32,6 @@ pub(crate) fn find_project_dir(start: &Path) -> anyhow::Result<PathBuf> {
     }
 }
 
-
 pub(crate) fn resolve_asset_path(
     project_dir: &Path,
     asset_path: &Path,
@@ -92,9 +91,6 @@ mod tests {
         assert_eq!(result, dir);
     }
 
-
-
-
     #[test]
     fn find_project_dir_should_return_dir_when_marker_present() {
         let dir =
@@ -149,10 +145,8 @@ mod tests {
 
     #[test]
     fn resolve_asset_path_should_convert_fs_path_via_content_root() {
-        let dir = std::env::temp_dir().join(format!(
-            "uasset_lens_resolve_path_{}",
-            std::process::id()
-        ));
+        let dir =
+            std::env::temp_dir().join(format!("uasset_lens_resolve_path_{}", std::process::id()));
         let content = dir.join("Content");
         let chars = content.join("Characters");
         std::fs::create_dir_all(&chars).unwrap();
@@ -171,10 +165,8 @@ mod tests {
         ));
         std::fs::create_dir_all(&dir).unwrap();
         // No Content subdirectory — an asset at /tmp/outside.uasset cannot be resolved
-        let asset = std::env::temp_dir().join(format!(
-            "uasset_lens_outside_{}.uasset",
-            std::process::id()
-        ));
+        let asset =
+            std::env::temp_dir().join(format!("uasset_lens_outside_{}.uasset", std::process::id()));
         let result = resolve_asset_path(&dir, &asset);
         assert!(result.is_err(), "path outside content root should fail");
         let _ = std::fs::remove_file(&asset);
