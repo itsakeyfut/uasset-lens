@@ -4,6 +4,9 @@ use anyhow::Context;
 
 use crate::FormatKind;
 
+// Cycles longer than this threshold show first 2 nodes, hidden count, and last.
+const CYCLE_TRUNCATE_THRESHOLD: usize = 6;
+
 #[derive(serde::Serialize)]
 struct GraphOutput {
     total_assets: usize,
@@ -14,6 +17,7 @@ struct GraphOutput {
 pub fn handle_graph(
     _project_dir: &Path,
     cycles_only: bool,
+    full_cycles: bool,
     db_path: &Path,
     cfg: &crate::config::ConfigFile,
     format: &FormatKind,
@@ -65,7 +69,7 @@ pub fn handle_graph(
                 }
                 println!("  Cycles:");
                 for (i, path_list) in cycle_paths.iter().enumerate() {
-                    println!("    [{}] {}", i + 1, path_list.join(" \u{2192} "));
+                    println!("    [{}] {}", i + 1, format_cycle(path_list, full_cycles));
                 }
             }
         }
@@ -75,6 +79,21 @@ pub fn handle_graph(
         Ok(1)
     } else {
         Ok(0)
+    }
+}
+
+fn format_cycle(nodes: &[String], full: bool) -> String {
+    let unique_count = nodes.len().saturating_sub(1);
+    if full || unique_count <= CYCLE_TRUNCATE_THRESHOLD {
+        nodes.join(" \u{2192} ")
+    } else {
+        let hidden = nodes.len() - 3;
+        format!(
+            "{} \u{2192} {} \u{2192} ... ({hidden} nodes) \u{2192} {}",
+            nodes[0],
+            nodes[1],
+            nodes[nodes.len() - 1],
+        )
     }
 }
 
@@ -92,6 +111,7 @@ mod tests {
         let result = handle_graph(
             Path::new("/proj"),
             false,
+            false,
             &db_path,
             &Default::default(),
             &FormatKind::Text,
@@ -107,6 +127,7 @@ mod tests {
         let result = handle_graph(
             &dir,
             false,
+            false,
             &db_path,
             &Default::default(),
             &FormatKind::Text,
@@ -121,8 +142,15 @@ mod tests {
         let (dir, db_path) = test_db_in_tempdir("graph21_nocycle");
         asset_db::AssetDb::open(&db_path).unwrap();
 
-        let result =
-            handle_graph(&dir, true, &db_path, &Default::default(), &FormatKind::Text).unwrap();
+        let result = handle_graph(
+            &dir,
+            true,
+            false,
+            &db_path,
+            &Default::default(),
+            &FormatKind::Text,
+        )
+        .unwrap();
         assert_eq!(result, 0);
         let _ = std::fs::remove_dir_all(&dir);
     }
@@ -152,8 +180,15 @@ mod tests {
             .unwrap();
         }
 
-        let result =
-            handle_graph(&dir, true, &db_path, &Default::default(), &FormatKind::Text).unwrap();
+        let result = handle_graph(
+            &dir,
+            true,
+            false,
+            &db_path,
+            &Default::default(),
+            &FormatKind::Text,
+        )
+        .unwrap();
         assert_eq!(result, 1, "cycles-only with A→B→A cycle should exit 1");
         let _ = std::fs::remove_dir_all(&dir);
     }
@@ -186,6 +221,7 @@ mod tests {
         let result = handle_graph(
             &dir,
             false,
+            false,
             &db_path,
             &Default::default(),
             &FormatKind::Text,
@@ -207,6 +243,7 @@ mod tests {
         // contains the expected keys by exercising handle_graph with Json format.
         let result = handle_graph(
             &dir,
+            false,
             false,
             &db_path,
             &Default::default(),
@@ -242,9 +279,127 @@ mod tests {
             .unwrap();
         }
 
-        let result =
-            handle_graph(&dir, true, &db_path, &Default::default(), &FormatKind::Json).unwrap();
+        let result = handle_graph(
+            &dir,
+            true,
+            false,
+            &db_path,
+            &Default::default(),
+            &FormatKind::Json,
+        )
+        .unwrap();
         assert_eq!(result, 1, "JSON cycles-only with A→B→A cycle should exit 1");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    fn make_cycle_path(unique_count: usize) -> Vec<String> {
+        let mut v: Vec<String> = (0..unique_count).map(|i| format!("/Game/N{i}")).collect();
+        v.push(v[0].clone()); // closed cycle: repeat first at end
+        v
+    }
+
+    #[test]
+    fn format_cycle_should_join_all_nodes_when_at_threshold() {
+        // 6 unique nodes = exactly CYCLE_TRUNCATE_THRESHOLD — must not truncate
+        let nodes = make_cycle_path(6);
+        let result = format_cycle(&nodes, false);
+        assert!(result.contains("/Game/N5"), "last unique node shown");
+        assert!(!result.contains("..."), "no truncation at threshold");
+    }
+
+    #[test]
+    fn format_cycle_should_truncate_middle_when_above_threshold() {
+        // 7 unique nodes → truncation: show N0, N1, ... (5 nodes), N0
+        let nodes = make_cycle_path(7);
+        let result = format_cycle(&nodes, false);
+        assert!(
+            result.starts_with("/Game/N0 \u{2192} /Game/N1"),
+            "shows first 2 nodes"
+        );
+        assert!(result.contains("... (5 nodes)"), "hidden count is correct");
+        assert!(result.ends_with("/Game/N0"), "shows last = repeated first");
+        assert!(!result.contains("/Game/N2"), "hides middle nodes");
+    }
+
+    #[test]
+    fn format_cycle_should_show_all_nodes_when_full_is_true() {
+        // full=true disables truncation even for large cycles
+        let nodes = make_cycle_path(7);
+        let result = format_cycle(&nodes, true);
+        assert!(result.contains("/Game/N2"), "middle nodes shown when full");
+        assert!(!result.contains("..."), "no truncation when full");
+    }
+
+    #[test]
+    fn handle_graph_text_should_return_1_and_not_panic_with_long_cycle_when_not_full() {
+        let (dir, db_path) = test_db_in_tempdir("graph237_trunc");
+        {
+            // Build a 7-node cycle: N0→N1→…→N6→N0
+            let mut db = asset_db::AssetDb::open(&db_path).unwrap();
+            let paths: Vec<_> = (0..7)
+                .map(|i| AssetPath::new(&format!("/Game/N{i}")).unwrap())
+                .collect();
+            let metas: Vec<_> = paths
+                .iter()
+                .enumerate()
+                .map(|(i, p)| {
+                    make_meta(
+                        p.as_str(),
+                        dir.join(format!("N{i}.uasset")),
+                        AssetType::Blueprint,
+                        512,
+                        vec![paths[(i + 1) % 7].clone()],
+                    )
+                })
+                .collect();
+            db.upsert_all(&metas).unwrap();
+        }
+        let result = handle_graph(
+            &dir,
+            true,
+            false,
+            &db_path,
+            &Default::default(),
+            &FormatKind::Text,
+        )
+        .unwrap();
+        assert_eq!(result, 1, "7-node cycle → cycles-only exits 1");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn handle_graph_text_should_return_1_and_not_panic_with_long_cycle_when_full() {
+        let (dir, db_path) = test_db_in_tempdir("graph237_full");
+        {
+            let mut db = asset_db::AssetDb::open(&db_path).unwrap();
+            let paths: Vec<_> = (0..7)
+                .map(|i| AssetPath::new(&format!("/Game/M{i}")).unwrap())
+                .collect();
+            let metas: Vec<_> = paths
+                .iter()
+                .enumerate()
+                .map(|(i, p)| {
+                    make_meta(
+                        p.as_str(),
+                        dir.join(format!("M{i}.uasset")),
+                        AssetType::Blueprint,
+                        512,
+                        vec![paths[(i + 1) % 7].clone()],
+                    )
+                })
+                .collect();
+            db.upsert_all(&metas).unwrap();
+        }
+        let result = handle_graph(
+            &dir,
+            true,
+            true,
+            &db_path,
+            &Default::default(),
+            &FormatKind::Text,
+        )
+        .unwrap();
+        assert_eq!(result, 1, "full_cycles=true, 7-node cycle → exits 1");
         let _ = std::fs::remove_dir_all(&dir);
     }
 }

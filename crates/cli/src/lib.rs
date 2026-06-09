@@ -72,6 +72,9 @@ pub enum Commands {
         /// Show only circular dependencies
         #[arg(long)]
         cycles_only: bool,
+        /// Show all nodes in long cycles instead of first 2 and last
+        #[arg(long)]
+        full_cycles: bool,
     },
     /// List assets that are not referenced by any other asset
     #[command(name = "dead-assets")]
@@ -315,9 +318,17 @@ fn dispatch(cli: &Cli) -> anyhow::Result<i32> {
         Commands::Graph {
             project_dir,
             cycles_only,
+            full_cycles,
         } => {
             let db_path = resolve_db_path(project_dir, cli.db.as_deref());
-            commands::graph::handle_graph(project_dir, *cycles_only, &db_path, &cfg, &cli.format)
+            commands::graph::handle_graph(
+                project_dir,
+                *cycles_only,
+                *full_cycles,
+                &db_path,
+                &cfg,
+                &cli.format,
+            )
         }
         Commands::DeadAssets {
             project_dir,
