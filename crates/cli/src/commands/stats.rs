@@ -58,8 +58,16 @@ pub fn handle_stats(
         .context("Failed to read assets from database")?;
     let graph = crate::load_graph(&db, &cfg.scan.external_roots)?;
 
-    let folder_limit = top.unwrap_or(5);
-    let asset_limit = top.unwrap_or(10);
+    let folder_limit = match top {
+        Some(0) => usize::MAX,
+        Some(n) => n,
+        None => 5,
+    };
+    let asset_limit = match top {
+        Some(0) => usize::MAX,
+        Some(n) => n,
+        None => 10,
+    };
 
     let total_assets = records.len();
     let total_bytes: u64 = records.iter().map(|r| r.file_size).sum();
@@ -80,6 +88,11 @@ pub fn handle_stats(
         })
         .collect();
     by_type.sort_unstable_by_key(|t| std::cmp::Reverse(t.bytes));
+    let type_limit = match top {
+        Some(0) => by_type.len(),
+        Some(n) => n,
+        None => 10,
+    };
 
     let mut folder_map: HashMap<String, u64> = HashMap::new();
     for r in &records {
@@ -153,24 +166,27 @@ pub fn handle_stats(
                 crate::format_size(total_bytes)
             );
 
-            // By Type: always show top 3, then "(N more types)" if any remain
             println!();
-            println!("By Type:");
-            let top3 = &by_type[..by_type.len().min(3)];
-            if !top3.is_empty() {
-                let max_name = top3.iter().map(|t| t.asset_type.len()).max().unwrap_or(1);
-                let max_count = top3
+            println!("By Type (top {}):", type_limit);
+            let top_types = &by_type[..by_type.len().min(type_limit)];
+            if !top_types.is_empty() {
+                let max_name = top_types
+                    .iter()
+                    .map(|t| t.asset_type.len())
+                    .max()
+                    .unwrap_or(1);
+                let max_count = top_types
                     .iter()
                     .map(|t| crate::digit_count(t.count))
                     .max()
                     .unwrap_or(1);
-                let max_size_len = top3
+                let max_size_len = top_types
                     .iter()
                     .map(|t| crate::format_size(t.bytes).len())
                     .max()
                     .unwrap_or(1);
-                let max_bytes = top3.first().map(|t| t.bytes).unwrap_or(1).max(1);
-                for t in top3 {
+                let max_bytes = top_types.first().map(|t| t.bytes).unwrap_or(1).max(1);
+                for t in top_types {
                     let size_str = crate::format_size(t.bytes);
                     let filled = (24.0 * t.bytes as f64 / max_bytes as f64).round() as usize;
                     let bar = "\u{2588}".repeat(filled) + &"\u{2591}".repeat(24 - filled);
@@ -192,7 +208,7 @@ pub fn handle_stats(
                     );
                 }
             }
-            let remaining = by_type.len().saturating_sub(3);
+            let remaining = by_type.len().saturating_sub(type_limit);
             if remaining > 0 {
                 println!("  ({} more types)", remaining);
             }
