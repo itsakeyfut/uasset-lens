@@ -118,6 +118,17 @@ pub fn handle_stats(
         })
         .collect();
 
+    let folder_display_limit = if folder_limit == usize::MAX {
+        by_folder.len()
+    } else {
+        folder_limit
+    };
+    let asset_display_limit = if asset_limit == usize::MAX {
+        largest.len()
+    } else {
+        asset_limit
+    };
+
     let total_edges = graph.edge_count();
     let avg_out_degree = if total_assets > 0 {
         total_edges as f64 / total_assets as f64
@@ -215,7 +226,7 @@ pub fn handle_stats(
 
             // By Folder
             println!();
-            println!("By Folder (top {} by size):", folder_limit);
+            println!("By Folder (top {} by size):", folder_display_limit);
             if !by_folder.is_empty() {
                 let max_folder = by_folder.iter().map(|f| f.folder.len()).max().unwrap_or(1);
                 for f in &by_folder {
@@ -230,7 +241,7 @@ pub fn handle_stats(
 
             // Largest Assets
             println!();
-            println!("Largest Assets (top {}):", asset_limit);
+            println!("Largest Assets (top {}):", asset_display_limit);
             for la in &largest {
                 let name = la.path.split('/').next_back().unwrap_or(la.path.as_str());
                 println!(
