@@ -503,7 +503,7 @@ mod tests {
 
     #[test]
     fn handle_stats_top_default_should_show_up_to_10_types_without_panicking() {
-        // 11 distinct types; default top (10) must not panic or truncate to old hardcoded 3
+        // smoke test: 11 distinct types must not cause a panic regardless of top
         let (dir, db_path) = test_db_in_tempdir("stats238_default");
         insert_11_types(&dir, &db_path);
         let result =
@@ -514,7 +514,7 @@ mod tests {
 
     #[test]
     fn handle_stats_top_zero_should_show_all_types_without_panicking() {
-        // top=Some(0) means "show all"; must not panic with 11 types
+        // smoke test: top=Some(0) must not panic with 11 types
         let (dir, db_path) = test_db_in_tempdir("stats238_zero");
         insert_11_types(&dir, &db_path);
         let result = handle_stats(
@@ -531,7 +531,7 @@ mod tests {
 
     #[test]
     fn handle_stats_top_custom_should_limit_type_display_without_panicking() {
-        // top=Some(3) with 11 types; must not panic
+        // smoke test: top=Some(3) with 11 types must not panic
         let (dir, db_path) = test_db_in_tempdir("stats238_custom");
         insert_11_types(&dir, &db_path);
         let result = handle_stats(
