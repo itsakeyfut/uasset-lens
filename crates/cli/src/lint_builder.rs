@@ -143,13 +143,20 @@ mod tests {
             .iter()
             .flat_map(|r| r.check(&bp, Some(&metrics)))
             .collect();
-        assert!(violations.iter().any(|v| v.rule_id == "blueprint/dependency-depth"));
+        assert!(
+            violations
+                .iter()
+                .any(|v| v.rule_id == "blueprint/dependency-depth")
+        );
     }
 
     #[test]
     fn build_lint_rules_should_apply_per_type_depth_when_blueprint_depth_by_type_set_in_config() {
         let cfg = LintConfig {
-            blueprint_depth_by_type: std::collections::HashMap::from([("Blueprint".to_owned(), 5u32)]),
+            blueprint_depth_by_type: std::collections::HashMap::from([(
+                "Blueprint".to_owned(),
+                5u32,
+            )]),
             ..LintConfig::default()
         };
         let rules = build_lint_rules(&cfg);
@@ -164,6 +171,10 @@ mod tests {
             .iter()
             .flat_map(|r| r.check(&bp, Some(&metrics)))
             .collect();
-        assert!(violations.iter().any(|v| v.rule_id == "blueprint/dependency-depth"));
+        assert!(
+            violations
+                .iter()
+                .any(|v| v.rule_id == "blueprint/dependency-depth")
+        );
     }
 }

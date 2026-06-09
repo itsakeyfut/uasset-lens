@@ -38,7 +38,11 @@ pub struct Cli {
     /// Skip confirmation prompts (for CI)
     #[arg(short = 'y', long, global = true)]
     pub yes: bool,
-    #[arg(long, global = true, help = "Path to config file (default: <project_dir>/.uasset-lens.toml)")]
+    #[arg(
+        long,
+        global = true,
+        help = "Path to config file (default: <project_dir>/.uasset-lens.toml)"
+    )]
     pub config: Option<PathBuf>,
     #[command(subcommand)]
     pub command: Commands,
@@ -629,7 +633,8 @@ mod tests {
         let cfg_path = dir.join("custom.toml");
         std::fs::write(&cfg_path, "[lint]\nblueprint_max_dependency_depth = 99\n").unwrap();
 
-        let cfg = crate::config::resolve_config(std::path::Path::new("."), Some(&cfg_path)).unwrap();
+        let cfg =
+            crate::config::resolve_config(std::path::Path::new("."), Some(&cfg_path)).unwrap();
         assert_eq!(cfg.lint.blueprint_max_dependency_depth, Some(99));
         let _ = std::fs::remove_dir_all(&dir);
     }

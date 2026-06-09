@@ -89,8 +89,13 @@ mod tests {
         let (dir, db_path) = test_db_in_tempdir("graph21_missing");
         let _ = std::fs::remove_dir_all(&dir);
 
-        let result =
-            handle_graph(Path::new("/proj"), false, &db_path, &Default::default(), &FormatKind::Text);
+        let result = handle_graph(
+            Path::new("/proj"),
+            false,
+            &db_path,
+            &Default::default(),
+            &FormatKind::Text,
+        );
         assert!(result.is_err(), "missing DB should return an error");
     }
 
@@ -99,8 +104,14 @@ mod tests {
         let (dir, db_path) = test_db_in_tempdir("graph21_empty");
         asset_db::AssetDb::open(&db_path).unwrap();
 
-        let result =
-            handle_graph(&dir, false, &db_path, &Default::default(), &FormatKind::Text).unwrap();
+        let result = handle_graph(
+            &dir,
+            false,
+            &db_path,
+            &Default::default(),
+            &FormatKind::Text,
+        )
+        .unwrap();
         assert_eq!(result, 0);
         let _ = std::fs::remove_dir_all(&dir);
     }
@@ -172,8 +183,14 @@ mod tests {
             .unwrap();
         }
 
-        let result =
-            handle_graph(&dir, false, &db_path, &Default::default(), &FormatKind::Text).unwrap();
+        let result = handle_graph(
+            &dir,
+            false,
+            &db_path,
+            &Default::default(),
+            &FormatKind::Text,
+        )
+        .unwrap();
         assert_eq!(
             result, 0,
             "without --cycles-only flag, exit code is always 0"
@@ -188,8 +205,14 @@ mod tests {
 
         // Verify that JSON serialization succeeds and the GraphOutput struct
         // contains the expected keys by exercising handle_graph with Json format.
-        let result =
-            handle_graph(&dir, false, &db_path, &Default::default(), &FormatKind::Json).unwrap();
+        let result = handle_graph(
+            &dir,
+            false,
+            &db_path,
+            &Default::default(),
+            &FormatKind::Json,
+        )
+        .unwrap();
         assert_eq!(result, 0);
         let _ = std::fs::remove_dir_all(&dir);
     }

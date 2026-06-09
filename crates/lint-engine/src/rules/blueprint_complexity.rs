@@ -22,7 +22,8 @@ impl LintRule for BlueprintComplexityRule {
         let Some(metrics) = metrics else {
             return vec![];
         };
-        let effective_depth = self.depth_by_type
+        let effective_depth = self
+            .depth_by_type
             .get(&asset.asset_type)
             .copied()
             .unwrap_or(self.thresholds.max_dependency_depth);
@@ -154,7 +155,7 @@ mod tests {
 
     #[test]
     fn blueprint_complexity_rule_should_fall_back_to_global_threshold_when_type_not_in_depth_by_type()
-    {
+     {
         use shared::AssetType;
         use std::collections::HashMap;
         let rule = BlueprintComplexityRule {

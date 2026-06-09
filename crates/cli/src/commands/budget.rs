@@ -199,8 +199,12 @@ mod tests {
     fn handle_budget_should_return_err_when_db_does_not_exist() {
         let (dir, db_path) = test_db_in_tempdir("budget_missing");
         let _ = std::fs::remove_dir_all(&dir);
-        let result =
-            handle_budget(std::path::Path::new("."), &db_path, &Default::default(), &FormatKind::Text);
+        let result = handle_budget(
+            std::path::Path::new("."),
+            &db_path,
+            &Default::default(),
+            &FormatKind::Text,
+        );
         assert!(result.is_err());
     }
 

@@ -66,8 +66,12 @@ mod tests {
         let (dir, db_path) = test_db_in_tempdir("redir26_missing");
         let _ = std::fs::remove_dir_all(&dir);
 
-        let result =
-            handle_redirectors(Path::new("/proj"), &db_path, &Default::default(), &FormatKind::Text);
+        let result = handle_redirectors(
+            Path::new("/proj"),
+            &db_path,
+            &Default::default(),
+            &FormatKind::Text,
+        );
         assert!(result.is_err(), "missing DB should return an error");
     }
 

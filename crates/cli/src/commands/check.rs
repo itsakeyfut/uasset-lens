@@ -102,8 +102,7 @@ pub fn handle_check(
                 )
             })
             .collect();
-        let engine =
-            lint_engine::LintEngine::new(crate::lint_builder::build_lint_rules(&cfg.lint));
+        let engine = lint_engine::LintEngine::new(crate::lint_builder::build_lint_rules(&cfg.lint));
         (Some(map), Some(engine))
     } else {
         (None, None)
@@ -334,8 +333,14 @@ mod tests {
         let (dir, db_path) = test_db_in_tempdir("check159_missing");
         let _ = std::fs::remove_dir_all(&dir);
 
-        let result =
-            handle_check(Path::new("/proj"), &[], &[], &db_path, &Default::default(), &FormatKind::Text);
+        let result = handle_check(
+            Path::new("/proj"),
+            &[],
+            &[],
+            &db_path,
+            &Default::default(),
+            &FormatKind::Text,
+        );
         assert!(result.is_err(), "missing DB should return an error");
     }
 
@@ -344,8 +349,15 @@ mod tests {
         let (dir, db_path) = test_db_in_tempdir("check159_empty");
         asset_db::AssetDb::open(&db_path).unwrap();
 
-        let result =
-            handle_check(&dir, &[], &[], &db_path, &Default::default(), &FormatKind::Text).unwrap();
+        let result = handle_check(
+            &dir,
+            &[],
+            &[],
+            &db_path,
+            &Default::default(),
+            &FormatKind::Text,
+        )
+        .unwrap();
         assert_eq!(result, 0, "empty DB — all checks pass");
         let _ = std::fs::remove_dir_all(&dir);
     }
@@ -367,8 +379,15 @@ mod tests {
             .unwrap();
         }
 
-        let result =
-            handle_check(&dir, &[], &[], &db_path, &Default::default(), &FormatKind::Text).unwrap();
+        let result = handle_check(
+            &dir,
+            &[],
+            &[],
+            &db_path,
+            &Default::default(),
+            &FormatKind::Text,
+        )
+        .unwrap();
         assert_eq!(result, 1, "orphan asset triggers dead-assets check");
         let _ = std::fs::remove_dir_all(&dir);
     }
@@ -398,8 +417,15 @@ mod tests {
             .unwrap();
         }
 
-        let result =
-            handle_check(&dir, &[], &[], &db_path, &Default::default(), &FormatKind::Text).unwrap();
+        let result = handle_check(
+            &dir,
+            &[],
+            &[],
+            &db_path,
+            &Default::default(),
+            &FormatKind::Text,
+        )
+        .unwrap();
         assert_eq!(result, 1, "A→B→A cycle triggers cycles check");
         let _ = std::fs::remove_dir_all(&dir);
     }
@@ -424,8 +450,15 @@ mod tests {
             "JSON must contain 'checks' key"
         );
 
-        let result =
-            handle_check(&dir, &[], &[], &db_path, &Default::default(), &FormatKind::Json).unwrap();
+        let result = handle_check(
+            &dir,
+            &[],
+            &[],
+            &db_path,
+            &Default::default(),
+            &FormatKind::Json,
+        )
+        .unwrap();
         assert_eq!(result, 0);
         let _ = std::fs::remove_dir_all(&dir);
     }
@@ -448,8 +481,15 @@ mod tests {
         }
 
         let only = vec!["cycles".to_owned()];
-        let result =
-            handle_check(&dir, &only, &[], &db_path, &Default::default(), &FormatKind::Text).unwrap();
+        let result = handle_check(
+            &dir,
+            &only,
+            &[],
+            &db_path,
+            &Default::default(),
+            &FormatKind::Text,
+        )
+        .unwrap();
         assert_eq!(result, 0, "--only cycles skips dead-assets");
         let _ = std::fs::remove_dir_all(&dir);
     }
@@ -471,8 +511,15 @@ mod tests {
         }
 
         let skip = vec!["dead-assets".to_owned()];
-        let result =
-            handle_check(&dir, &[], &skip, &db_path, &Default::default(), &FormatKind::Text).unwrap();
+        let result = handle_check(
+            &dir,
+            &[],
+            &skip,
+            &db_path,
+            &Default::default(),
+            &FormatKind::Text,
+        )
+        .unwrap();
         assert_eq!(result, 0, "--skip dead-assets means orphan is ignored");
         let _ = std::fs::remove_dir_all(&dir);
     }
@@ -481,8 +528,14 @@ mod tests {
     fn handle_check_should_return_err_for_unknown_only_check_name() {
         let (dir, db_path) = test_db_in_tempdir("check159_unk_only");
         let only = vec!["bogus".to_owned()];
-        let result =
-            handle_check(Path::new("/proj"), &only, &[], &db_path, &Default::default(), &FormatKind::Text);
+        let result = handle_check(
+            Path::new("/proj"),
+            &only,
+            &[],
+            &db_path,
+            &Default::default(),
+            &FormatKind::Text,
+        );
         assert!(result.is_err(), "unknown check name in --only should error");
         let _ = std::fs::remove_dir_all(&dir);
     }
@@ -491,8 +544,14 @@ mod tests {
     fn handle_check_should_return_err_for_unknown_skip_check_name() {
         let (dir, db_path) = test_db_in_tempdir("check159_unk_skip");
         let skip = vec!["bogus".to_owned()];
-        let result =
-            handle_check(Path::new("/proj"), &[], &skip, &db_path, &Default::default(), &FormatKind::Text);
+        let result = handle_check(
+            Path::new("/proj"),
+            &[],
+            &skip,
+            &db_path,
+            &Default::default(),
+            &FormatKind::Text,
+        );
         assert!(result.is_err(), "unknown check name in --skip should error");
         let _ = std::fs::remove_dir_all(&dir);
     }

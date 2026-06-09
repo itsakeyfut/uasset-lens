@@ -76,10 +76,7 @@ pub fn load_config_at(path: &Path) -> ConfigFile {
         .unwrap_or_default()
 }
 
-pub fn resolve_config(
-    project_dir: &Path,
-    explicit: Option<&Path>,
-) -> anyhow::Result<ConfigFile> {
+pub fn resolve_config(project_dir: &Path, explicit: Option<&Path>) -> anyhow::Result<ConfigFile> {
     match explicit {
         Some(path) => {
             let s = std::fs::read_to_string(path)
@@ -232,8 +229,8 @@ mod tests {
 
     #[test]
     fn load_config_at_should_return_default_when_file_is_missing() {
-        let path = std::env::temp_dir()
-            .join(format!("uasset_lens_absent_{}.toml", std::process::id()));
+        let path =
+            std::env::temp_dir().join(format!("uasset_lens_absent_{}.toml", std::process::id()));
         // don't create it — we want it to be missing
         let cfg = load_config_at(&path);
         assert!(cfg.lint.blueprint_max_dependency_depth.is_none());
@@ -253,8 +250,10 @@ mod tests {
 
     #[test]
     fn resolve_config_should_return_error_when_explicit_path_is_missing() {
-        let absent =
-            std::env::temp_dir().join(format!("uasset_lens_absent_err_{}.toml", std::process::id()));
+        let absent = std::env::temp_dir().join(format!(
+            "uasset_lens_absent_err_{}.toml",
+            std::process::id()
+        ));
         let result = resolve_config(std::path::Path::new("."), Some(&absent));
         assert!(result.is_err());
     }
@@ -297,8 +296,14 @@ mod tests {
         )
         .unwrap();
         let cfg = load_config(&dir);
-        assert_eq!(cfg.lint.blueprint_depth_by_type.get("Blueprint"), Some(&10u32));
-        assert_eq!(cfg.lint.blueprint_depth_by_type.get("AnimBlueprint"), Some(&20u32));
+        assert_eq!(
+            cfg.lint.blueprint_depth_by_type.get("Blueprint"),
+            Some(&10u32)
+        );
+        assert_eq!(
+            cfg.lint.blueprint_depth_by_type.get("AnimBlueprint"),
+            Some(&20u32)
+        );
         let _ = std::fs::remove_dir_all(&dir);
     }
 }

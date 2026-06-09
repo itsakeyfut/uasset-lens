@@ -260,8 +260,13 @@ mod tests {
         let (dir, db_path) = test_db_in_tempdir("stats158_missing");
         let _ = std::fs::remove_dir_all(&dir);
 
-        let result =
-            handle_stats(Path::new("/proj"), None, &db_path, &Default::default(), &FormatKind::Text);
+        let result = handle_stats(
+            Path::new("/proj"),
+            None,
+            &db_path,
+            &Default::default(),
+            &FormatKind::Text,
+        );
         assert!(result.is_err(), "missing DB should return an error");
     }
 
@@ -433,8 +438,14 @@ mod tests {
             .unwrap();
         }
 
-        let result =
-            handle_stats(&dir, Some(2), &db_path, &Default::default(), &FormatKind::Text).unwrap();
+        let result = handle_stats(
+            &dir,
+            Some(2),
+            &db_path,
+            &Default::default(),
+            &FormatKind::Text,
+        )
+        .unwrap();
         assert_eq!(
             result, 0,
             "stats is informational — always exits 0 even with --top"

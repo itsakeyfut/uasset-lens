@@ -162,8 +162,13 @@ mod tests {
         let (dir, db_path) = test_db_in_tempdir("lint_ga_empty");
         asset_db::AssetDb::open(&db_path).unwrap();
 
-        let result =
-            handle_lint(&dir, &db_path, &Default::default(), &FormatKind::GithubActions).unwrap();
+        let result = handle_lint(
+            &dir,
+            &db_path,
+            &Default::default(),
+            &FormatKind::GithubActions,
+        )
+        .unwrap();
 
         assert_eq!(result, 0);
         let _ = std::fs::remove_dir_all(&dir);
@@ -179,8 +184,13 @@ mod tests {
                 .unwrap();
         }
 
-        let result =
-            handle_lint(&dir, &db_path, &Default::default(), &FormatKind::GithubActions).unwrap();
+        let result = handle_lint(
+            &dir,
+            &db_path,
+            &Default::default(),
+            &FormatKind::GithubActions,
+        )
+        .unwrap();
 
         assert_eq!(
             result, 0,
@@ -214,8 +224,13 @@ mod tests {
             .unwrap();
         }
 
-        let result =
-            handle_lint(&dir, &db_path, &Default::default(), &FormatKind::GithubActions).unwrap();
+        let result = handle_lint(
+            &dir,
+            &db_path,
+            &Default::default(),
+            &FormatKind::GithubActions,
+        )
+        .unwrap();
 
         assert_eq!(
             result, 1,
@@ -228,8 +243,12 @@ mod tests {
     fn handle_lint_should_return_err_when_db_does_not_exist() {
         let (dir, db_path) = test_db_in_tempdir("lint_missing");
         let _ = std::fs::remove_dir_all(&dir);
-        let result =
-            handle_lint(std::path::Path::new("."), &db_path, &Default::default(), &FormatKind::Text);
+        let result = handle_lint(
+            std::path::Path::new("."),
+            &db_path,
+            &Default::default(),
+            &FormatKind::Text,
+        );
         assert!(result.is_err());
     }
 
