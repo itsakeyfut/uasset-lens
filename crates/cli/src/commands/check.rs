@@ -14,6 +14,8 @@ const ALL_CHECKS: &[&str] = &[
     "duplicates",
 ];
 
+const CHECK_SAMPLE_LIMIT: usize = 5;
+
 struct CheckResult {
     name: &'static str,
     passed: bool,
@@ -35,9 +37,10 @@ struct CheckOutput {
 }
 
 pub fn handle_check(
-    _project_dir: &Path,
+    project_dir: &Path,
     only: &[String],
     skip: &[String],
+    verbose: bool,
     db_path: &Path,
     cfg: &crate::config::ConfigFile,
     format: &FormatKind,
@@ -295,8 +298,21 @@ pub fn handle_check(
                     r.summary,
                     width = name_width,
                 );
-                for finding in &r.findings {
+                let sample_end = if verbose {
+                    r.findings.len()
+                } else {
+                    r.findings.len().min(CHECK_SAMPLE_LIMIT)
+                };
+                for finding in &r.findings[..sample_end] {
                     println!("      {finding}");
+                }
+                if !verbose && r.findings.len() > CHECK_SAMPLE_LIMIT {
+                    let remaining = r.findings.len() - CHECK_SAMPLE_LIMIT;
+                    println!(
+                        "      ... and {remaining} more. Run `uasset-lens {} {}` for the full list.",
+                        check_full_command(r.name),
+                        project_dir.display(),
+                    );
                 }
             }
             println!();
@@ -323,6 +339,18 @@ fn check_display_name(name: &str) -> &str {
     }
 }
 
+fn check_full_command(name: &str) -> &str {
+    match name {
+        "dead-assets" => "dead-assets",
+        "cycles" => "graph --cycles-only",
+        "redirectors" => "redirectors",
+        "lint" => "lint",
+        "budget" => "budget",
+        "duplicates" => "duplicates",
+        _ => name,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -338,6 +366,7 @@ mod tests {
             Path::new("/proj"),
             &[],
             &[],
+            false,
             &db_path,
             &Default::default(),
             &FormatKind::Text,
@@ -354,6 +383,7 @@ mod tests {
             &dir,
             &[],
             &[],
+            false,
             &db_path,
             &Default::default(),
             &FormatKind::Text,
@@ -384,6 +414,7 @@ mod tests {
             &dir,
             &[],
             &[],
+            false,
             &db_path,
             &Default::default(),
             &FormatKind::Text,
@@ -422,6 +453,7 @@ mod tests {
             &dir,
             &[],
             &[],
+            false,
             &db_path,
             &Default::default(),
             &FormatKind::Text,
@@ -455,6 +487,7 @@ mod tests {
             &dir,
             &[],
             &[],
+            false,
             &db_path,
             &Default::default(),
             &FormatKind::Json,
@@ -486,6 +519,7 @@ mod tests {
             &dir,
             &only,
             &[],
+            false,
             &db_path,
             &Default::default(),
             &FormatKind::Text,
@@ -516,6 +550,7 @@ mod tests {
             &dir,
             &[],
             &skip,
+            false,
             &db_path,
             &Default::default(),
             &FormatKind::Text,
@@ -533,6 +568,7 @@ mod tests {
             Path::new("/proj"),
             &only,
             &[],
+            false,
             &db_path,
             &Default::default(),
             &FormatKind::Text,
@@ -549,11 +585,143 @@ mod tests {
             Path::new("/proj"),
             &[],
             &skip,
+            false,
             &db_path,
             &Default::default(),
             &FormatKind::Text,
         );
         assert!(result.is_err(), "unknown check name in --skip should error");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn handle_check_text_should_return_1_and_not_panic_with_many_findings_when_not_verbose() {
+        let (dir, db_path) = test_db_in_tempdir("check236_truncate");
+        {
+            let mut db = asset_db::AssetDb::open(&db_path).unwrap();
+            // 6 orphans exceed CHECK_SAMPLE_LIMIT (5) → truncation path exercised
+            db.upsert_all(&[
+                make_meta(
+                    "/Game/T_A",
+                    dir.join("T_A.uasset"),
+                    AssetType::Texture2D,
+                    512,
+                    vec![],
+                ),
+                make_meta(
+                    "/Game/T_B",
+                    dir.join("T_B.uasset"),
+                    AssetType::Texture2D,
+                    512,
+                    vec![],
+                ),
+                make_meta(
+                    "/Game/T_C",
+                    dir.join("T_C.uasset"),
+                    AssetType::Texture2D,
+                    512,
+                    vec![],
+                ),
+                make_meta(
+                    "/Game/T_D",
+                    dir.join("T_D.uasset"),
+                    AssetType::Texture2D,
+                    512,
+                    vec![],
+                ),
+                make_meta(
+                    "/Game/T_E",
+                    dir.join("T_E.uasset"),
+                    AssetType::Texture2D,
+                    512,
+                    vec![],
+                ),
+                make_meta(
+                    "/Game/T_F",
+                    dir.join("T_F.uasset"),
+                    AssetType::Texture2D,
+                    512,
+                    vec![],
+                ),
+            ])
+            .unwrap();
+        }
+        let result = handle_check(
+            &dir,
+            &[],
+            &[],
+            false,
+            &db_path,
+            &Default::default(),
+            &FormatKind::Text,
+        )
+        .unwrap();
+        assert_eq!(result, 1, "6 dead assets → check fails");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn handle_check_text_should_return_1_and_not_panic_with_many_findings_when_verbose() {
+        let (dir, db_path) = test_db_in_tempdir("check236_verbose");
+        {
+            let mut db = asset_db::AssetDb::open(&db_path).unwrap();
+            db.upsert_all(&[
+                make_meta(
+                    "/Game/T_A",
+                    dir.join("T_A.uasset"),
+                    AssetType::Texture2D,
+                    512,
+                    vec![],
+                ),
+                make_meta(
+                    "/Game/T_B",
+                    dir.join("T_B.uasset"),
+                    AssetType::Texture2D,
+                    512,
+                    vec![],
+                ),
+                make_meta(
+                    "/Game/T_C",
+                    dir.join("T_C.uasset"),
+                    AssetType::Texture2D,
+                    512,
+                    vec![],
+                ),
+                make_meta(
+                    "/Game/T_D",
+                    dir.join("T_D.uasset"),
+                    AssetType::Texture2D,
+                    512,
+                    vec![],
+                ),
+                make_meta(
+                    "/Game/T_E",
+                    dir.join("T_E.uasset"),
+                    AssetType::Texture2D,
+                    512,
+                    vec![],
+                ),
+                make_meta(
+                    "/Game/T_F",
+                    dir.join("T_F.uasset"),
+                    AssetType::Texture2D,
+                    512,
+                    vec![],
+                ),
+            ])
+            .unwrap();
+        }
+        let result = handle_check(
+            &dir,
+            &[],
+            &[],
+            true,
+            &db_path,
+            &Default::default(),
+            &FormatKind::Text,
+        )
+        .unwrap();
+        assert_eq!(result, 1, "verbose=true, 6 dead assets → check fails");
         let _ = std::fs::remove_dir_all(&dir);
     }
 }

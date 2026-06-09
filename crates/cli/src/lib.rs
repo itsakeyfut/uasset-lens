@@ -170,6 +170,9 @@ pub enum Commands {
         /// Skip these checks (comma-separated: dead-assets,cycles,redirectors,lint,budget,duplicates)
         #[arg(long, value_delimiter = ',')]
         skip: Vec<String>,
+        /// Show all findings instead of the first 5 per category
+        #[arg(long)]
+        verbose: bool,
     },
     /// Delete confirmed dead assets from disk
     #[command(name = "clean")]
@@ -426,9 +429,18 @@ fn dispatch(cli: &Cli) -> anyhow::Result<i32> {
             project_dir,
             only,
             skip,
+            verbose,
         } => {
             let db_path = resolve_db_path(project_dir, cli.db.as_deref());
-            commands::check::handle_check(project_dir, only, skip, &db_path, &cfg, &cli.format)
+            commands::check::handle_check(
+                project_dir,
+                only,
+                skip,
+                *verbose,
+                &db_path,
+                &cfg,
+                &cli.format,
+            )
         }
         Commands::Clean {
             project_dir,
