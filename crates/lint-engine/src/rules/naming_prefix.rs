@@ -39,6 +39,9 @@ impl Default for NamingPrefixRule {
             AssetType::NiagaraEmitter,
             vec!["NE_".to_owned(), "NS_".to_owned()],
         );
+        // IKRigDefinition (IKR_), IKRetargeter (RETG_), DialogueWave (DW_) have no default
+        // prefix rule: naming conventions vary widely across UE5 projects and Epic's own samples
+        // are inconsistent. Users can configure these via .uasset-lens.toml if desired.
         Self { prefixes }
     }
 }
@@ -65,11 +68,20 @@ impl LintRule for NamingPrefixRule {
         if valid_prefixes.iter().any(|p| name.starts_with(p.as_str())) {
             return vec![];
         }
-        let expected = &valid_prefixes[0];
+        let expected = if valid_prefixes.len() == 1 {
+            format!("`{}`", valid_prefixes[0])
+        } else {
+            let joined = valid_prefixes
+                .iter()
+                .map(|p| format!("`{p}`"))
+                .collect::<Vec<_>>()
+                .join(", ");
+            format!("one of: {joined}")
+        };
         vec![LintViolation {
             severity: Severity::Warning,
             rule_id: "naming/prefix",
-            message: format!("asset `{name}` should start with prefix `{expected}`"),
+            message: format!("asset `{name}` should start with {expected}"),
             asset_path: asset.asset_path.clone(), // clone required: cannot move out of shared reference
         }]
     }

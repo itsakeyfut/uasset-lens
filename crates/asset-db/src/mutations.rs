@@ -286,6 +286,24 @@ mod tests {
     }
 
     #[test]
+    fn upsert_all_should_deduplicate_dependencies_without_constraint_error() {
+        let mut db = AssetDb::open(Path::new(":memory:")).unwrap();
+        let assets = vec![scanner::AssetMetadata {
+            file_path: PathBuf::from("/proj/Content/BP_Test.uasset"),
+            file_size: 1024,
+            last_modified: 100,
+            dependencies: vec![
+                AssetPath::new("/Game/Dep").unwrap(),
+                AssetPath::new("/Game/Dep").unwrap(),
+            ],
+            ..scanner::make_meta("/Game/BP_Test", AssetType::Blueprint)
+        }];
+        assert!(db.upsert_all(&assets).is_ok());
+        let edges = db.all_edges().unwrap();
+        assert_eq!(edges.len(), 1, "duplicate deps should be collapsed to one edge");
+    }
+
+    #[test]
     fn upsert_all_should_insert_multiple_assets_and_their_dependencies() {
         let mut db = AssetDb::open(Path::new(":memory:")).unwrap();
         let assets = vec![

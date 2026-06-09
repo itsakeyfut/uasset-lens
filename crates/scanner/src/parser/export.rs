@@ -266,6 +266,30 @@ mod tests {
     }
 
     #[test]
+    fn class_name_to_asset_type_should_return_niagara_emitter_for_niagara_emitter() {
+        assert_eq!(
+            class_name_to_asset_type("NiagaraEmitter"),
+            Some(AssetType::NiagaraEmitter)
+        );
+    }
+
+    #[test]
+    fn class_name_to_asset_type_should_return_ik_retargeter_for_ik_retargeter() {
+        assert_eq!(
+            class_name_to_asset_type("IKRetargeter"),
+            Some(AssetType::IKRetargeter)
+        );
+    }
+
+    #[test]
+    fn class_name_to_asset_type_should_return_dialogue_wave_for_dialogue_wave() {
+        assert_eq!(
+            class_name_to_asset_type("DialogueWave"),
+            Some(AssetType::DialogueWave)
+        );
+    }
+
+    #[test]
     fn class_name_to_asset_type_should_return_none_for_unknown_class() {
         assert_eq!(class_name_to_asset_type(""), None);
         assert_eq!(class_name_to_asset_type("SomeCustomClass"), None);
