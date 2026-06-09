@@ -116,7 +116,8 @@ pub fn handle_check(
                 let g = graph.as_ref().ok_or_else(|| {
                     anyhow::anyhow!("internal: graph not loaded for dead-assets check")
                 })?;
-                let dead = dead_asset_detector::detect(g);
+                let dead =
+                    dead_asset_detector::detect(g, dead_asset_detector::DEFAULT_EXCLUDED_TYPES);
                 let count = dead.len();
                 let findings = dead.iter().map(|p| p.as_str().to_owned()).collect();
                 CheckResult {

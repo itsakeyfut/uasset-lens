@@ -55,7 +55,8 @@ pub fn handle_clean(
     let db = crate::open_db(db_path)?;
     let graph = crate::load_graph(&db, &cfg.scan.external_roots)?;
 
-    let dead_paths = dead_asset_detector::detect(&graph);
+    let dead_paths =
+        dead_asset_detector::detect(&graph, dead_asset_detector::DEFAULT_EXCLUDED_TYPES);
 
     let type_map: HashMap<&shared::AssetPath, String> = graph
         .nodes()
@@ -724,6 +725,37 @@ mod tests {
         )
         .unwrap();
         assert_eq!(result, 0);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn handle_clean_should_not_target_metadata_type_assets() {
+        let (dir, db_path) = test_db_in_tempdir("clean235_meta");
+        {
+            let mut db = asset_db::AssetDb::open(&db_path).unwrap();
+            db.upsert_all(&[make_meta(
+                "/Game/Meta",
+                dir.join("Meta.uasset"),
+                AssetType::Unknown("MetaData".to_owned()),
+                512,
+                vec![],
+            )])
+            .unwrap();
+        }
+        // dry_run = true so no file deletion; MetaData should not appear as a target
+        let result = handle_clean(
+            &dir,
+            true,
+            true,
+            None,
+            &[],
+            None,
+            &db_path,
+            &Default::default(),
+            &FormatKind::Text,
+        )
+        .unwrap();
+        assert_eq!(result, 0, "MetaData is excluded; no clean targets → exit 0");
         let _ = std::fs::remove_dir_all(&dir);
     }
 
