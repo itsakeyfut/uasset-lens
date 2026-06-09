@@ -12,6 +12,11 @@ fn parse_asset_type(s: &str) -> Option<shared::AssetType> {
         "AnimBlueprint" => Some(AssetType::AnimBlueprint),
         "UserWidget" => Some(AssetType::UserWidget),
         "SoundWave" => Some(AssetType::SoundWave),
+        "NiagaraSystem" => Some(AssetType::NiagaraSystem),
+        "NiagaraEmitter" => Some(AssetType::NiagaraEmitter),
+        "IKRigDefinition" => Some(AssetType::IKRigDefinition),
+        "IKRetargeter" => Some(AssetType::IKRetargeter),
+        "DialogueWave" => Some(AssetType::DialogueWave),
         _ => None,
     }
 }
@@ -20,7 +25,8 @@ pub fn build_lint_rules(cfg: &LintConfig) -> Vec<Box<dyn LintRule>> {
     let mut naming = lint_engine::NamingPrefixRule::default();
     for (type_str, prefix) in &cfg.naming_prefix {
         if let Some(asset_type) = parse_asset_type(type_str) {
-            naming.prefixes.insert(asset_type, prefix.clone()); // clone required: HashMap insert takes owned String
+            // Config override replaces the entire default Vec; clone required: HashMap insert takes owned value
+            naming.prefixes.insert(asset_type, vec![prefix.clone()]);
         }
     }
 

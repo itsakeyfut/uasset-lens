@@ -21,7 +21,8 @@ impl Default for ComplexityThresholds {
             max_node_count: 200,
             max_event_tick_count: 1,
             max_cast_count: 10,
-            max_dependency_depth: 5,
+            // IK rig chains and animation Blueprint hierarchies commonly reach depth 10–15
+            max_dependency_depth: 15,
         }
     }
 }
@@ -115,7 +116,7 @@ mod tests {
             node_count: 201,
             event_tick_count: 2,
             cast_count: 11,
-            dependency_depth: 6,
+            dependency_depth: 16,
         };
         let warnings = is_complex(&metrics, &ComplexityThresholds::default());
         assert_eq!(warnings.len(), 4);

@@ -21,6 +21,11 @@ pub enum AssetType {
     DataAsset,
     World,
     ObjectRedirector,
+    NiagaraSystem,
+    NiagaraEmitter,
+    IKRigDefinition,
+    IKRetargeter,
+    DialogueWave,
     Unknown(String),
 }
 
@@ -67,6 +72,11 @@ mod tests {
             AssetType::DataAsset,
             AssetType::World,
             AssetType::ObjectRedirector,
+            AssetType::NiagaraSystem,
+            AssetType::NiagaraEmitter,
+            AssetType::IKRigDefinition,
+            AssetType::IKRetargeter,
+            AssetType::DialogueWave,
         ];
         for variant in &variants {
             let json = serde_json::to_string(variant).unwrap();
