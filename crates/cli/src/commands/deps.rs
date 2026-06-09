@@ -19,14 +19,14 @@ pub fn handle_deps(
     project_dir: &Path,
     asset_path: &Path,
     db_path: &Path,
+    cfg: &crate::config::ConfigFile,
     depth: Option<u32>,
     size_only: bool,
     format: &FormatKind,
 ) -> anyhow::Result<i32> {
     let target = crate::resolve_asset_path(project_dir, asset_path)?;
     let db = crate::open_db(db_path)?;
-    let config = crate::config::load_config(project_dir);
-    let graph = crate::load_graph(&db, &config.scan.external_roots)?;
+    let graph = crate::load_graph(&db, &cfg.scan.external_roots)?;
 
     if !graph.contains(&target) {
         anyhow::bail!("asset not found in scan data: {}", target.as_str());
@@ -287,6 +287,7 @@ mod tests {
             &dir,
             Path::new("/Game/Target"),
             &db_path,
+            &Default::default(),
             None,
             false,
             &FormatKind::Text,
@@ -303,6 +304,7 @@ mod tests {
             &dir,
             Path::new("/Game/NotInGraph"),
             &db_path,
+            &Default::default(),
             None,
             false,
             &FormatKind::Text,
@@ -334,6 +336,7 @@ mod tests {
             &dir,
             Path::new("/Game/Leaf"),
             &db_path,
+            &Default::default(),
             None,
             false,
             &FormatKind::Text,
@@ -372,6 +375,7 @@ mod tests {
             &dir,
             Path::new("/Game/Root"),
             &db_path,
+            &Default::default(),
             None,
             false,
             &FormatKind::Text,
@@ -410,6 +414,7 @@ mod tests {
             &dir,
             Path::new("/Game/Root"),
             &db_path,
+            &Default::default(),
             None,
             false,
             &FormatKind::Json,
@@ -449,6 +454,7 @@ mod tests {
             &dir,
             Path::new("/Game/A"),
             &db_path,
+            &Default::default(),
             None,
             false,
             &FormatKind::Text,
@@ -495,6 +501,7 @@ mod tests {
             &dir,
             Path::new("/Game/A"),
             &db_path,
+            &Default::default(),
             Some(1),
             false,
             &FormatKind::Text,
@@ -583,6 +590,7 @@ mod tests {
             &dir,
             Path::new("/Game/Root"),
             &db_path,
+            &Default::default(),
             None,
             true,
             &FormatKind::Text,

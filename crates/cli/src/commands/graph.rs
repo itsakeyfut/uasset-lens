@@ -12,14 +12,14 @@ struct GraphOutput {
 }
 
 pub fn handle_graph(
-    project_dir: &Path,
+    _project_dir: &Path,
     cycles_only: bool,
     db_path: &Path,
+    cfg: &crate::config::ConfigFile,
     format: &FormatKind,
 ) -> anyhow::Result<i32> {
     let db = crate::open_db(db_path)?;
-    let config = crate::config::load_config(project_dir);
-    let graph = crate::load_graph(&db, &config.scan.external_roots)?;
+    let graph = crate::load_graph(&db, &cfg.scan.external_roots)?;
     let cycles = graph.find_cycles();
     let total_assets = graph.nodes().count();
     let total_edges = graph.edge_count();
@@ -89,7 +89,13 @@ mod tests {
         let (dir, db_path) = test_db_in_tempdir("graph21_missing");
         let _ = std::fs::remove_dir_all(&dir);
 
-        let result = handle_graph(Path::new("/proj"), false, &db_path, &FormatKind::Text);
+        let result = handle_graph(
+            Path::new("/proj"),
+            false,
+            &db_path,
+            &Default::default(),
+            &FormatKind::Text,
+        );
         assert!(result.is_err(), "missing DB should return an error");
     }
 
@@ -98,7 +104,14 @@ mod tests {
         let (dir, db_path) = test_db_in_tempdir("graph21_empty");
         asset_db::AssetDb::open(&db_path).unwrap();
 
-        let result = handle_graph(&dir, false, &db_path, &FormatKind::Text).unwrap();
+        let result = handle_graph(
+            &dir,
+            false,
+            &db_path,
+            &Default::default(),
+            &FormatKind::Text,
+        )
+        .unwrap();
         assert_eq!(result, 0);
         let _ = std::fs::remove_dir_all(&dir);
     }
@@ -108,7 +121,8 @@ mod tests {
         let (dir, db_path) = test_db_in_tempdir("graph21_nocycle");
         asset_db::AssetDb::open(&db_path).unwrap();
 
-        let result = handle_graph(&dir, true, &db_path, &FormatKind::Text).unwrap();
+        let result =
+            handle_graph(&dir, true, &db_path, &Default::default(), &FormatKind::Text).unwrap();
         assert_eq!(result, 0);
         let _ = std::fs::remove_dir_all(&dir);
     }
@@ -138,7 +152,8 @@ mod tests {
             .unwrap();
         }
 
-        let result = handle_graph(&dir, true, &db_path, &FormatKind::Text).unwrap();
+        let result =
+            handle_graph(&dir, true, &db_path, &Default::default(), &FormatKind::Text).unwrap();
         assert_eq!(result, 1, "cycles-only with A→B→A cycle should exit 1");
         let _ = std::fs::remove_dir_all(&dir);
     }
@@ -168,7 +183,14 @@ mod tests {
             .unwrap();
         }
 
-        let result = handle_graph(&dir, false, &db_path, &FormatKind::Text).unwrap();
+        let result = handle_graph(
+            &dir,
+            false,
+            &db_path,
+            &Default::default(),
+            &FormatKind::Text,
+        )
+        .unwrap();
         assert_eq!(
             result, 0,
             "without --cycles-only flag, exit code is always 0"
@@ -183,7 +205,14 @@ mod tests {
 
         // Verify that JSON serialization succeeds and the GraphOutput struct
         // contains the expected keys by exercising handle_graph with Json format.
-        let result = handle_graph(&dir, false, &db_path, &FormatKind::Json).unwrap();
+        let result = handle_graph(
+            &dir,
+            false,
+            &db_path,
+            &Default::default(),
+            &FormatKind::Json,
+        )
+        .unwrap();
         assert_eq!(result, 0);
         let _ = std::fs::remove_dir_all(&dir);
     }
@@ -213,7 +242,8 @@ mod tests {
             .unwrap();
         }
 
-        let result = handle_graph(&dir, true, &db_path, &FormatKind::Json).unwrap();
+        let result =
+            handle_graph(&dir, true, &db_path, &Default::default(), &FormatKind::Json).unwrap();
         assert_eq!(result, 1, "JSON cycles-only with A→B→A cycle should exit 1");
         let _ = std::fs::remove_dir_all(&dir);
     }

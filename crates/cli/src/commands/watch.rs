@@ -5,7 +5,11 @@ use std::time::Duration;
 
 use anyhow::Context;
 
-pub fn handle_watch(project_dir: &Path, db_path: &Path) -> anyhow::Result<i32> {
+pub fn handle_watch(
+    project_dir: &Path,
+    db_path: &Path,
+    cfg: &crate::config::ConfigFile,
+) -> anyhow::Result<i32> {
     if let Some(parent) = db_path.parent().filter(|p| !p.as_os_str().is_empty()) {
         std::fs::create_dir_all(parent).context("Failed to create database directory")?;
     }
@@ -15,6 +19,7 @@ pub fn handle_watch(project_dir: &Path, db_path: &Path) -> anyhow::Result<i32> {
         project_dir,
         db_path,
         &crate::FormatKind::Text,
+        cfg,
         &super::scan::ScanOptions {
             full_scan: false,
             diff: false,
@@ -26,6 +31,7 @@ pub fn handle_watch(project_dir: &Path, db_path: &Path) -> anyhow::Result<i32> {
 
     let content_root = crate::resolve_content_root(project_dir);
     let db = crate::open_db(db_path)?;
+    // Re-load config from disk so the watch loop picks up any file edits during the session.
     let config = crate::config::load_config(project_dir);
 
     let stop = Arc::new(AtomicBool::new(false));
@@ -102,7 +108,7 @@ mod tests {
         // project_dir must not exist; db_path stays inside dir so create_dir_all in
         // handle_watch recreates dir but not proj, keeping project_dir non-existent.
         let proj = dir.join("proj");
-        let result = handle_watch(&proj, &db_path);
+        let result = handle_watch(&proj, &db_path, &Default::default());
         assert!(result.is_err());
         let _ = std::fs::remove_dir_all(&dir);
     }

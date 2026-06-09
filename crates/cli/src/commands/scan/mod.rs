@@ -38,6 +38,7 @@ pub fn handle_scan(
     project_dir: &Path,
     db_path: &Path,
     format: &FormatKind,
+    cfg: &crate::config::ConfigFile,
     opts: &ScanOptions<'_>,
 ) -> anyhow::Result<i32> {
     let use_color = matches!(format, FormatKind::Text)
@@ -73,8 +74,7 @@ pub fn handle_scan(
         .into_iter()
         .collect();
 
-    let config = crate::config::load_config(project_dir);
-    let excluded = config.scan.exclude_paths;
+    let excluded = cfg.scan.exclude_paths.clone();
 
     let effective_diff = opts.diff || opts.diff_from.is_some();
 
@@ -274,7 +274,7 @@ pub fn handle_scan(
                 stale: &stale,
                 content_root: &content_root,
                 project_dir,
-                threshold: config.diff.size_increase_threshold_pct,
+                threshold: cfg.diff.size_increase_threshold_pct,
                 diff_from: opts.diff_from,
                 prev_scanned_at,
             },
@@ -400,6 +400,7 @@ mod tests {
             &dir,
             &db_path,
             &FormatKind::Text,
+            &Default::default(),
             &ScanOptions {
                 full_scan: false,
                 diff: false,
@@ -430,10 +431,12 @@ mod tests {
         )
         .unwrap();
         std::fs::write(excluded_dir.join("Dummy.uasset"), b"not a real uasset").unwrap();
+        let cfg = crate::config::load_config(&dir);
         let _ = handle_scan(
             &dir,
             &db_path,
             &FormatKind::Text,
+            &cfg,
             &ScanOptions {
                 full_scan: false,
                 diff: false,
@@ -461,6 +464,7 @@ mod tests {
             &dir,
             &db_path,
             &FormatKind::Text,
+            &Default::default(),
             &ScanOptions {
                 full_scan: false,
                 diff: false,
@@ -490,6 +494,7 @@ mod tests {
             &dir,
             &db_path,
             &FormatKind::Text,
+            &Default::default(),
             &ScanOptions {
                 full_scan: false,
                 diff: false,
@@ -530,6 +535,7 @@ mod tests {
             &dir,
             &db_path,
             &FormatKind::Text,
+            &Default::default(),
             &ScanOptions {
                 full_scan: false,
                 diff: false,
@@ -563,6 +569,7 @@ mod tests {
             &dir,
             &db_path,
             &FormatKind::Text,
+            &Default::default(),
             &ScanOptions {
                 full_scan: false,
                 diff: true,
@@ -590,6 +597,7 @@ mod tests {
             &dir,
             &db_path,
             &FormatKind::Text,
+            &Default::default(),
             &ScanOptions {
                 full_scan: false,
                 diff: false,
@@ -605,6 +613,7 @@ mod tests {
             &dir,
             &db_path,
             &FormatKind::Text,
+            &Default::default(),
             &ScanOptions {
                 full_scan: false,
                 diff: true,
@@ -628,6 +637,7 @@ mod tests {
             &dir,
             &db_path,
             &FormatKind::Text,
+            &Default::default(),
             &ScanOptions {
                 full_scan: false,
                 diff: false,
@@ -642,6 +652,7 @@ mod tests {
             &dir,
             &db_path,
             &FormatKind::Json,
+            &Default::default(),
             &ScanOptions {
                 full_scan: false,
                 diff: true,
@@ -667,10 +678,12 @@ mod tests {
             "[diff]\nsize_increase_threshold_pct = 25\n",
         )
         .unwrap();
+        let cfg = crate::config::load_config(&dir);
         handle_scan(
             &dir,
             &db_path,
             &FormatKind::Text,
+            &cfg,
             &ScanOptions {
                 full_scan: false,
                 diff: false,
@@ -681,10 +694,12 @@ mod tests {
         )
         .unwrap();
 
+        let cfg = crate::config::load_config(&dir);
         let result = handle_scan(
             &dir,
             &db_path,
             &FormatKind::Text,
+            &cfg,
             &ScanOptions {
                 full_scan: false,
                 diff: true,
@@ -711,6 +726,7 @@ mod tests {
             &dir,
             &db_path,
             &FormatKind::Text,
+            &Default::default(),
             &ScanOptions {
                 full_scan: false,
                 diff: false,
@@ -725,6 +741,7 @@ mod tests {
             &dir,
             &db_path,
             &FormatKind::GithubActions,
+            &Default::default(),
             &ScanOptions {
                 full_scan: false,
                 diff: true,
@@ -748,6 +765,7 @@ mod tests {
             &dir,
             &db_path,
             &FormatKind::Text,
+            &Default::default(),
             &ScanOptions {
                 full_scan: false,
                 diff: false,
@@ -774,6 +792,7 @@ mod tests {
             &dir,
             &db_path,
             &FormatKind::Text,
+            &Default::default(),
             &ScanOptions {
                 full_scan: false,
                 diff: false,
@@ -788,6 +807,7 @@ mod tests {
             &dir,
             &db_path,
             &FormatKind::Text,
+            &Default::default(),
             &ScanOptions {
                 full_scan: false,
                 diff: false,
@@ -810,6 +830,7 @@ mod tests {
             &dir,
             &db_path,
             &FormatKind::Text,
+            &Default::default(),
             &ScanOptions {
                 full_scan: false,
                 diff: false,
@@ -824,6 +845,7 @@ mod tests {
             &dir,
             &db_path,
             &FormatKind::Text,
+            &Default::default(),
             &ScanOptions {
                 full_scan: false,
                 diff: false,
