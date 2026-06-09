@@ -31,6 +31,11 @@ pub fn build_lint_rules(cfg: &LintConfig) -> Vec<Box<dyn LintRule>> {
     }
 
     let defaults = lint_engine::ComplexityThresholds::default();
+    let depth_by_type: std::collections::HashMap<shared::AssetType, u32> = cfg
+        .blueprint_depth_by_type
+        .iter()
+        .filter_map(|(k, &v)| parse_asset_type(k).map(|t| (t, v)))
+        .collect();
     let complexity = lint_engine::BlueprintComplexityRule {
         thresholds: lint_engine::ComplexityThresholds {
             max_node_count: cfg.blueprint_max_nodes.unwrap_or(defaults.max_node_count),
@@ -40,8 +45,11 @@ pub fn build_lint_rules(cfg: &LintConfig) -> Vec<Box<dyn LintRule>> {
             max_cast_count: cfg
                 .blueprint_max_cast_count
                 .unwrap_or(defaults.max_cast_count),
-            max_dependency_depth: defaults.max_dependency_depth,
+            max_dependency_depth: cfg
+                .blueprint_max_dependency_depth
+                .unwrap_or(defaults.max_dependency_depth),
         },
+        depth_by_type,
     };
 
     vec![
@@ -115,5 +123,47 @@ mod tests {
         let t_rock = asset_db::make_record("/Game/Textures/T_Rock", AssetType::Texture2D);
         let ok_violations: Vec<_> = rules.iter().flat_map(|r| r.check(&t_rock, None)).collect();
         assert!(ok_violations.is_empty());
+    }
+
+    #[test]
+    fn build_lint_rules_should_apply_blueprint_max_dependency_depth_when_set_in_config() {
+        let cfg = LintConfig {
+            blueprint_max_dependency_depth: Some(5),
+            ..LintConfig::default()
+        };
+        let rules = build_lint_rules(&cfg);
+        let bp = asset_db::make_record("/Game/BP_Deep", AssetType::Blueprint);
+        let metrics = scanner::BlueprintMetrics {
+            node_count: 0,
+            event_tick_count: 0,
+            cast_count: 0,
+            dependency_depth: 6,
+        };
+        let violations: Vec<_> = rules
+            .iter()
+            .flat_map(|r| r.check(&bp, Some(&metrics)))
+            .collect();
+        assert!(violations.iter().any(|v| v.rule_id == "blueprint/dependency-depth"));
+    }
+
+    #[test]
+    fn build_lint_rules_should_apply_per_type_depth_when_blueprint_depth_by_type_set_in_config() {
+        let cfg = LintConfig {
+            blueprint_depth_by_type: std::collections::HashMap::from([("Blueprint".to_owned(), 5u32)]),
+            ..LintConfig::default()
+        };
+        let rules = build_lint_rules(&cfg);
+        let bp = asset_db::make_record("/Game/BP_Deep", AssetType::Blueprint);
+        let metrics = scanner::BlueprintMetrics {
+            node_count: 0,
+            event_tick_count: 0,
+            cast_count: 0,
+            dependency_depth: 6, // exceeds per-type threshold of 5
+        };
+        let violations: Vec<_> = rules
+            .iter()
+            .flat_map(|r| r.check(&bp, Some(&metrics)))
+            .collect();
+        assert!(violations.iter().any(|v| v.rule_id == "blueprint/dependency-depth"));
     }
 }
