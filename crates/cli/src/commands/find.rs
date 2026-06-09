@@ -22,7 +22,7 @@ struct FindOutput {
 
 #[allow(clippy::too_many_arguments)]
 pub fn handle_find(
-    project_dir: &Path,
+    _project_dir: &Path,
     asset_type: Option<&str>,
     larger_than: Option<u64>,
     smaller_than: Option<u64>,
@@ -32,6 +32,7 @@ pub fn handle_find(
     refs: Option<&str>,
     deps: Option<&str>,
     db_path: &Path,
+    cfg: &crate::config::ConfigFile,
     format: &FormatKind,
 ) -> anyhow::Result<i32> {
     let at = asset_type.map(|s| {
@@ -40,7 +41,6 @@ pub fn handle_find(
     });
 
     let db = crate::open_db(db_path)?;
-    let config = crate::config::load_config(project_dir);
 
     let filter = asset_db::AssetFilter {
         asset_type: at,
@@ -52,7 +52,7 @@ pub fn handle_find(
     let mut results = db.find_assets(&filter).context("Failed to query assets")?;
 
     let graph = if unreferenced || refs.is_some() || deps.is_some() {
-        Some(crate::load_graph(&db, &config.scan.external_roots)?)
+        Some(crate::load_graph(&db, &cfg.scan.external_roots)?)
     } else {
         None
     };
@@ -159,6 +159,7 @@ mod tests {
             None,
             None,
             &db_path,
+            &Default::default(),
             &FormatKind::Text,
         );
         assert!(result.is_err(), "missing DB should return an error");
@@ -180,6 +181,7 @@ mod tests {
             None,
             None,
             &db_path,
+            &Default::default(),
             &FormatKind::Text,
         )
         .unwrap();
@@ -214,6 +216,7 @@ mod tests {
             None,
             None,
             &db_path,
+            &Default::default(),
             &FormatKind::Text,
         )
         .unwrap();
@@ -257,6 +260,7 @@ mod tests {
             None,
             None,
             &db_path,
+            &Default::default(),
             &FormatKind::Text,
         )
         .unwrap();
@@ -309,6 +313,7 @@ mod tests {
             None,
             None,
             &db_path,
+            &Default::default(),
             &FormatKind::Text,
         )
         .unwrap();
@@ -343,6 +348,7 @@ mod tests {
             None,
             None,
             &db_path,
+            &Default::default(),
             &FormatKind::Json,
         )
         .unwrap();
@@ -442,6 +448,7 @@ mod tests {
             None,
             None,
             &db_path,
+            &Default::default(),
             &FormatKind::Text,
         )
         .unwrap();
@@ -485,6 +492,7 @@ mod tests {
             None,
             None,
             &db_path,
+            &Default::default(),
             &FormatKind::Text,
         )
         .unwrap();
@@ -528,6 +536,7 @@ mod tests {
             None,
             None,
             &db_path,
+            &Default::default(),
             &FormatKind::Text,
         )
         .unwrap();
@@ -578,6 +587,7 @@ mod tests {
             None,
             None,
             &db_path,
+            &Default::default(),
             &FormatKind::Text,
         )
         .unwrap();
@@ -650,6 +660,7 @@ mod tests {
             Some("/Game/T"),
             None,
             &db_path,
+            &Default::default(),
             &FormatKind::Text,
         )
         .unwrap();
@@ -734,6 +745,7 @@ mod tests {
             None,
             Some("/Game/A"),
             &db_path,
+            &Default::default(),
             &FormatKind::Text,
         )
         .unwrap();
@@ -798,6 +810,7 @@ mod tests {
             None,
             None,
             &db_path,
+            &Default::default(),
             &FormatKind::Json,
         )
         .unwrap();

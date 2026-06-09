@@ -42,18 +42,18 @@ struct CleanSummaryJson {
 // Each arg maps to a distinct CLI flag; a wrapper struct adds indirection at a single call site.
 #[allow(clippy::too_many_arguments)]
 pub fn handle_clean(
-    project_dir: &Path,
+    _project_dir: &Path,
     yes: bool,
     dry_run: bool,
     min_size: Option<u64>,
     exclude_patterns: &[String],
     path_filter: Option<&str>,
     db_path: &Path,
+    cfg: &crate::config::ConfigFile,
     format: &FormatKind,
 ) -> anyhow::Result<i32> {
     let db = crate::open_db(db_path)?;
-    let config = crate::config::load_config(project_dir);
-    let graph = crate::load_graph(&db, &config.scan.external_roots)?;
+    let graph = crate::load_graph(&db, &cfg.scan.external_roots)?;
 
     let dead_paths = dead_asset_detector::detect(&graph);
 
@@ -325,6 +325,7 @@ mod tests {
             &[],
             None,
             &db_path,
+            &Default::default(),
             &FormatKind::Text,
         );
         assert!(result.is_err(), "missing DB should return Err");
@@ -343,6 +344,7 @@ mod tests {
             &[],
             None,
             &db_path,
+            &Default::default(),
             &FormatKind::Text,
         )
         .unwrap();
@@ -375,6 +377,7 @@ mod tests {
             &[],
             None,
             &db_path,
+            &Default::default(),
             &FormatKind::Text,
         )
         .unwrap();
@@ -408,6 +411,7 @@ mod tests {
             &[],
             None,
             &db_path,
+            &Default::default(),
             &FormatKind::Text,
         )
         .unwrap();
@@ -440,6 +444,7 @@ mod tests {
             &[],
             None,
             &db_path,
+            &Default::default(),
             &FormatKind::Text,
         )
         .unwrap();
@@ -473,6 +478,7 @@ mod tests {
             &[],
             None,
             &db_path,
+            &Default::default(),
             &FormatKind::Text,
         )
         .unwrap();
@@ -514,6 +520,7 @@ mod tests {
             &[],
             None,
             &db_path,
+            &Default::default(),
             &FormatKind::Text,
         )
         .unwrap();
@@ -558,6 +565,7 @@ mod tests {
             &[],
             None,
             &db_path,
+            &Default::default(),
             &FormatKind::Text,
         )
         .unwrap();
@@ -608,6 +616,7 @@ mod tests {
             &patterns,
             None,
             &db_path,
+            &Default::default(),
             &FormatKind::Text,
         )
         .unwrap();
@@ -654,6 +663,7 @@ mod tests {
             &[],
             Some("**/Characters/**"),
             &db_path,
+            &Default::default(),
             &FormatKind::Text,
         )
         .unwrap();
@@ -709,6 +719,7 @@ mod tests {
             &[],
             None,
             &db_path,
+            &Default::default(),
             &FormatKind::Json,
         )
         .unwrap();
@@ -756,6 +767,7 @@ mod tests {
             &[],
             None,
             &db_path,
+            &Default::default(),
             &FormatKind::Json,
         )
         .unwrap();

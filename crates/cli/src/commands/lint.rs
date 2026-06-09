@@ -13,12 +13,16 @@ struct LintEntry {
     message: String,
 }
 
-pub fn handle_lint(project_dir: &Path, db_path: &Path, format: &FormatKind) -> anyhow::Result<i32> {
+pub fn handle_lint(
+    project_dir: &Path,
+    db_path: &Path,
+    cfg: &crate::config::ConfigFile,
+    format: &FormatKind,
+) -> anyhow::Result<i32> {
     crate::maybe_hint_github_actions(format);
-    let config = crate::config::load_config(project_dir);
     let db = crate::open_db(db_path)?;
 
-    let engine = lint_engine::LintEngine::new(crate::lint_builder::build_lint_rules(&config.lint));
+    let engine = lint_engine::LintEngine::new(crate::lint_builder::build_lint_rules(&cfg.lint));
 
     let assets = db
         .all_assets()
@@ -158,7 +162,8 @@ mod tests {
         let (dir, db_path) = test_db_in_tempdir("lint_ga_empty");
         asset_db::AssetDb::open(&db_path).unwrap();
 
-        let result = handle_lint(&dir, &db_path, &FormatKind::GithubActions).unwrap();
+        let result =
+            handle_lint(&dir, &db_path, &Default::default(), &FormatKind::GithubActions).unwrap();
 
         assert_eq!(result, 0);
         let _ = std::fs::remove_dir_all(&dir);
@@ -174,7 +179,8 @@ mod tests {
                 .unwrap();
         }
 
-        let result = handle_lint(&dir, &db_path, &FormatKind::GithubActions).unwrap();
+        let result =
+            handle_lint(&dir, &db_path, &Default::default(), &FormatKind::GithubActions).unwrap();
 
         assert_eq!(
             result, 0,
@@ -208,7 +214,8 @@ mod tests {
             .unwrap();
         }
 
-        let result = handle_lint(&dir, &db_path, &FormatKind::GithubActions).unwrap();
+        let result =
+            handle_lint(&dir, &db_path, &Default::default(), &FormatKind::GithubActions).unwrap();
 
         assert_eq!(
             result, 1,
@@ -221,7 +228,8 @@ mod tests {
     fn handle_lint_should_return_err_when_db_does_not_exist() {
         let (dir, db_path) = test_db_in_tempdir("lint_missing");
         let _ = std::fs::remove_dir_all(&dir);
-        let result = handle_lint(std::path::Path::new("."), &db_path, &FormatKind::Text);
+        let result =
+            handle_lint(std::path::Path::new("."), &db_path, &Default::default(), &FormatKind::Text);
         assert!(result.is_err());
     }
 
@@ -230,7 +238,7 @@ mod tests {
         let (dir, db_path) = test_db_in_tempdir("lint_empty");
         asset_db::AssetDb::open(&db_path).unwrap();
 
-        let result = handle_lint(&dir, &db_path, &FormatKind::Text).unwrap();
+        let result = handle_lint(&dir, &db_path, &Default::default(), &FormatKind::Text).unwrap();
 
         assert_eq!(result, 0);
         let _ = std::fs::remove_dir_all(&dir);
@@ -247,7 +255,7 @@ mod tests {
                 .unwrap();
         }
 
-        let result = handle_lint(&dir, &db_path, &FormatKind::Text).unwrap();
+        let result = handle_lint(&dir, &db_path, &Default::default(), &FormatKind::Text).unwrap();
 
         assert_eq!(result, 1);
         let _ = std::fs::remove_dir_all(&dir);
@@ -263,7 +271,7 @@ mod tests {
                 .unwrap();
         }
 
-        let result = handle_lint(&dir, &db_path, &FormatKind::Text).unwrap();
+        let result = handle_lint(&dir, &db_path, &Default::default(), &FormatKind::Text).unwrap();
 
         assert_eq!(result, 0);
         let _ = std::fs::remove_dir_all(&dir);
@@ -279,7 +287,7 @@ mod tests {
                 .unwrap();
         }
 
-        let result = handle_lint(&dir, &db_path, &FormatKind::Json).unwrap();
+        let result = handle_lint(&dir, &db_path, &Default::default(), &FormatKind::Json).unwrap();
 
         assert_eq!(result, 1);
         let _ = std::fs::remove_dir_all(&dir);
@@ -311,7 +319,7 @@ mod tests {
             .unwrap();
         }
 
-        let result = handle_lint(&dir, &db_path, &FormatKind::Text).unwrap();
+        let result = handle_lint(&dir, &db_path, &Default::default(), &FormatKind::Text).unwrap();
 
         assert_eq!(result, 1);
         let _ = std::fs::remove_dir_all(&dir);

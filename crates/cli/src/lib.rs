@@ -38,6 +38,8 @@ pub struct Cli {
     /// Skip confirmation prompts (for CI)
     #[arg(short = 'y', long, global = true)]
     pub yes: bool,
+    #[arg(long, global = true, help = "Path to config file (default: <project_dir>/.uasset-lens.toml)")]
+    pub config: Option<PathBuf>,
     #[command(subcommand)]
     pub command: Commands,
 }
@@ -252,6 +254,31 @@ pub fn run_with(cli: Cli) -> i32 {
 }
 
 fn dispatch(cli: &Cli) -> anyhow::Result<i32> {
+    let project_dir_for_cfg = match &cli.command {
+        Commands::Scan { project_dir, .. }
+        | Commands::Graph { project_dir, .. }
+        | Commands::DeadAssets { project_dir, .. }
+        | Commands::Deps { project_dir, .. }
+        | Commands::Impact { project_dir, .. }
+        | Commands::Redirectors { project_dir }
+        | Commands::Find { project_dir, .. }
+        | Commands::Blueprint { project_dir }
+        | Commands::Stats { project_dir, .. }
+        | Commands::Budget { project_dir }
+        | Commands::Duplicates { project_dir }
+        | Commands::Lint { project_dir }
+        | Commands::Check { project_dir, .. }
+        | Commands::Clean { project_dir, .. }
+        | Commands::Watch { project_dir } => Some(project_dir.as_path()),
+        Commands::Path { .. } | Commands::Completions { .. } => None,
+    };
+
+    let cfg = if let Some(pd) = project_dir_for_cfg {
+        crate::config::resolve_config(pd, cli.config.as_deref())?
+    } else {
+        crate::config::ConfigFile::default()
+    };
+
     match &cli.command {
         Commands::Scan {
             project_dir,
@@ -265,6 +292,7 @@ fn dispatch(cli: &Cli) -> anyhow::Result<i32> {
                 project_dir,
                 &db_path,
                 &cli.format,
+                &cfg,
                 &commands::scan::ScanOptions {
                     full_scan: *full_scan,
                     diff: *diff,
@@ -279,7 +307,7 @@ fn dispatch(cli: &Cli) -> anyhow::Result<i32> {
             cycles_only,
         } => {
             let db_path = resolve_db_path(project_dir, cli.db.as_deref());
-            commands::graph::handle_graph(project_dir, *cycles_only, &db_path, &cli.format)
+            commands::graph::handle_graph(project_dir, *cycles_only, &db_path, &cfg, &cli.format)
         }
         Commands::DeadAssets {
             project_dir,
@@ -298,6 +326,7 @@ fn dispatch(cli: &Cli) -> anyhow::Result<i32> {
                 exclude_patterns,
                 group.as_ref(),
                 &db_path,
+                &cfg,
                 &cli.format,
             )
         }
@@ -312,6 +341,7 @@ fn dispatch(cli: &Cli) -> anyhow::Result<i32> {
                 project_dir,
                 asset_path,
                 &db_path,
+                &cfg,
                 *depth,
                 *size_only,
                 &cli.format,
@@ -323,11 +353,18 @@ fn dispatch(cli: &Cli) -> anyhow::Result<i32> {
             tree,
         } => {
             let db_path = resolve_db_path(project_dir, cli.db.as_deref());
-            commands::impact::handle_impact(project_dir, asset_path, &db_path, *tree, &cli.format)
+            commands::impact::handle_impact(
+                project_dir,
+                asset_path,
+                &db_path,
+                &cfg,
+                *tree,
+                &cli.format,
+            )
         }
         Commands::Redirectors { project_dir } => {
             let db_path = resolve_db_path(project_dir, cli.db.as_deref());
-            commands::redirectors::handle_redirectors(project_dir, &db_path, &cli.format)
+            commands::redirectors::handle_redirectors(project_dir, &db_path, &cfg, &cli.format)
         }
         Commands::Find {
             project_dir,
@@ -352,6 +389,7 @@ fn dispatch(cli: &Cli) -> anyhow::Result<i32> {
                 refs.as_deref(),
                 deps.as_deref(),
                 &db_path,
+                &cfg,
                 &cli.format,
             )
         }
@@ -361,11 +399,11 @@ fn dispatch(cli: &Cli) -> anyhow::Result<i32> {
         }
         Commands::Stats { project_dir, top } => {
             let db_path = resolve_db_path(project_dir, cli.db.as_deref());
-            commands::stats::handle_stats(project_dir, *top, &db_path, &cli.format)
+            commands::stats::handle_stats(project_dir, *top, &db_path, &cfg, &cli.format)
         }
         Commands::Budget { project_dir } => {
             let db_path = resolve_db_path(project_dir, cli.db.as_deref());
-            commands::budget::handle_budget(project_dir, &db_path, &cli.format)
+            commands::budget::handle_budget(project_dir, &db_path, &cfg, &cli.format)
         }
         Commands::Duplicates { project_dir } => {
             let db_path = resolve_db_path(project_dir, cli.db.as_deref());
@@ -373,7 +411,7 @@ fn dispatch(cli: &Cli) -> anyhow::Result<i32> {
         }
         Commands::Lint { project_dir } => {
             let db_path = resolve_db_path(project_dir, cli.db.as_deref());
-            commands::lint::handle_lint(project_dir, &db_path, &cli.format)
+            commands::lint::handle_lint(project_dir, &db_path, &cfg, &cli.format)
         }
         Commands::Check {
             project_dir,
@@ -381,7 +419,7 @@ fn dispatch(cli: &Cli) -> anyhow::Result<i32> {
             skip,
         } => {
             let db_path = resolve_db_path(project_dir, cli.db.as_deref());
-            commands::check::handle_check(project_dir, only, skip, &db_path, &cli.format)
+            commands::check::handle_check(project_dir, only, skip, &db_path, &cfg, &cli.format)
         }
         Commands::Clean {
             project_dir,
@@ -399,12 +437,13 @@ fn dispatch(cli: &Cli) -> anyhow::Result<i32> {
                 exclude_patterns,
                 path.as_deref(),
                 &db_path,
+                &cfg,
                 &cli.format,
             )
         }
         Commands::Watch { project_dir } => {
             let db_path = resolve_db_path(project_dir, cli.db.as_deref());
-            commands::watch::handle_watch(project_dir, &db_path)
+            commands::watch::handle_watch(project_dir, &db_path, &cfg)
         }
         Commands::Path {
             input,
@@ -581,5 +620,27 @@ mod tests {
         assert_eq!(digit_count(10), 2);
         assert_eq!(digit_count(999), 3);
         assert_eq!(digit_count(1000), 4);
+    }
+
+    #[test]
+    fn dispatch_should_use_explicit_config_path_when_config_flag_is_set() {
+        let dir = std::env::temp_dir().join(format!("uasset_lens_dispatch_{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let cfg_path = dir.join("custom.toml");
+        std::fs::write(&cfg_path, "[lint]\nblueprint_max_dependency_depth = 99\n").unwrap();
+
+        let cfg = crate::config::resolve_config(std::path::Path::new("."), Some(&cfg_path)).unwrap();
+        assert_eq!(cfg.lint.blueprint_max_dependency_depth, Some(99));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn dispatch_should_error_when_explicit_config_path_does_not_exist() {
+        let absent = std::env::temp_dir().join(format!(
+            "uasset_lens_absent_dispatch_{}.toml",
+            std::process::id()
+        ));
+        let result = crate::config::resolve_config(std::path::Path::new("."), Some(&absent));
+        assert!(result.is_err());
     }
 }

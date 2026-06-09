@@ -22,17 +22,17 @@ struct BudgetViolationEntry {
 pub fn handle_budget(
     project_dir: &Path,
     db_path: &Path,
+    cfg: &crate::config::ConfigFile,
     format: &FormatKind,
 ) -> anyhow::Result<i32> {
     crate::maybe_hint_github_actions(format);
-    let config = crate::config::load_config(project_dir);
     let db = crate::open_db(db_path)?;
 
     let assets = db
         .all_assets()
         .context("Failed to read assets from database")?;
 
-    let report = budget_tracker::check_budget(&assets, &config.budget);
+    let report = budget_tracker::check_budget(&assets, &cfg.budget);
 
     let entries: Vec<BudgetViolationEntry> = report
         .violations
@@ -160,7 +160,8 @@ mod tests {
             .unwrap();
         }
 
-        let result = handle_budget(&dir, &db_path, &FormatKind::GithubActions).unwrap();
+        let cfg = crate::config::load_config(&dir);
+        let result = handle_budget(&dir, &db_path, &cfg, &FormatKind::GithubActions).unwrap();
 
         assert_eq!(result, 0);
         let _ = std::fs::remove_dir_all(&dir);
@@ -187,7 +188,8 @@ mod tests {
             .unwrap();
         }
 
-        let result = handle_budget(&dir, &db_path, &FormatKind::GithubActions).unwrap();
+        let cfg = crate::config::load_config(&dir);
+        let result = handle_budget(&dir, &db_path, &cfg, &FormatKind::GithubActions).unwrap();
 
         assert_eq!(result, 1);
         let _ = std::fs::remove_dir_all(&dir);
@@ -197,7 +199,8 @@ mod tests {
     fn handle_budget_should_return_err_when_db_does_not_exist() {
         let (dir, db_path) = test_db_in_tempdir("budget_missing");
         let _ = std::fs::remove_dir_all(&dir);
-        let result = handle_budget(std::path::Path::new("."), &db_path, &FormatKind::Text);
+        let result =
+            handle_budget(std::path::Path::new("."), &db_path, &Default::default(), &FormatKind::Text);
         assert!(result.is_err());
     }
 
@@ -206,7 +209,7 @@ mod tests {
         let (dir, db_path) = test_db_in_tempdir("budget_empty");
         asset_db::AssetDb::open(&db_path).unwrap();
 
-        let result = handle_budget(&dir, &db_path, &FormatKind::Text).unwrap();
+        let result = handle_budget(&dir, &db_path, &Default::default(), &FormatKind::Text).unwrap();
 
         assert_eq!(result, 0);
         let _ = std::fs::remove_dir_all(&dir);
@@ -233,7 +236,8 @@ mod tests {
             .unwrap();
         }
 
-        let result = handle_budget(&dir, &db_path, &FormatKind::Text).unwrap();
+        let cfg = crate::config::load_config(&dir);
+        let result = handle_budget(&dir, &db_path, &cfg, &FormatKind::Text).unwrap();
 
         assert_eq!(result, 0);
         let _ = std::fs::remove_dir_all(&dir);
@@ -261,7 +265,8 @@ mod tests {
             .unwrap();
         }
 
-        let result = handle_budget(&dir, &db_path, &FormatKind::Text).unwrap();
+        let cfg = crate::config::load_config(&dir);
+        let result = handle_budget(&dir, &db_path, &cfg, &FormatKind::Text).unwrap();
 
         assert_eq!(result, 1);
         let _ = std::fs::remove_dir_all(&dir);
@@ -288,7 +293,8 @@ mod tests {
             .unwrap();
         }
 
-        let result = handle_budget(&dir, &db_path, &FormatKind::Json).unwrap();
+        let cfg = crate::config::load_config(&dir);
+        let result = handle_budget(&dir, &db_path, &cfg, &FormatKind::Json).unwrap();
 
         assert_eq!(result, 1);
         let _ = std::fs::remove_dir_all(&dir);

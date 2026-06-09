@@ -29,18 +29,18 @@ struct GroupEntry {
 // Each arg maps to a distinct CLI flag; a wrapper struct adds indirection at a single call site.
 #[allow(clippy::too_many_arguments)]
 pub fn handle_dead_assets(
-    project_dir: &Path,
+    _project_dir: &Path,
     asset_type_filter: Option<&str>,
     sort_by_size: bool,
     min_size: Option<u64>,
     exclude_patterns: &[String],
     group: Option<&GroupMode>,
     db_path: &Path,
+    cfg: &crate::config::ConfigFile,
     format: &FormatKind,
 ) -> anyhow::Result<i32> {
     let db = crate::open_db(db_path)?;
-    let config = crate::config::load_config(project_dir);
-    let graph = crate::load_graph(&db, &config.scan.external_roots)?;
+    let graph = crate::load_graph(&db, &cfg.scan.external_roots)?;
 
     let dead_paths = dead_asset_detector::detect(&graph);
 
@@ -252,6 +252,7 @@ mod tests {
             &[],
             None,
             &db_path,
+            &Default::default(),
             &FormatKind::Text,
         );
         assert!(result.is_err(), "missing DB should return an error");
@@ -270,6 +271,7 @@ mod tests {
             &[],
             None,
             &db_path,
+            &Default::default(),
             &FormatKind::Text,
         )
         .unwrap();
@@ -311,6 +313,7 @@ mod tests {
             &[],
             None,
             &db_path,
+            &Default::default(),
             &FormatKind::Text,
         )
         .unwrap();
@@ -342,6 +345,7 @@ mod tests {
             &[],
             None,
             &db_path,
+            &Default::default(),
             &FormatKind::Text,
         )
         .unwrap();
@@ -373,6 +377,7 @@ mod tests {
             &[],
             None,
             &db_path,
+            &Default::default(),
             &FormatKind::Text,
         )
         .unwrap();
@@ -416,6 +421,7 @@ mod tests {
             &[],
             None,
             &db_path,
+            &Default::default(),
             &FormatKind::Text,
         )
         .unwrap();
@@ -436,6 +442,7 @@ mod tests {
             &[],
             None,
             &db_path,
+            &Default::default(),
             &FormatKind::Json,
         )
         .unwrap();
@@ -467,6 +474,7 @@ mod tests {
             &[],
             None,
             &db_path,
+            &Default::default(),
             &FormatKind::Json,
         )
         .unwrap();
@@ -514,6 +522,7 @@ mod tests {
             &[],
             None,
             &db_path,
+            &Default::default(),
             &FormatKind::Text,
         )
         .unwrap();
@@ -579,6 +588,7 @@ mod tests {
             &[],
             None,
             &db_path,
+            &Default::default(),
             &FormatKind::Text,
         )
         .unwrap();
@@ -610,6 +620,7 @@ mod tests {
             &[],
             None,
             &db_path,
+            &Default::default(),
             &FormatKind::Text,
         )
         .unwrap();
@@ -651,6 +662,7 @@ mod tests {
             &patterns,
             None,
             &db_path,
+            &Default::default(),
             &FormatKind::Text,
         )
         .unwrap();
@@ -683,6 +695,7 @@ mod tests {
             &patterns,
             None,
             &db_path,
+            &Default::default(),
             &FormatKind::Text,
         )
         .unwrap();
@@ -750,6 +763,7 @@ mod tests {
             &[],
             Some(&GroupMode::Type),
             &db_path,
+            &Default::default(),
             &FormatKind::Text,
         )
         .unwrap();
@@ -790,6 +804,7 @@ mod tests {
             &[],
             Some(&GroupMode::Dir),
             &db_path,
+            &Default::default(),
             &FormatKind::Text,
         )
         .unwrap();
@@ -821,6 +836,7 @@ mod tests {
             &[],
             Some(&GroupMode::Type),
             &db_path,
+            &Default::default(),
             &FormatKind::Json,
         )
         .unwrap();
@@ -841,6 +857,7 @@ mod tests {
             &[],
             Some(&GroupMode::Type),
             &db_path,
+            &Default::default(),
             &FormatKind::Text,
         )
         .unwrap();
@@ -889,6 +906,7 @@ mod tests {
             &patterns,
             None,
             &db_path,
+            &Default::default(),
             &FormatKind::Text,
         )
         .unwrap();

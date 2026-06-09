@@ -49,14 +49,14 @@ pub fn handle_stats(
     project_dir: &Path,
     top: Option<usize>,
     db_path: &Path,
+    cfg: &crate::config::ConfigFile,
     format: &FormatKind,
 ) -> anyhow::Result<i32> {
     let db = crate::open_db(db_path)?;
     let records = db
         .all_assets()
         .context("Failed to read assets from database")?;
-    let config = crate::config::load_config(project_dir);
-    let graph = crate::load_graph(&db, &config.scan.external_roots)?;
+    let graph = crate::load_graph(&db, &cfg.scan.external_roots)?;
 
     let folder_limit = top.unwrap_or(5);
     let asset_limit = top.unwrap_or(10);
@@ -260,7 +260,8 @@ mod tests {
         let (dir, db_path) = test_db_in_tempdir("stats158_missing");
         let _ = std::fs::remove_dir_all(&dir);
 
-        let result = handle_stats(Path::new("/proj"), None, &db_path, &FormatKind::Text);
+        let result =
+            handle_stats(Path::new("/proj"), None, &db_path, &Default::default(), &FormatKind::Text);
         assert!(result.is_err(), "missing DB should return an error");
     }
 
@@ -269,7 +270,8 @@ mod tests {
         let (dir, db_path) = test_db_in_tempdir("stats158_empty");
         asset_db::AssetDb::open(&db_path).unwrap();
 
-        let result = handle_stats(&dir, None, &db_path, &FormatKind::Text).unwrap();
+        let result =
+            handle_stats(&dir, None, &db_path, &Default::default(), &FormatKind::Text).unwrap();
         assert_eq!(result, 0);
         let _ = std::fs::remove_dir_all(&dir);
     }
@@ -290,7 +292,8 @@ mod tests {
             .unwrap();
         }
 
-        let result = handle_stats(&dir, None, &db_path, &FormatKind::Text).unwrap();
+        let result =
+            handle_stats(&dir, None, &db_path, &Default::default(), &FormatKind::Text).unwrap();
         assert_eq!(result, 0, "stats is informational — always exits 0");
         let _ = std::fs::remove_dir_all(&dir);
     }
@@ -382,7 +385,8 @@ mod tests {
         }
 
         // Use JSON format to trigger serialisation; check values via the handler return code.
-        let result = handle_stats(&dir, None, &db_path, &FormatKind::Json).unwrap();
+        let result =
+            handle_stats(&dir, None, &db_path, &Default::default(), &FormatKind::Json).unwrap();
         assert_eq!(result, 0, "stats always exits 0");
 
         let db = asset_db::AssetDb::open_existing(&db_path).unwrap();
@@ -429,7 +433,8 @@ mod tests {
             .unwrap();
         }
 
-        let result = handle_stats(&dir, Some(2), &db_path, &FormatKind::Text).unwrap();
+        let result =
+            handle_stats(&dir, Some(2), &db_path, &Default::default(), &FormatKind::Text).unwrap();
         assert_eq!(
             result, 0,
             "stats is informational — always exits 0 even with --top"

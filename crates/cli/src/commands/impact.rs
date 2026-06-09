@@ -39,13 +39,13 @@ pub fn handle_impact(
     project_dir: &Path,
     asset_path: &Path,
     db_path: &Path,
+    cfg: &crate::config::ConfigFile,
     tree: bool,
     format: &FormatKind,
 ) -> anyhow::Result<i32> {
     let target = crate::resolve_asset_path(project_dir, asset_path)?;
     let db = crate::open_db(db_path)?;
-    let config = crate::config::load_config(project_dir);
-    let graph = crate::load_graph(&db, &config.scan.external_roots)?;
+    let graph = crate::load_graph(&db, &cfg.scan.external_roots)?;
 
     if !graph.contains(&target) {
         anyhow::bail!("asset not found in scan data: {}", target.as_str());
@@ -206,6 +206,7 @@ mod tests {
             &dir,
             Path::new("/Game/Target"),
             &db_path,
+            &Default::default(),
             false,
             &FormatKind::Text,
         );
@@ -221,6 +222,7 @@ mod tests {
             &dir,
             Path::new("/Game/NotInGraph"),
             &db_path,
+            &Default::default(),
             false,
             &FormatKind::Text,
         );
@@ -251,6 +253,7 @@ mod tests {
             &dir,
             Path::new("/Game/Target"),
             &db_path,
+            &Default::default(),
             false,
             &FormatKind::Text,
         )
@@ -289,6 +292,7 @@ mod tests {
             &dir,
             Path::new("/Game/Target"),
             &db_path,
+            &Default::default(),
             false,
             &FormatKind::Text,
         )
@@ -334,6 +338,7 @@ mod tests {
             &dir,
             Path::new("/Game/Target"),
             &db_path,
+            &Default::default(),
             false,
             &FormatKind::Text,
         )
@@ -362,6 +367,7 @@ mod tests {
             &dir,
             Path::new("/Game/Target"),
             &db_path,
+            &Default::default(),
             false,
             &FormatKind::Json,
         )
@@ -399,6 +405,7 @@ mod tests {
             &dir,
             Path::new("/Game/Target"),
             &db_path,
+            &Default::default(),
             false,
             &FormatKind::Json,
         )
@@ -453,6 +460,7 @@ mod tests {
             &dir,
             Path::new("/Game/Target"),
             &db_path,
+            &Default::default(),
             true,
             &FormatKind::Text,
         )
@@ -490,6 +498,7 @@ mod tests {
             &dir,
             Path::new("/Game/Target"),
             &db_path,
+            &Default::default(),
             true,
             &FormatKind::Text,
         )
@@ -527,6 +536,7 @@ mod tests {
             &dir,
             Path::new("/Game/Target"),
             &db_path,
+            &Default::default(),
             true,
             &FormatKind::Json,
         )
@@ -566,6 +576,7 @@ mod tests {
             &dir,
             Path::new("/Game/Target"),
             &db_path,
+            &Default::default(),
             true,
             &FormatKind::Text,
         )
