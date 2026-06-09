@@ -35,24 +35,16 @@ struct ImpactTreeOutput {
     children: Vec<TreeNode>,
 }
 
-// Unlike other handlers that receive a resolved `db_path`, this handler takes
-// `asset_path` (a path to a specific asset, not a project dir) and resolves
-// both the target AssetPath and the DB location internally via
-// `resolve_target_and_db`. The resolution must walk up from the asset file to
-// find the project root, so it cannot be done uniformly at the dispatch level.
 pub fn handle_impact(
+    project_dir: &Path,
     asset_path: &Path,
-    db_override: Option<&Path>,
+    db_path: &Path,
     tree: bool,
     format: &FormatKind,
 ) -> anyhow::Result<i32> {
-    let (target, db_path) = crate::resolve_target_and_db(asset_path, db_override)?;
-    let db = crate::open_db(&db_path)?;
-    let config = db_path
-        .parent()
-        .and_then(|p| p.parent())
-        .map(crate::config::load_config)
-        .unwrap_or_default();
+    let target = crate::resolve_asset_path(project_dir, asset_path)?;
+    let db = crate::open_db(db_path)?;
+    let config = crate::config::load_config(project_dir);
     let graph = crate::load_graph(&db, &config.scan.external_roots)?;
 
     if !graph.contains(&target) {
@@ -211,8 +203,9 @@ mod tests {
         let _ = std::fs::remove_dir_all(&dir);
 
         let result = handle_impact(
+            &dir,
             Path::new("/Game/Target"),
-            Some(&db_path),
+            &db_path,
             false,
             &FormatKind::Text,
         );
@@ -225,8 +218,9 @@ mod tests {
         asset_db::AssetDb::open(&db_path).unwrap();
 
         let result = handle_impact(
+            &dir,
             Path::new("/Game/NotInGraph"),
-            Some(&db_path),
+            &db_path,
             false,
             &FormatKind::Text,
         );
@@ -254,8 +248,9 @@ mod tests {
         }
 
         let result = handle_impact(
+            &dir,
             Path::new("/Game/Target"),
-            Some(&db_path),
+            &db_path,
             false,
             &FormatKind::Text,
         )
@@ -291,8 +286,9 @@ mod tests {
         }
 
         let result = handle_impact(
+            &dir,
             Path::new("/Game/Target"),
-            Some(&db_path),
+            &db_path,
             false,
             &FormatKind::Text,
         )
@@ -335,8 +331,9 @@ mod tests {
         }
 
         let result = handle_impact(
+            &dir,
             Path::new("/Game/Target"),
-            Some(&db_path),
+            &db_path,
             false,
             &FormatKind::Text,
         )
@@ -362,8 +359,9 @@ mod tests {
         }
 
         let result = handle_impact(
+            &dir,
             Path::new("/Game/Target"),
-            Some(&db_path),
+            &db_path,
             false,
             &FormatKind::Json,
         )
@@ -398,8 +396,9 @@ mod tests {
         }
 
         let result = handle_impact(
+            &dir,
             Path::new("/Game/Target"),
-            Some(&db_path),
+            &db_path,
             false,
             &FormatKind::Json,
         )
@@ -451,8 +450,9 @@ mod tests {
         }
 
         let result = handle_impact(
+            &dir,
             Path::new("/Game/Target"),
-            Some(&db_path),
+            &db_path,
             true,
             &FormatKind::Text,
         )
@@ -487,8 +487,9 @@ mod tests {
         }
 
         let result = handle_impact(
+            &dir,
             Path::new("/Game/Target"),
-            Some(&db_path),
+            &db_path,
             true,
             &FormatKind::Text,
         )
@@ -523,8 +524,9 @@ mod tests {
         }
 
         let result = handle_impact(
+            &dir,
             Path::new("/Game/Target"),
-            Some(&db_path),
+            &db_path,
             true,
             &FormatKind::Json,
         )
@@ -561,8 +563,9 @@ mod tests {
 
         // path_stack prevents infinite DFS when A→Target→A forms a mutual cycle
         let result = handle_impact(
+            &dir,
             Path::new("/Game/Target"),
-            Some(&db_path),
+            &db_path,
             true,
             &FormatKind::Text,
         )
