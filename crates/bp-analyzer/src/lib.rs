@@ -21,8 +21,10 @@ impl Default for ComplexityThresholds {
             max_node_count: 200,
             max_event_tick_count: 1,
             max_cast_count: 10,
-            // IK rig chains and animation Blueprint hierarchies commonly reach depth 10–15
-            max_dependency_depth: 15,
+            // UE5 Manny/Quinn PostProcess ABPs reach depth 16 due to the per-joint PoseAsset
+            // chain (~64 pose assets) in the IK rig. 20 is chosen as a safe default that
+            // accommodates standard Epic template content without false positives.
+            max_dependency_depth: 20,
         }
     }
 }
@@ -116,7 +118,7 @@ mod tests {
             node_count: 201,
             event_tick_count: 2,
             cast_count: 11,
-            dependency_depth: 16,
+            dependency_depth: 21,
         };
         let warnings = is_complex(&metrics, &ComplexityThresholds::default());
         assert_eq!(warnings.len(), 4);
