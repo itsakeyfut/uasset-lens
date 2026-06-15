@@ -4,6 +4,7 @@ use std::path::Path;
 use anyhow::Context;
 
 use crate::FormatKind;
+use shared::AssetType;
 
 #[derive(serde::Serialize)]
 struct LintEntry {
@@ -47,7 +48,25 @@ pub fn handle_lint(
         })
         .collect();
 
-    let violations = engine.run(&assets, &metrics_map);
+    let mut violations = engine.run(&assets, &metrics_map);
+    let effective_budget = budget_tracker::BudgetConfig::effective(&cfg.budget);
+    let budget_report = budget_tracker::check_budget(&assets, &effective_budget);
+    for bv in budget_report.violations {
+        let path = bv.asset_path.as_str();
+        // AssetPath always starts with '/', so rsplit always yields at least one element
+        let name = path.rsplit('/').next().unwrap_or(path);
+        let actual_mb = bv.file_size as f64 / (1024.0 * 1024.0);
+        let max_mb = bv.max_size as f64 / (1024.0 * 1024.0);
+        violations.push(lint_engine::LintViolation {
+            severity: lint_engine::Severity::Warning,
+            rule_id: budget_rule_id(&bv.asset_type),
+            message: format!(
+                "{} {name} exceeds size limit: {actual_mb:.1} MB > {max_mb:.1} MB",
+                bv.asset_type,
+            ),
+            asset_path: bv.asset_path,
+        });
+    }
 
     let entries: Vec<LintEntry> = violations
         .iter()
@@ -124,6 +143,13 @@ pub fn handle_lint(
     }
 
     if entries.is_empty() { Ok(0) } else { Ok(1) }
+}
+
+fn budget_rule_id(asset_type: &AssetType) -> String {
+    match asset_type {
+        AssetType::Texture2D => "budget/texture-size".to_owned(),
+        other => format!("budget/{}", other.to_string().to_lowercase()),
+    }
 }
 
 fn truncate_path(path: &str, max_len: usize) -> String {
@@ -341,6 +367,51 @@ mod tests {
         let result = handle_lint(&dir, &db_path, &Default::default(), &FormatKind::Text).unwrap();
 
         assert_eq!(result, 1);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn handle_lint_should_return_1_when_texture_exceeds_4mb_built_in_default() {
+        let (dir, db_path) = test_db_in_tempdir("lint_texture_builtin");
+        {
+            let mut db = asset_db::AssetDb::open(&db_path).unwrap();
+            db.upsert_all(&[crate::commands::make_meta(
+                "/Game/Textures/T_Large",
+                dir.join("T_Large.uasset"),
+                AssetType::Texture2D,
+                5 * 1024 * 1024,
+                vec![],
+            )])
+            .unwrap();
+        }
+        let result = handle_lint(&dir, &db_path, &Default::default(), &FormatKind::Text).unwrap();
+        assert_eq!(result, 1);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn handle_lint_should_respect_custom_budget_texture2d_limit_from_config() {
+        let (dir, db_path) = test_db_in_tempdir("lint_texture_custom");
+        std::fs::write(
+            dir.join(".uasset-lens.toml"),
+            "[budget]\nTexture2D.max_size = 8388608\n",
+        )
+        .unwrap();
+        {
+            let mut db = asset_db::AssetDb::open(&db_path).unwrap();
+            // 5 MB is over the default 4 MB but under the custom 8 MB limit
+            db.upsert_all(&[crate::commands::make_meta(
+                "/Game/Textures/T_Large",
+                dir.join("T_Large.uasset"),
+                AssetType::Texture2D,
+                5 * 1024 * 1024,
+                vec![],
+            )])
+            .unwrap();
+        }
+        let cfg = crate::config::load_config(&dir);
+        let result = handle_lint(&dir, &db_path, &cfg, &FormatKind::Text).unwrap();
+        assert_eq!(result, 0);
         let _ = std::fs::remove_dir_all(&dir);
     }
 }
