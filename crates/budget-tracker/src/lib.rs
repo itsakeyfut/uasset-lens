@@ -20,7 +20,7 @@ impl BudgetConfig {
         );
         for (k, v) in &user.limits {
             limits.insert(
-                k.clone(),
+                k.clone(), // clone required: HashMap insert takes ownership of the key
                 AssetBudget {
                     max_size: v.max_size,
                 },
