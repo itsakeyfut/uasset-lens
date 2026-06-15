@@ -399,7 +399,6 @@ mod tests {
         .unwrap();
         {
             let mut db = asset_db::AssetDb::open(&db_path).unwrap();
-            // 5 MB is over the default 4 MB but under the custom 8 MB limit
             db.upsert_all(&[crate::commands::make_meta(
                 "/Game/Textures/T_Large",
                 dir.join("T_Large.uasset"),
