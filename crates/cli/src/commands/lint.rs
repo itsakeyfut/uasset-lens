@@ -85,7 +85,7 @@ pub fn handle_lint(
                 };
                 println!(
                     "{}",
-                    crate::format_gh_annotation(level, &rel, v.rule_id, &v.message)
+                    crate::format_gh_annotation(level, &rel, &v.rule_id, &v.message)
                 );
             }
             return if has_error { Ok(1) } else { Ok(0) };
