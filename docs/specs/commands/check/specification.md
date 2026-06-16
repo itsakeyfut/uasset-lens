@@ -2,15 +2,15 @@
 
 ## Purpose
 
-Single CI entry point. Runs all enabled quality checks against a scanned project and
-returns an exit code that CI pipelines can gate on.
+Run all (or a selected subset of) health checks in one pass and exit with a code that
+CI pipelines can gate on. Aggregates the results of `dead-assets`, `cycles`,
+`redirectors`, `lint`, `budget`, and `duplicates` into a single report.
 
 ```bash
 uasset-lens check ./Project
 ```
 
-The command always re-scans first (mtime delta) so CI always sees the current state of
-the repository. Use `--skip-scan` to reuse an existing DB.
+Requires `uasset-lens scan` to have been run first.
 
 ---
 
@@ -18,11 +18,24 @@ the repository. Use `--skip-scan` to reuse an existing DB.
 
 | Code | Meaning |
 |---|---|
-| `0` | All checks pass — no `"error"` severity violations |
-| `1` | One or more `"error"` severity violations found |
+| `0` | All checks pass — no problems found |
+| `1` | One or more checks found problems |
 | `2` | Execution error (I/O failure, DB missing, parse error) |
 
-`"warn"` severity violations appear in output but do **not** cause exit `1`.
+---
+
+## Available Checks
+
+| Check name | What it detects |
+|---|---|
+| `dead-assets` | Assets not referenced by any other asset |
+| `cycles` | Circular dependency cycles in the dependency graph |
+| `redirectors` | ObjectRedirector assets in the project |
+| `lint` | Lint rule violations (naming conventions, Blueprint complexity, etc.) |
+| `budget` | Assets exceeding per-type size budgets configured in `.uasset-lens.toml` |
+| `duplicates` | Same-name and texture duplicate asset groups |
+
+All six checks are enabled by default. Use `--only` or `--skip` to control which run.
 
 ---
 
@@ -31,28 +44,41 @@ the repository. Use `--skip-scan` to reuse an existing DB.
 ```
 $ uasset-lens check ./Project
 
-Scanning... (1,024 assets, 0.8s)
-Running checks...
+[dead-assets] 3 unreferenced assets found
+  /Game/Unused/T_OldRock (Texture2D, 2.1 MB)
+  /Game/Unused/SM_Barrel (StaticMesh, 4.8 MB)
+  /Game/Unused/BP_OldEnemy (Blueprint, 0.2 MB)
+  ... (3 shown)
 
-ERRORS (3):
-  [blueprint] /Game/Characters/BP_Player.uasset
-    EventTick node count (8) exceeds limit (5)
-  [budget] /Game/Characters/T_PlayerArmor_D.uasset
-    File size (6.1 MB) exceeds Texture2D limit (4 MB)
-  [lint] /Game/Meshes/Rock.uasset
-    StaticMesh missing required prefix 'SM_'
+[cycles] 1 circular dependency found
+  BP_Player → BP_Enemy → BP_GameMode → BP_Player
 
-WARNINGS (12):
-  [dead-assets] /Game/Unused/T_OldRock.uasset (Texture2D, 2.1 MB)
-  ... (11 more)
+[redirectors] no redirectors found
 
-check failed: 3 errors, 12 warnings
+[lint] 2 violations found
+  /Game/Meshes/Rock.uasset: StaticMesh missing required prefix 'SM_'
+  /Game/Characters/BP_Player.uasset: EventTick node count (8) exceeds limit (5)
+  ... (2 shown)
+
+[budget] no budget violations
+
+[duplicates] no duplicates found
+
+check failed: dead-assets(3), cycles(1), lint(2)
 ```
 
 All-pass output:
 
 ```
-check passed: 0 errors, 0 warnings (1,024 assets, 0.9s)
+check passed: all 6 checks clean (1,024 assets)
+```
+
+With `--verbose`, full findings are printed instead of the first 5 per check:
+
+```
+[dead-assets] 47 unreferenced assets found
+  /Game/Unused/T_OldRock (Texture2D, 2.1 MB)
+  ... (all 47 listed)
 ```
 
 ---
@@ -61,119 +87,46 @@ check passed: 0 errors, 0 warnings (1,024 assets, 0.9s)
 
 ```json
 {
-  "summary": {
-    "errors": 3,
-    "warnings": 12,
-    "assets_scanned": 1024,
-    "duration_ms": 820
-  },
-  "violations": [
-    {
-      "severity": "error",
-      "rule": "blueprint.event_tick_limit",
-      "asset_path": "/Game/Characters/BP_Player",
-      "file": "Content/Characters/BP_Player.uasset",
-      "message": "EventTick node count (8) exceeds limit (5)"
-    },
-    {
-      "severity": "warn",
-      "rule": "dead-assets",
-      "asset_path": "/Game/Unused/T_OldRock",
-      "file": "Content/Unused/T_OldRock.uasset",
-      "message": "Asset has no incoming references"
-    }
-  ]
+  "passed": false,
+  "checks": {
+    "dead-assets":  { "passed": false, "count": 3 },
+    "cycles":       { "passed": false, "count": 1 },
+    "redirectors":  { "passed": true,  "count": 0 },
+    "lint":         { "passed": false, "count": 2 },
+    "budget":       { "passed": true,  "count": 0 },
+    "duplicates":   { "passed": true,  "count": 0 }
+  }
 }
 ```
 
-On execution error (exit `2`): stderr only, no JSON envelope.
-
 ---
 
-## GitHub Actions Annotation Output (`--format github-actions`)
+## Selective Checks
 
-Uses [GitHub Actions workflow commands](https://docs.github.com/en/actions/using-workflows/workflow-commands-for-github-actions).
-Annotations appear as inline comments in the PR diff view.
+```bash
+# Run only cycle and lint checks
+uasset-lens check ./Project --only cycles,lint
 
-Output goes to **stdout** (GitHub Actions reads annotations from stdout).
+# Run all except dead-assets
+uasset-lens check ./Project --skip dead-assets
 
-```
-::error file=Content/Characters/BP_Player.uasset,title=blueprint.event_tick_limit::EventTick node count (8) exceeds limit (5)
-::error file=Content/Characters/T_PlayerArmor_D.uasset,title=budget.Texture2D::File size (6.1 MB) exceeds limit (4 MB)
-::warning file=Content/Unused/T_OldRock.uasset,title=dead-assets::Asset has no incoming references
+# Run all except dead-assets and duplicates
+uasset-lens check ./Project --skip dead-assets,duplicates
 ```
 
-`file` is the path relative to the repository root. `title` is the rule name.
+`--only` and `--skip` are mutually exclusive.
 
 ---
 
-## Baseline Comparison (`--diff-from`)
-
-Loads a previously saved baseline and fails only when violations have **increased**.
-
-| Violation state | Outcome |
-|---|---|
-| Present in both baseline and current | No regression — does not fail |
-| Present in current, absent in baseline | New regression — exit `1` |
-| Present in baseline, absent in current | Resolved — no fail |
-
-Matching is by `rule` + `asset_path`.
-
----
-
-## Checks Performed
-
-`check` runs every check enabled in `.uasset-lens.toml`. See `docs/specs/config.md` for
-the full configuration reference.
-
-| Config key | What it checks |
-|---|---|
-| `[rules] dead-assets` | Unreferenced asset detection |
-| `[rules] circular-deps` | Circular dependency detection |
-| `[rules] duplicate-assets` | Same-name / same-content duplicates |
-| `[rules] redirectors` | Unresolved ObjectRedirector assets |
-| `[lint] naming.*` | Asset naming convention violations |
-| `[lint] blueprint.*` | Blueprint node / EventTick / Cast complexity |
-| `[budget] <Type>.*` | Per-type file size budget enforcement |
-
----
-
-## `check` vs `report`
-
-| | `check` | `report` |
-|---|---|---|
-| Purpose | CI gate | Human-readable output |
-| Exit code | 0 / 1 / 2 (meaningful) | 0 / 2 (always 0 on success) |
-| Output | text / json / github-actions | html / markdown |
-| Speed | Fast (optimized for CI) | Slower (richer output) |
-| Trend data | No | Yes (if baselines present) |
-
----
-
-## CI Usage Patterns
-
-### Strict gate (greenfield projects)
+## CI Usage
 
 ```yaml
-- run: uasset-lens check ./Project --format github-actions
+- name: Scan assets
+  run: uasset-lens scan ./Project -y
+
+- name: Health check
+  run: uasset-lens check ./Project --format github-actions
 ```
 
-Fails on any `"error"` violation.
-
-### Regression-only gate (existing projects with violations)
-
-```yaml
-- name: Check assets (regression gate)
-  run: |
-    uasset-lens check ./Project \
-      --diff-from .uasset-lens/baseline.json \
-      --format github-actions
-
-- name: Update baseline (main branch only)
-  if: github.ref == 'refs/heads/main'
-  run: |
-    uasset-lens check ./Project --save-baseline
-    git add .uasset-lens/baseline.json
-    git commit -m "chore: update asset quality baseline" || true
-    git push
-```
+With `--format github-actions`, lint and budget violations are emitted as inline PR
+annotations. Dead assets, cycles, redirectors, and duplicates are emitted as notices.
