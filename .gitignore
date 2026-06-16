@@ -1,14 +1,42 @@
+# Editor / IDE
+.vscode/
+.idea/
+*.iml
+.fleet/
+.zed/
+*.code-workspace
+
+# Vim / Emacs
+*.swp
+*.swo
+.*.sw[a-p]
+*~
+\#*\#
+.\#*
+
+# OS
+.DS_Store
+.AppleDouble
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# Build artifacts
+**/target/
+
+# Tool configuration (personal / local)
 justfile
 
-docs/purpose.md
-docs/plan.md
-
-SESSION.md
-
-.claude/
-CLAUDE.md
-
-target/
+# Runtime data — SQLite asset index created by `uasset-lens scan`
 .uasset-lens/
 
-docs/dev/
+# Internal docs (not for contributors)
+/docs/purpose.md
+/docs/plan.md
+/docs/dev/
+
+# Claude — personal use only, not shared with contributors
+/CLAUDE.md
+/.claude/
+
+/SESSION.md
