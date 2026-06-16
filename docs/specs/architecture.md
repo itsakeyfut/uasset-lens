@@ -1,28 +1,28 @@
-# アーキテクチャ・設計
+# Architecture
 
-## 全体アーキテクチャ
+## Overall Architecture
 
 ```text
 uasset-lens/
  ├─ crates/
- │   ├─ scanner               # .uasset スキャン・メタデータ抽出
- │   ├─ asset-db              # SQLite による Asset インデックス管理
- │   ├─ dependency-graph      # Hard/Soft Reference 解析・グラフ構築
- │   ├─ impact-analyzer       # 削除・リネーム影響分析
- │   ├─ redirector-analyzer   # Redirector 検出・分析
- │   ├─ dead-asset-detector   # 未使用 Asset 検出
- │   ├─ duplicate-detector    # 重複 Asset 検出
- │   ├─ bp-analyzer           # Blueprint 静的解析
- │   ├─ level-analyzer        # Level / World Partition 分析
- │   ├─ material-analyzer     # Material 複雑度分析
- │   ├─ lint-engine           # Linter ルールエンジン
- │   ├─ budget-tracker        # Performance Budget 管理
- │   ├─ git-diff              # Blueprint / Asset 差分解析
- │   ├─ watcher               # ファイルシステム監視（Watch Mode）
- │   ├─ reporter              # HTML / Markdown レポート生成
- │   ├─ dashboard             # egui GUI ダッシュボード
- │   ├─ cli                   # CLI コマンド定義（clap）
- │   └─ shared                # 共通型・ユーティリティ
+ │   ├─ scanner               # .uasset scan and metadata extraction
+ │   ├─ asset-db              # SQLite-backed asset index management
+ │   ├─ dependency-graph      # Hard/Soft Reference analysis and graph construction
+ │   ├─ impact-analyzer       # Delete / rename impact analysis
+ │   ├─ redirector-analyzer   # Redirector detection and analysis
+ │   ├─ dead-asset-detector   # Unused asset detection
+ │   ├─ duplicate-detector    # Duplicate asset detection
+ │   ├─ bp-analyzer           # Blueprint static analysis
+ │   ├─ level-analyzer        # Level / World Partition analysis
+ │   ├─ material-analyzer     # Material complexity analysis
+ │   ├─ lint-engine           # Linter rule engine
+ │   ├─ budget-tracker        # Performance budget management
+ │   ├─ git-diff              # Blueprint / asset diff analysis
+ │   ├─ watcher               # File system watching (Watch Mode)
+ │   ├─ reporter              # HTML / Markdown report generation
+ │   ├─ dashboard             # egui GUI dashboard
+ │   ├─ cli                   # CLI command definitions (clap)
+ │   └─ shared                # Common types and utilities
  │
  ├─ apps/
  │   ├─ uasset-lens-cli
@@ -33,23 +33,23 @@ uasset-lens/
 
 ---
 
-## Phase 1 ワークスペース構成
+## Phase 1 Workspace Structure
 
-### クレート一覧（Phase 1）
+### Crate List (Phase 1)
 
-| クレート | 種別 | 役割 |
-|---|---|---|
-| `crates/shared` | lib | 共通型定義・エラー型（`AssetPath`・`AssetType`・`FPackageVersion`） |
-| `crates/scanner` | lib | `.uasset` バイナリパーサー・メタデータ抽出 |
-| `crates/asset-db` | lib | SQLite による Asset インデックス管理・差分スキャン |
-| `crates/dependency-graph` | lib | 依存グラフ構築・循環依存検出 |
-| `crates/dead-asset-detector` | lib | 未使用 Asset・孤立 Asset 検出 |
-| `crates/impact-analyzer` | lib | 削除・リネーム影響範囲分析（Phase 1 は `dependency-graph.find_impact()` の薄いラッパー。Phase 2 でリネーム安全性検査・Soft Reference 解析を追加） |
-| `crates/redirector-analyzer` | lib | Redirector 検出・分析 |
-| `crates/cli` | lib | clap コマンド定義・ハンドラロジック・出力フォーマット・ディレクトリウォーク・設定ファイル読み込み |
-| `apps/uasset-lens-cli` | bin | エントリポイント（`main.rs` のみ） |
+| Crate | Kind | Role |
+|-------|------|------|
+| `crates/shared` | lib | Common type definitions and error types (`AssetPath`, `AssetType`, `FPackageVersion`) |
+| `crates/scanner` | lib | `.uasset` binary parser and metadata extraction |
+| `crates/asset-db` | lib | SQLite-backed asset index management and delta scanning |
+| `crates/dependency-graph` | lib | Dependency graph construction and circular dependency detection |
+| `crates/dead-asset-detector` | lib | Unused and isolated asset detection |
+| `crates/impact-analyzer` | lib | Delete / rename impact scope analysis (Phase 1: thin wrapper over `dependency-graph.find_impact()`; Phase 2 adds rename-safety checks and Soft Reference analysis) |
+| `crates/redirector-analyzer` | lib | Redirector detection and analysis |
+| `crates/cli` | lib | clap command definitions, handler logic, output formatting, directory walk, config file loading |
+| `apps/uasset-lens-cli` | bin | Entry point (`main.rs` only) |
 
-### クレート間依存関係
+### Crate Dependency Graph
 
 ```text
 shared
@@ -68,46 +68,46 @@ cli ← shared
     ← impact-analyzer
     ← redirector-analyzer
 
-apps/uasset-lens-cli ← cli（main.rs のみ）
+apps/uasset-lens-cli ← cli (main.rs only)
 ```
 
-依存の原則:
-- `shared` はどのクレートにも依存しない（依存グラフの底）
-- `scanner`・`asset-db`・`redirector-analyzer` は `shared` にのみ依存する
-- `dependency-graph` は `shared` と `petgraph` にのみ依存する（DB/IO 非依存の純粋グラフ計算層）
-- `dead-asset-detector`・`impact-analyzer` は `dependency-graph` に依存する
-- `cli` は全ライブラリクレートに依存する。ディレクトリウォーク（`walkdir`）・設定ファイル読み込み（`toml`）も `cli` が担う
-- `apps/uasset-lens-cli` は `cli` にのみ依存する（薄いエントリポイント）
+Dependency rules:
+- `shared` depends on nothing (bottom of the dependency graph)
+- `scanner`, `asset-db`, and `redirector-analyzer` depend only on `shared`
+- `dependency-graph` depends only on `shared` and `petgraph` (pure graph computation, no DB or I/O)
+- `dead-asset-detector` and `impact-analyzer` depend on `dependency-graph`
+- `cli` depends on all library crates; it owns directory walking (`walkdir`) and config file loading (`toml`)
+- `apps/uasset-lens-cli` depends only on `cli` (thin entry point)
 
-### `cli` / `apps` 分離方針
+### `cli` / `apps` Separation
 
-| パッケージ | 種別 | 内容 |
-|---|---|---|
-| `crates/cli` | ライブラリクレート | clap コマンド定義・ハンドラロジック・出力フォーマット |
-| `apps/uasset-lens-cli` | バイナリクレート | `main.rs` のみ（数行）。`crates/cli` を呼び出す |
+| Package | Kind | Contents |
+|---------|------|----------|
+| `crates/cli` | library crate | clap command definitions, handler logic, output formatting |
+| `apps/uasset-lens-cli` | binary crate | `main.rs` only (a few lines); delegates everything to `crates/cli` |
 
-将来の GUI（`apps/uasset-lens-desktop`）からも `crates/cli` のロジックを再利用できる設計とする。
+This design allows the future GUI (`apps/uasset-lens-desktop`) to reuse `crates/cli` logic.
 
-### `shared` crate の内容
+### `shared` crate contents
 
-型定義・エラー型のみ。ユーティリティ関数は各クレートに持たせる。
+Type definitions and error types only. Utility functions belong in their respective crates.
 
-| ファイル | 内容 |
-|---|---|
-| `asset_path.rs` | `AssetPath` 型 |
+| File | Contents |
+|------|----------|
+| `asset_path.rs` | `AssetPath` type |
 | `asset_type.rs` | `AssetType` enum |
-| `error.rs` | 共通エラー型（`thiserror` ベース） |
+| `error.rs` | Common error types (thiserror-based) |
 | `version.rs` | `FPackageVersion` |
 
-### ワークスペース設定方針
+### Workspace Configuration
 
-- 依存クレートのバージョンは `[workspace.dependencies]` で一元管理する
-- `edition = "2021"` を全クレートで統一する
-- `resolver = "2"` を使用する（Rust 2021 デフォルト）
+- Dependency crate versions are centrally managed in `[workspace.dependencies]`
+- All crates use `edition = "2021"`
+- Use `resolver = "2"` (Rust 2021 default)
 
 ---
 
-## 内部データモデル
+## Internal Data Model
 
 ### Graph Model
 
@@ -118,17 +118,17 @@ Material -> Texture
 Blueprint -> Blueprint
 ```
 
-### Database 化する理由
+### Rationale for using a Database
 
-以下を可能にするため。
+Enables:
 
-- 高速検索
-- Trend Analysis
-- Historical Diff
-- Query System
-- Large Scale Analysis
+- Fast search
+- Trend analysis
+- Historical diff
+- Query system
+- Large-scale analysis
 
-### クエリ例
+### Example Query
 
 ```sql
 SELECT *

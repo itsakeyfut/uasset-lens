@@ -1,55 +1,58 @@
-# コアバリュー・プロジェクト方針
+# Core Values and Project Policy
 
-## コアバリュー
+## Core Values
 
-### Primary: 影響範囲の即時把握
+### Primary: Instant Impact Visibility
 
-> "この Asset を削除・リネームして何が壊れるか、UE エディターなしで即座に答える"
+> "Answer 'what breaks if I delete or rename this asset?' without opening the UE editor."
 
-UE 内蔵の Reference Viewer・Asset Audit・Size Map はすべてエディターが起動している前提で動作する。
-uasset-lens はエディター不要・CLI 単体で依存関係と影響範囲を解析し、**"delete 怖い / rename 怖い"** という UE 開発者が毎日直面する課題に直接応える。
+UE's built-in Reference Viewer, Asset Audit, and Size Map all require the editor to be running.
+uasset-lens analyzes dependency relationships and impact scope from the CLI alone — no editor required.
+It directly addresses **"afraid to delete / afraid to rename"**, a problem every UE developer faces daily.
 
-### Future: CI 統合可能な UE 品質ゲート
+### Future: CI-Integrable UE Quality Gate
 
-> "PR マージ前に Asset 品質を自動チェックする"
+> "Automatically check asset quality before merging a PR."
 
-既存の UE ツールは CI 統合できない。uasset-lens はその空白地帯を埋め、GitHub Actions 等のパイプラインに組み込める UE 向け品質ゲートとなる。
-Primary が動く時点でこの価値はほぼ自動的に実現される。
+Existing UE tools cannot be integrated into CI. uasset-lens fills that gap,
+becoming a UE-specific quality gate that can be embedded in GitHub Actions and similar pipelines.
+This value is nearly achieved automatically once the Primary goal is working.
 
 ---
 
-## プロジェクト方針
+## Project Policy
 
-### 公開方針
+### Publication Policy
 
-動くものができた時点で公開可否を判断する。公開前の段階でも、**ドキュメントの整備（README・仕様書）は最初から本番品質で行う**。
+Publication readiness is assessed once the tool is working. Even before publication,
+**documentation (README, specs) is maintained at production quality from day one.**
 
-| 項目 | 方針 |
-|---|---|
-| ライセンス | 公開時に決定（MIT / Apache-2.0 を候補とする） |
-| ドキュメント | 最初から整備（公開・非公開を問わず） |
-| 配布方法 | 公開時に決定（`cargo install` / GitHub Releases を候補とする） |
+| Item | Policy |
+|------|--------|
+| License | Decided at publication time (MIT / Apache-2.0 are candidates) |
+| Documentation | Maintained from the start, regardless of publication status |
+| Distribution | Decided at publication time (`cargo install` / GitHub Releases are candidates) |
 
-### プライマリターゲットユーザー
+### Primary Target User
 
-**インディー・ソロ開発者**を最優先とする。
+**Indie and solo developers** are the top priority.
 
-- セットアップ不要・すぐ使える CLI 設計を優先する
-- 設定ファイルなしでもデフォルトで動作することを重視する
-- チーム向け機能（CI 統合・複数人設定共有等）は、ソロ向け機能が安定した後に追加する
+- Prioritize zero-setup, ready-to-use CLI design
+- Emphasize working out-of-the-box without a config file
+- Team-oriented features (CI integration, multi-user config sharing, etc.) are added after solo features are stable
 
-### 対応 OS
+### Supported Platforms
 
-**最初からクロスプラットフォーム対応**（Windows / macOS / Linux）。
+**Cross-platform from day one** (Windows / macOS / Linux).
 
-- ファイルパスは `std::path::PathBuf` で統一し、OS 固有の区切り文字を混入させない
-- CI は GitHub Actions でマルチ OS テストを実施する（Windows / macOS / Linux）
-- 開発環境は Windows だが、OS 固有の実装は行わない
+- Use `std::path::PathBuf` for all file paths; never mix in OS-specific separators
+- CI runs multi-OS tests via GitHub Actions (Windows / macOS / Linux)
+- Primary development is on Windows, but no OS-specific implementation is used
 
-### GUI（Phase 5）の位置づけ
+### GUI (Phase 6) Positioning
 
-**努力目標**とする。CLI として十分な完成度に達した後に着手する。
+Treated as a **best-effort goal**. Not started until the CLI reaches sufficient completeness.
 
-- Phase 1〜4 の CLI 機能が安定するまでは GUI の実装を開始しない
-- egui を採用するため、アーキテクチャ上の追加制約は最小限
-- Dependency Visualization 等の視覚的価値は GUI があって初めて最大化されるため、スコープ外にはしない
+- Do not begin GUI implementation until Phase 1–4 CLI features are stable
+- Using egui minimizes architectural constraints
+- Visual value (e.g. dependency visualization) is maximized by the GUI, so it is not descoped

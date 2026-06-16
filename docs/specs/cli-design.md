@@ -1,31 +1,32 @@
-# CLI 詳細設計
+# CLI Detailed Design
 
-## DB ファイルの配置
+## DB File Location
 
-`<project_dir>/.uasset-lens/uasset-lens.db` に自動生成される。
+Auto-generated at `<project_dir>/.uasset-lens/uasset-lens.db`.
 
 ```
 /MyProject/
-  ├─ Content/           # UE コンテンツ
+  ├─ Content/           # UE content
   ├─ .uasset-lens/
-  │   └─ uasset-lens.db  # ← scan 時に自動生成（.gitignore に追加推奨）
-  └─ .uasset-lens.toml  # 設定ファイル（任意）
+  │   └─ uasset-lens.db  # ← auto-created on scan (add to .gitignore)
+  └─ .uasset-lens.toml  # config file (optional)
 ```
 
-`--db <path>` フラグで任意のパスに上書きできる（CI 用途等）。
+Override with `--db <path>` for CI use cases.
 
-## Content ルートの解決ルール
+## Content Root Resolution
 
-`<project_dir>` の解釈:
+Interpreting `<project_dir>`:
 
-1. `<project_dir>/Content/` が存在する → `content_root = <project_dir>/Content/`
-2. 存在しない → `content_root = <project_dir>`（Content ディレクトリを直接渡した場合）
+1. If `<project_dir>/Content/` exists → `content_root = <project_dir>/Content/`
+2. Otherwise → `content_root = <project_dir>` (Content directory passed directly)
 
-`impact` コマンド等でアセットパスのみ渡された場合は、パスを上方に辿って `.uasset-lens/uasset-lens.db` を自動検索する。
+For commands like `impact` that receive only an asset path, the tool walks up the directory
+tree to auto-locate `.uasset-lens/uasset-lens.db`.
 
-## scan 未実行時の挙動
+## Behavior When scan Has Not Been Run
 
-DB が存在しない・空の状態で他のコマンドを実行した場合はエラーで終了する。
+If the DB is missing or empty when any other command runs, exit with an error:
 
 ```
 Error: no scan data found.
@@ -34,40 +35,40 @@ Run 'uasset-lens scan <project_dir>' first.
 
 ## Exit codes
 
-Clippy スタイルの 3 値。CI での品質ゲートとして利用できる。
+Three values, Clippy-style. Usable as CI quality gates.
 
-| コード | 意味 |
-|---|---|
-| `0` | 正常終了・問題なし |
-| `1` | 問題を検出（dead asset・循環依存・impact あり 等） |
-| `2` | 実行エラー（IO エラー・DB 未作成・パース失敗 等） |
+| Code | Meaning |
+|------|---------|
+| `0` | Success — no issues found |
+| `1` | Issues detected (dead asset, circular dependency, impact found, etc.) |
+| `2` | Execution error (I/O error, DB not created, parse failure, etc.) |
 
 ```bash
-# CI での利用例
-uasset-lens graph --cycles-only ./Project || exit 1   # 循環依存でビルド失敗
-uasset-lens dead-assets ./Project                     # 検出時は exit 1（警告扱い）
+# CI usage examples
+uasset-lens graph --cycles-only ./Project || exit 1   # fail build on circular deps
+uasset-lens dead-assets ./Project                     # exit 1 on detection (warning)
 ```
 
-## 共通フラグ
+## Common Flags
 
-| フラグ | 説明 |
-|---|---|
-| `--format <text\|json>` | 出力フォーマット（デフォルト: `text`） |
-| `--db <path>` | DB パスの上書き |
-| `-y` / `--yes` | 確認プロンプトをスキップ（CI 用） |
+| Flag | Description |
+|------|-------------|
+| `--format <text\|json>` | Output format (default: `text`) |
+| `--db <path>` | Override the DB path |
+| `-y` / `--yes` | Skip confirmation prompts (for CI) |
 
-## コマンド一覧
+## Command Reference
 
 ### `scan <project_dir>`
 
-Content 配下の全 `.uasset` / `.umap` をスキャンして DB を更新する。
+Scans all `.uasset` / `.umap` files under Content and updates the DB.
 
-**重要**: scan コマンドは `.uasset` ファイル本体には一切触れない。DB レコードのみを操作する。
+**Important**: The scan command never modifies `.uasset` files themselves. It only operates on DB records.
 
 ```
 Options:
-  --full-scan    mtime に関わらず全ファイルを強制再スキャン
-  -y / --yes     DB クリーンアップの確認プロンプトをスキップ（CI 用）
+  --full-scan    Force re-scan of all files regardless of mtime
+  -y / --yes     Skip the DB cleanup confirmation prompt (for CI)
 
 Output (text):
   Scanning ./MyProject/Content... (1000 files)
@@ -87,17 +88,17 @@ Output (text):
     WARN Content/Old/M_Y.uasset: unsupported version
 ```
 
-`-y` フラグ使用時はプロンプトを出さずに自動削除する。
+With `-y`, auto-delete without prompting.
 
 ---
 
 ### `graph <project_dir>`
 
-依存グラフの概要と循環依存を表示する。
+Displays a dependency graph summary and circular dependencies.
 
 ```
 Options:
-  --cycles-only    循環依存のみ表示
+  --cycles-only    Show circular dependencies only
 
 Output (text):
   Dependency Graph Summary
@@ -114,11 +115,11 @@ Output (text):
 
 ### `dead-assets <project_dir>`
 
-どの Asset からも参照されていない Asset を一覧表示する。
+Lists assets not referenced by any other asset.
 
 ```
 Options:
-  --type <AssetType>    型でフィルタ
+  --type <AssetType>    Filter by type
 
 Output (text):
   /Game/Unused/T_OldTexture          (Texture2D, 2.1 MB)
@@ -132,9 +133,9 @@ Output (text):
 
 ### `impact <asset_path>`
 
-指定 Asset を削除・リネームした場合に壊れる Asset を列挙する。
+Lists assets that would break if the given asset were deleted or renamed.
 
-`<asset_path>` はゲームパス（`/Game/...`）またはファイルシステムパスを受け付ける。
+`<asset_path>` accepts both a game path (`/Game/...`) and a filesystem path.
 
 ```
 Output (text):
@@ -156,10 +157,10 @@ Output (text):
 
 ### `redirectors <project_dir>`
 
-プロジェクト内の Redirector Asset を検出・列挙する。
+Detects and lists Redirector assets in the project.
 
-**Phase 1 スコープ**: `ObjectRedirector` 型の Asset を検出して一覧表示するのみ。
-redirect 先の解決（壊れた Redirector の判定）は Phase 2 以降で対応する。
+**Phase 1 scope**: only detects and lists assets of type `ObjectRedirector`.
+Redirect target resolution (detecting broken redirectors) is Phase 2+.
 
 ```
 Output (text):
@@ -177,15 +178,15 @@ Output (text):
 
 ### `find <project_dir> [options]`
 
-DB を使った Asset 検索・フィルタリング。
+Searches and filters assets using the DB.
 
 ```
 Options:
-  --type <AssetType>      型でフィルタ（例: Texture2D, Blueprint）
-  --larger-than <bytes>   ファイルサイズ下限
-  --smaller-than <bytes>  ファイルサイズ上限
-  --unreferenced          参照されていない Asset のみ
-  --path <pattern>        パスのパターンマッチ（glob）
+  --type <AssetType>      Filter by type (e.g. Texture2D, Blueprint)
+  --larger-than <bytes>   File size lower bound
+  --smaller-than <bytes>  File size upper bound
+  --unreferenced          Show only unreferenced assets
+  --path <pattern>        Match by path pattern (glob)
 
 Examples:
   uasset-lens find ./Project --type Texture2D --larger-than 4096
@@ -195,10 +196,10 @@ Examples:
 
 ---
 
-## JSON 出力フォーマット（`--format json`）
+## JSON Output Format (`--format json`)
 
-`--format json` を指定した場合、各コマンドは以下の単一 JSON オブジェクト（または配列）を stdout に出力する。
-エラー時は `exit 2` となり、stderr にエラーメッセージを出力する（JSON エラーエンベロープは設けない）。
+With `--format json`, each command writes a single JSON value (object or array) to stdout.
+On error, exit code `2` and write the error message to stderr (no JSON error envelope).
 
 ### `scan`
 
@@ -267,17 +268,17 @@ Examples:
 
 ---
 
-## `.uasset-lens.toml` 設定ファイル（Phase 1 最小仕様）
+## `.uasset-lens.toml` Config File (Phase 1 minimum spec)
 
-プロジェクトルートに配置し、チームで git 管理する。存在しない場合はデフォルト設定で動作する。
+Placed in the project root and checked into git for team sharing. If absent, defaults apply.
 
-### Phase 1 でサポートするフィールド
+### Phase 1 supported fields
 
 ```toml
 # .uasset-lens.toml
 
 [scan]
-# スキャン対象から除外するパス（content_root からの相対パス、前方一致）
+# Paths to exclude from scanning (relative to content_root, prefix match)
 exclude_paths = [
     "Content/Dev/",
     "Content/Test/",
@@ -285,4 +286,4 @@ exclude_paths = [
 ]
 ```
 
-Phase 3 以降で命名規則・サイズバジェット等のフィールドを追加する。
+Naming conventions, size budgets, and other fields will be added in Phase 3+.

@@ -1,167 +1,164 @@
-# uasset-lens 概要
+# uasset-lens Overview
 
-## 概要
+## Overview
 
-Unreal Engine プロジェクト向けの Asset / Blueprint 静的解析・可視化・監査ツールを Rust で開発する。
+A Rust-based static analysis, visualization, and audit tool for assets and Blueprints in
+Unreal Engine projects.
 
-本ツールは、巨大化した Unreal プロジェクトにおける以下の課題を解決することを目的とする。
+This tool addresses the following pain points that emerge as Unreal projects grow large:
 
-- Asset 依存関係の不透明化
-- Blueprint の巨大化
-- 未使用 Asset の蓄積
-- Circular Dependency
-- Git diff の困難さ
-- Asset 管理コスト増大
-- Package/Cook サイズ肥大化
-- チーム開発時のレビュー困難
+- Opaque asset dependency chains
+- Blueprint sprawl
+- Accumulation of unused assets
+- Circular dependencies
+- Difficulty diffing assets with Git
+- Increasing asset management overhead
+- Bloated package / cook sizes
+- Hard-to-review changes in team development
 
-単なる Asset Viewer ではなく、
+Rather than being just another Asset Viewer, the goal is to serve as an
 
 > Unreal Project Observability Platform
 
-として設計する。
+---
+
+## Target Users
+
+- Unreal Engine developers
+- Indie game developers
+- Technical Artists
+- Tools Programmers
+- Gameplay Programmers
+- Teams working on large-scale Unreal projects
 
 ---
 
-## 想定ユーザー
-
-- Unreal Engine 開発者
-- インディーゲーム開発者
-- Technical Artist
-- Tools Programmer
-- Gameplay Programmer
-- 大規模 Unreal プロジェクトを扱うチーム
-
----
-
-## 解決したい課題
+## Problems to Solve
 
 ### Asset Explosion
 
-Unreal プロジェクト巨大化に伴い以下の問題が発生する。
+As Unreal projects grow, the following problems appear:
 
-- 何がどこから参照されているかわからない
-- 不要 Asset が削除できない
-- Blueprint の循環参照
-- 巨大 BP 化
-- Redirector 地獄
-- Asset Rename の恐怖
-- Build/Cook 時間増加
-- Package サイズ肥大化
+- No clear picture of what references what
+- Cannot safely delete unused assets
+- Blueprint circular references
+- Blueprint complexity explosion
+- Redirector hell
+- Fear of renaming assets
+- Increasing build / cook times
+- Package size bloat
 
-### Blueprint Black Box 問題
+### Blueprint Black Box Problem
 
-Blueprint は GUI ベースのため:
+Because Blueprints are GUI-based:
 
-- grep 不可能
-- diff 困難
-- review 困難
-- static analysis 困難
+- Cannot be grepped
+- Difficult to diff
+- Difficult to review
+- Difficult to statically analyze
 
-その結果、巨大化すると保守性が大きく低下する。
+As a result, Blueprint maintainability drops sharply once they grow large.
 
 ---
 
-## ソフトウェアコンセプト
+## Software Concept
 
-### コンセプト
+### Concept
 
 "Clippy for Unreal Assets"
 
-### 提供価値
+### Value Proposition
 
-- Asset 可視化
-- Asset 健康状態分析
-- Blueprint 静的解析
-- Dependency Graph
+- Asset visualization
+- Asset health analysis
+- Blueprint static analysis
+- Dependency graph
 - Lint
-- Git Friendly Analysis
+- Git-friendly analysis
 
-### 重要視する点
+### Design Priorities
 
-- 高速
-- 並列解析
-- CLI First
-- CI Integration
-- Git Friendly
-- Cross Platform
-- Large Project Friendly
+- Fast
+- Parallel analysis
+- CLI first
+- CI integration
+- Git friendly
+- Cross-platform
+- Large project friendly
 
-### 非機能要件
+### Non-Functional Requirements
 
-| 要件 | 目標値 |
-|---|---|
-| メモリ使用量 | 100 MB 以内（UE5 + VS と共存するため） |
-| スキャン速度 | 1,000 assets を 5 秒以内（フルスキャン時、並列化前提） |
-| 対応最大規模 | 100,000 assets まで |
+| Requirement | Target |
+|-------------|--------|
+| Memory usage | ≤ 100 MB (must coexist with UE5 + VS in the background) |
+| Scan speed | 1,000 assets in under 5 seconds (full scan, parallel) |
+| Maximum scale | Up to 100,000 assets |
 
-#### 設計上の制約
+#### Design Constraints
 
-- 全 Asset を一度にメモリに展開しない（ストリーミング・チャンク処理）
-- 大規模データは SQLite に委譲し、メモリ上のグラフは必要な範囲のみ保持
-- 並列スキャンにより速度目標を達成する（rayon 使用）
-
----
-
-## コア思想
-
-### Engine Replacement は目指さない
-
-以下はスコープ外:
-
-- 独自ゲームエンジン
-- Unreal Replacement
-- 汎用 Engine 開発
-
-目指す方向:
-
-> Unreal Engine 開発を強化する
+- Never expand all assets into memory at once (streaming / chunk processing)
+- Delegate large datasets to SQLite; keep only the needed portion of the graph in memory
+- Meet the speed target through parallel scanning (rayon)
 
 ---
 
-## CLI First 方針
+## Core Philosophy
 
-初期段階では GUI より CLI を優先する。
+### Not aiming to replace the engine
 
-理由:
+Out of scope:
 
-- 実装速度
-- CI Integration
-- OSS Friendly
-- Automation Friendly
-- Large Project Friendly
+- A custom game engine
+- An Unreal replacement
+- A general-purpose engine
 
----
+Direction:
 
-## 競合・関連分野
-
-### 既存 Unreal の課題
-
-Unreal は:
-
-- Asset 可視化が弱い
-- BP diff が弱い
-- 大規模 Asset 管理が難しい
-- GUI 依存が強い
-
-本ツールはそこを補完する。
+> Augment Unreal Engine development
 
 ---
 
-## 最終ビジョン
+## CLI First Approach
 
-本プロジェクトの最終目標は:
+CLI takes priority over GUI in the early stages.
 
-> Unreal プロジェクトを "見える化" すること
+Reasons:
 
-である。
+- Faster to implement
+- CI integration
+- OSS friendly
+- Automation friendly
+- Large project friendly
 
-特に:
+---
 
-- Asset
-- Blueprint
-- Dependency
+## Competitive Landscape
+
+### Limitations of existing Unreal tools
+
+Unreal's built-in tools:
+
+- Weak asset visualization
+- Weak Blueprint diff
+- Hard to manage large-scale assets
+- Heavy GUI dependency
+
+uasset-lens fills that gap.
+
+---
+
+## Ultimate Vision
+
+The final goal of this project is to
+
+> Make Unreal projects observable
+
+Specifically, to visualize:
+
+- Assets
+- Blueprints
+- Dependencies
 - Complexity
-- Project Health
+- Project health
 
-を可視化し、巨大 Unreal プロジェクトの保守性を向上させる。
+and improve the maintainability of large Unreal projects.

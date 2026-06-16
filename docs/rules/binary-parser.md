@@ -3,23 +3,23 @@
 ## References
 
 - [byteorder documentation](https://docs.rs/byteorder)
-- [UE5 .uasset format](https://docs.rs/unreal-asset) (参考のみ — 実装は自前)
+- [UE5 .uasset format](https://docs.rs/unreal-asset) (reference only — implementation is hand-written)
 
 ---
 
 ## Philosophy
 
-`.uasset` パーサーはこのプロジェクトの核心部品であり、ポートフォリオとしても重要。
-- **正確**: 不正な入力をきれいに拒否する
-- **回復力**: 破損ファイル 1 つでスキャン全体を止めない
-- **ゼロコピー志向**: 可能な限り `&[u8]` スライスで解析し、必要なときだけ所有権を取る
+The `.uasset` parser is the core of this project and an important portfolio piece.
+- **Correct**: reject invalid input cleanly
+- **Resilient**: a single corrupt file must not halt the entire scan
+- **Zero-copy minded**: parse from `&[u8]` slices wherever possible; take ownership only when necessary
 
 ---
 
-## ファイル読み込み戦略
+## File Reading Strategy
 
-ファイル全体を一度 `Vec<u8>` に読み込んでからスライスを解析する。
-`BufReader` + シーク操作を繰り返さない。UE5 アセットのサイズは実用上 50 MB 以下に収まる。
+Read the entire file into a `Vec<u8>` once, then parse from slices.
+Do not use `BufReader` with repeated seeks. UE5 assets are practically always under 50 MB.
 
 ```rust
 // ✅ Single read, parse from slice
@@ -29,10 +29,10 @@ let metadata = parse_asset(&data, content_root)?;
 
 ---
 
-## エンディアン
+## Endianness
 
-UE5 の `.uasset` ファイルは **常にリトルエンディアン**（macOS 上でも同じ）。
-全マルチバイト読み込みに `byteorder::LittleEndian` を使う。ネイティブエンディアンは使わない。
+UE5 `.uasset` files are **always little-endian** (even on macOS).
+Use `byteorder::LittleEndian` for all multi-byte reads. Never use native endian.
 
 ```rust
 use byteorder::{LittleEndian, ReadBytesExt};
@@ -46,13 +46,13 @@ let magic = cursor.read_u32::<NativeEndian>()?;
 
 ---
 
-## byteorder + Cursor パターン
+## byteorder + Cursor Pattern
 
-UE5 の `.uasset` はオフセットベースのナビゲーション（NameTable / ImportTable / ExportTable それぞれの
-絶対位置をヘッダーから得てジャンプする）が前提のため、ストリーミング消費モデルではなく
-`Cursor` を使って絶対位置に直接 `set_position()` する方式を採用している。
+UE5 `.uasset` navigation is offset-based: the header provides absolute positions for
+NameTable, ImportTable, and ExportTable. Rather than streaming sequentially, use `Cursor`
+and jump directly to each table via `set_position()`.
 
-### プリミティブ読み込みには `ReadBytesExt` を使う
+### Use `ReadBytesExt` for primitive reads
 
 ```rust
 use byteorder::{LittleEndian, ReadBytesExt};
@@ -63,7 +63,7 @@ let magic   = cur.read_u32::<LittleEndian>().map_err(map_io)?;
 let version = cur.read_i32::<LittleEndian>().map_err(map_io)?;
 ```
 
-### 配列読み込みにはループを使う（with_capacity で事前確保）
+### Use loops for array reads (pre-allocate with with_capacity)
 
 ```rust
 let count = cur.read_i32::<LittleEndian>().map_err(map_io)?;
@@ -76,7 +76,7 @@ for _ in 0..count {
 }
 ```
 
-### I/O エラーは `map_io` でドメインエラーに変換する
+### Convert I/O errors to domain errors with `map_io`
 
 ```rust
 fn map_io(e: std::io::Error) -> ScanError {
@@ -88,10 +88,10 @@ fn map_io(e: std::io::Error) -> ScanError {
 }
 ```
 
-### カーソル移動には `advance()` ヘルパーを使う（bounds check 込み）
+### Use the `advance()` helper for cursor movement (includes bounds check)
 
-直接 `set_position()` を呼ばない。必ず `advance()` 経由で移動し、
-バッファ終端を超えた場合に `ScanError::UnexpectedEof` を返す。
+Never call `set_position()` directly. Always move through `advance()`,
+which returns `ScanError::UnexpectedEof` when the cursor exceeds the buffer end.
 
 ```rust
 fn advance(cur: &mut Cursor<&[u8]>, n: u64) -> Result<(), ScanError> {
@@ -104,22 +104,22 @@ fn advance(cur: &mut Cursor<&[u8]>, n: u64) -> Result<(), ScanError> {
 }
 ```
 
-### パーサー内で `unwrap` を使わない
+### Never use `unwrap` inside a parser
 
 ```rust
 // ❌ FORBIDDEN
 let val = cur.read_u32::<LittleEndian>().unwrap();
 
-// ✅ map_err でドメインエラーへ変換
+// ✅ Convert to domain error with map_err
 let val = cur.read_u32::<LittleEndian>().map_err(map_io)?;
 ```
 
 ---
 
-## Magic Number 検証
+## Magic Number Verification
 
-パースの最初の操作として必ず Magic Number を検証する。
-不一致の場合は即座に `ScanError::InvalidMagic` を返す。
+Always verify the Magic Number as the very first parse operation.
+Return `ScanError::InvalidMagic` immediately on mismatch.
 
 ```rust
 const UE_MAGIC: u32 = 0x9E2A83C1;
@@ -133,10 +133,10 @@ if magic != UE_MAGIC {
 
 ---
 
-## オフセットベースのテーブルナビゲーション
+## Offset-Based Table Navigation
 
-`FPackageFileSummary` の各テーブル（NameTable / ImportTable / ExportTable）は
-ヘッダーに格納されたオフセットで位置が決まる。テーブルの出現順序を仮定しない。
+Each table in `FPackageFileSummary` (NameTable, ImportTable, ExportTable) is located
+by the offsets stored in the header. Never assume a fixed table order.
 
 ```rust
 // ✅ Use header-provided offsets — don't assume order
@@ -147,14 +147,14 @@ let export_data = &data[header.export_offset as usize..];
 
 ---
 
-## FString パース
+## FString Parsing
 
-UE の FString は長さプレフィックス付き。負の長さは UTF-16LE を示す。
-Phase 1 ではアセット名として一般的な UTF-8 / ASCII のみ対応する。
+UE FStrings are length-prefixed. A negative length signals UTF-16LE encoding.
+Phase 1 supports only UTF-8/ASCII, which covers all common asset names.
 
 ```
-FString バイナリ形式:
-  i32  length  ( < 0 → UTF-16LE;  > 0 → UTF-8/ASCII、null 終端含む長さ;  == 0 → 空文字 )
+FString binary layout:
+  i32  length  ( < 0 → UTF-16LE;  > 0 → UTF-8/ASCII, length includes null terminator;  == 0 → empty )
   [u8] data
 ```
 
@@ -165,14 +165,14 @@ fn parse_fstring(cur: &mut Cursor<&[u8]>) -> Result<String, ScanError> {
         return Ok(String::new());
     }
     if len < 0 {
-        // UTF-16LE: Phase 1 では未対応 — スキップして空文字列を返す
+        // UTF-16LE: not supported in Phase 1 — skip and return empty string
         advance(cur, (-len as u64) * 2)?;
         return Ok(String::new());
     }
     let pos = cur.position() as usize;
     advance(cur, len as u64)?;
     let bytes = &cur.get_ref()[pos..pos + len as usize];
-    // null 終端を除いて UTF-8 デコード
+    // strip null terminator before UTF-8 decode
     let s = std::str::from_utf8(&bytes[..bytes.len().saturating_sub(1)])
         .map_err(|_| ScanError::InvalidData("invalid UTF-8 in FString".into()))?
         .to_owned();
@@ -182,10 +182,10 @@ fn parse_fstring(cur: &mut Cursor<&[u8]>) -> Result<String, ScanError> {
 
 ---
 
-## エラー回復（scan_files レベル）
+## Error Recovery (scan_files level)
 
-1 ファイルのパースエラーはスキャン全体を止めない。
-破損ファイルは `ScanResult.skipped` に入れ、`warn` ログを出してスキャンを継続する。
+A parse error in one file must not halt the entire scan.
+Put corrupt files in `ScanResult.skipped`, emit a `warn` log, and continue scanning.
 
 ```rust
 // ✅ Per-file error isolation with rayon
@@ -202,7 +202,7 @@ let (assets, skipped): (Vec<_>, Vec<_>) = files
     });
 ```
 
-パースエラーは `warn` レベルでログを出す。`error` レベルは使わない（予期されたケースのため）。
+Log parse errors at `warn` level. Do not use `error` — skipped files are an expected outcome.
 
 ```rust
 for skip in &skipped {
@@ -216,12 +216,12 @@ for skip in &skipped {
 
 ---
 
-## バージョン検証
+## Version Verification
 
-`FPackageFileSummary` パース後に UE5 ファイルかどうかを確認する。
+Verify the file is UE5 after parsing `FPackageFileSummary`.
 
 ```rust
-// UE5 の条件: legacy_version == -8 かつ file_version_ue5 > 0
+// UE5 condition: legacy_version == -8 and file_version_ue5 > 0
 if file_version_ue5 <= 0 {
     return Err(ScanError::UnsupportedVersion(
         legacy_version,
@@ -230,19 +230,19 @@ if file_version_ue5 <= 0 {
 }
 ```
 
-対応バージョン: UE5.1 以降（`legacy_version == -8`）。UE4 ファイルは `UnsupportedVersion` として skipped に入れる。
+Supported versions: UE5.1 and later (`legacy_version == -8`). UE4 files become `UnsupportedVersion` entries in `skipped`.
 
 ---
 
-## ImportTable フィルタリング
+## ImportTable Filtering
 
-依存関係として保存するのは `/Game/` プレフィックスのパスのみ。
-以下を**変換前にフィルタリング**して `AssetPath` アロケーションを避ける。
+Only paths with the `/Game/` prefix are stored as dependencies.
+**Filter before conversion** to avoid allocating discarded `AssetPath` values.
 
-| プレフィックス | 例 | 除外理由 |
-|---|---|---|
-| `/Script/` | `/Script/Engine.StaticMesh` | エンジンクラス定義 |
-| `/Engine/` | `/Engine/Content/T_DefaultNormal` | エンジン内蔵コンテンツ |
+| Prefix | Example | Reason for exclusion |
+|--------|---------|---------------------|
+| `/Script/` | `/Script/Engine.StaticMesh` | Engine class definitions |
+| `/Engine/` | `/Engine/Content/T_DefaultNormal` | Engine built-in content |
 
 ```rust
 // ✅ Filter before allocating AssetPath

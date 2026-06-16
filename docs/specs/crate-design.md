@@ -1,48 +1,48 @@
-# crate 詳細設計（Phase 1）
+# Crate Detailed Design (Phase 1)
 
-## `shared` crate 詳細設計
+## `shared` crate
 
-### 設計方針
+### Design
 
-- 型定義・エラー型のみを提供する。ロジックは各クレートに持たせる。
-- 全クレートから依存されるため、依存クレートは最小限に抑える（`thiserror` + `serde` のみ）。
+- Provides type definitions and error types only. Logic belongs in each crate.
+- Keep dependencies minimal (only `thiserror` + `serde`) since every crate depends on this one.
 
-### ファイル構成
+### File Structure
 
 ```
 crates/shared/src/
   lib.rs
-  asset_path.rs    # AssetPath・AssetPathError
+  asset_path.rs    # AssetPath, AssetPathError
   asset_type.rs    # AssetType enum
   version.rs       # FPackageVersion
 ```
 
-### `AssetPath` 型
+### `AssetPath` type
 
-UE の Asset パス（例: `/Game/Characters/BP_Player`）を表す newtype。
+A newtype representing a UE asset path (e.g. `/Game/Characters/BP_Player`).
 
 ```rust
 pub struct AssetPath(String);
 
 impl AssetPath {
-    /// UE パス形式を検証してコンストラクト。不正な場合は Err を返す。
+    /// Validates and constructs from a UE path string. Returns Err for invalid input.
     pub fn new(s: impl Into<String>) -> Result<Self, AssetPathError>;
     pub fn as_str(&self) -> &str;
-    /// オブジェクト名サフィックスを除去してパッケージ名を返す
-    /// 例: "/Game/Chars/BP_Player.BP_Player" → "/Game/Chars/BP_Player"
+    /// Strips the object-name suffix and returns the package name.
+    /// e.g. "/Game/Chars/BP_Player.BP_Player" → "/Game/Chars/BP_Player"
     pub fn package_name(&self) -> &str;
-    /// ファイルシステムの絶対パスからゲームパスへ変換
-    /// 例: content_root="/Project/Content", file="/Project/Content/Chars/BP_Player.uasset"
+    /// Converts a filesystem absolute path to a game path.
+    /// e.g. content_root="/Project/Content", file="/Project/Content/Chars/BP_Player.uasset"
     ///     → "/Game/Chars/BP_Player"
     pub fn from_fs_path(content_root: &Path, file_path: &Path) -> Result<Self, AssetPathError>;
 }
 ```
 
-バリデーション規則:
+Validation rules:
 
-- 空文字列は不可
-- 先頭が `/` であること
-- ファイル拡張子（`.uasset`・`.umap`）を含まないこと
+- Empty string is not allowed
+- Must start with `/`
+- Must not contain a file extension (`.uasset` / `.umap`)
 
 ```rust
 #[derive(Debug, thiserror::Error)]
@@ -60,58 +60,57 @@ pub enum AssetPathError {
 
 ### `AssetType` enum
 
-Phase 1 の解析に必要な主要型を列挙し、未知クラスは `Unknown(String)` でクラス名を保持する。
+Enumerates the primary types needed for Phase 1 analysis. Unknown classes are retained via `Unknown(String)`.
 
 ```rust
 #[derive(Debug, Clone, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
 pub enum AssetType {
-    // Blueprint 系
+    // Blueprint family
     Blueprint, BlueprintInterface, AnimBlueprint, UserWidget,
-    // Mesh 系
+    // Mesh family
     StaticMesh, SkeletalMesh,
-    // Texture 系
+    // Texture family
     Texture2D,
-    // Material 系
+    // Material family
     Material, MaterialInstance, MaterialFunction,
-    // Audio 系
+    // Audio family
     SoundWave, SoundCue,
-    // Animation 系
+    // Animation family
     AnimSequence, AnimMontage,
-    // データ系
+    // Data family
     DataTable, DataAsset,
-    // レベル系
-    World,                  // .umap ファイル
-    // 特殊
-    ObjectRedirector,       // Redirector 解析に必須
-    // 未知（UE クラス名をそのまま保持）
+    // Level family
+    World,                  // .umap files
+    // Special
+    ObjectRedirector,       // Required for redirector analysis
+    // Unknown (preserves the raw UE class name)
     Unknown(String),
 }
 ```
 
-型の決定方法:
+Type determination:
+- `.umap` files are always treated as `World`
+- For `.uasset` files, the type is derived from the class name of the first Export in the Export Table (resolved via the Import Table)
 
-- `.umap` ファイルは問答無用で `World` とみなす
-- `.uasset` は Export Table の最初の Export が持つクラス名（Import Table 経由で解決）から決定する
+### `FPackageVersion` type
 
-### `FPackageVersion` 型
-
-`.uasset` ヘッダーから読み取るバージョン情報。
+Version information read from the `.uasset` header.
 
 ```rust
 #[derive(Debug, Clone, Copy)]
 pub struct FPackageVersion {
-    pub legacy_version: i32,    // UE5 では -8
-    pub file_version_ue4: u32,  // deprecated（UE5 では 0）
-    pub file_version_ue5: u32,  // UE5 固有バージョン番号
+    pub legacy_version: i32,    // -8 in UE5
+    pub file_version_ue4: u32,  // deprecated (0 in UE5)
+    pub file_version_ue5: u32,  // UE5-specific version number
 }
 
 impl FPackageVersion {
-    /// UE5 形式かどうか（legacy_version == -8 かつ file_version_ue5 > 0）
+    /// Returns true for UE5 files (legacy_version == -8 and file_version_ue5 > 0)
     pub fn is_ue5(&self) -> bool;
 }
 ```
 
-### `shared` crate の依存クレート
+### `shared` crate dependencies
 
 ```toml
 [dependencies]
@@ -121,61 +120,61 @@ serde     = { workspace = true, features = ["derive"] }
 
 ---
 
-## `asset-db` crate 詳細設計
+## `asset-db` crate
 
-### 設計方針
+### Design
 
-- 差分スキャン（mtime ベース）のためのスキャン状態管理
-- 依存関係の永続化（再スキャンなしでクエリできる）
-- `/Game/` 下のプロジェクト Asset のみ対象（エンジン内部参照は保存しない）
+- Manages scan state for delta scanning (mtime-based)
+- Persists dependency relationships (queryable without re-scanning)
+- Scope: project assets under `/Game/` only (engine-internal references are not stored)
 
-### スキーマ
+### Schema
 
 ```sql
 CREATE TABLE assets (
     id            INTEGER PRIMARY KEY,
     asset_path    TEXT    NOT NULL UNIQUE,  -- /Game/Characters/BP_Player
-    file_path     TEXT    NOT NULL UNIQUE,  -- ファイルシステム絶対パス
-    asset_type    TEXT    NOT NULL,         -- シリアライズされた AssetType
-    file_size     INTEGER NOT NULL,         -- バイト数
-    last_modified INTEGER NOT NULL          -- Unix タイムスタンプ（mtime）
+    file_path     TEXT    NOT NULL UNIQUE,  -- filesystem absolute path
+    asset_type    TEXT    NOT NULL,         -- serialized AssetType
+    file_size     INTEGER NOT NULL,         -- bytes
+    last_modified INTEGER NOT NULL          -- Unix timestamp (mtime)
 );
 
 CREATE TABLE dependencies (
     from_id  INTEGER NOT NULL REFERENCES assets(id) ON DELETE CASCADE,
-    to_path  TEXT    NOT NULL,              -- 参照先の asset_path（未登録でも可）
+    to_path  TEXT    NOT NULL,              -- asset_path of referenced asset (may not exist in DB)
     PRIMARY KEY (from_id, to_path)
 );
 ```
 
-### インデックス
+### Indexes
 
 ```sql
--- 差分スキャン: mtime が変化したファイルを高速に取得
+-- Delta scan: quickly retrieve files whose mtime has changed
 CREATE INDEX idx_assets_last_modified ON assets(last_modified);
 
--- 型フィルタ検索（find コマンド向け）
+-- Type filter search (for the find command)
 CREATE INDEX idx_assets_type ON assets(asset_type);
 
--- 逆引き依存（Impact Analyzer 向け）: "この Asset を参照している Asset は？"
+-- Reverse dependency lookup (for Impact Analyzer): "which assets reference this asset?"
 CREATE INDEX idx_dependencies_to_path ON dependencies(to_path);
 ```
 
-### エンジン内部参照のフィルタリング
+### Engine-internal reference filtering
 
-依存関係の保存時、以下のプレフィックスを持つ参照はスキップする。
+When saving dependencies, skip references with the following prefixes:
 
-| プレフィックス | 例 | 理由 |
-|---|---|---|
-| `/Script/` | `/Script/Engine.StaticMesh` | エンジンクラス定義 |
-| `/Engine/` | `/Engine/Content/T_DefaultNormal` | エンジン内蔵コンテンツ |
+| Prefix | Example | Reason |
+|--------|---------|--------|
+| `/Script/` | `/Script/Engine.StaticMesh` | Engine class definitions |
+| `/Engine/` | `/Engine/Content/T_DefaultNormal` | Engine built-in content |
 
-`/Game/` で始まる参照のみ保存する。
+Only references starting with `/Game/` are stored.
 
-### 型定義
+### Type definitions
 
 ```rust
-/// assets テーブルの 1 行に対応する型（scanner の AssetMetadata とは異なり dependencies を持たない）
+/// Corresponds to one row in the assets table (does not include dependencies, unlike AssetMetadata)
 pub struct AssetRecord {
     pub id:            i64,
     pub asset_path:    AssetPath,
@@ -185,127 +184,127 @@ pub struct AssetRecord {
     pub last_modified: u64,
 }
 
-/// find_assets() のフィルタ条件（全フィールドが Option であり、None は条件なしを意味する）
+/// Filter criteria for find_assets() — all fields are Option; None means no constraint
 pub struct AssetFilter {
     pub asset_type:   Option<AssetType>,
-    pub min_size:     Option<u64>,        // バイト数下限（--larger-than）
-    pub max_size:     Option<u64>,        // バイト数上限（--smaller-than）
-    pub path_pattern: Option<String>,     // glob パターン（--path）
+    pub min_size:     Option<u64>,        // bytes lower bound (--larger-than)
+    pub max_size:     Option<u64>,        // bytes upper bound (--smaller-than)
+    pub path_pattern: Option<String>,     // glob pattern (--path)
 }
 ```
 
-### クエリ API
+### Query API
 
 ```rust
 impl AssetDb {
     pub fn open(db_path: &Path) -> Result<Self>;
 
-    // --- 差分スキャン ---
-    /// ファイル一覧（パス + 現在の mtime）のうち DB に存在しない / mtime が変化したものだけを返す
-    /// cli が walkdir で全ファイルを列挙した後にこのメソッドで絞り込む
+    // --- Delta scanning ---
+    /// From a list of (path, current mtime) pairs, returns only those that are new or have changed mtime in the DB
+    /// The CLI enumerates all files with walkdir, then narrows the list with this method
     pub fn filter_changed(&self, files: &[(PathBuf, u64)]) -> Result<Vec<PathBuf>>;
-    /// Asset を upsert（差分スキャンの書き込み）
+    /// Upsert an asset (delta scan write)
     pub fn upsert_asset(&self, meta: &AssetMetadata) -> Result<i64>;
-    /// DB には存在するがファイルが消えた Asset を削除
+    /// Delete assets that exist in the DB but are no longer on disk
     pub fn delete_asset(&self, asset_path: &AssetPath) -> Result<()>;
-    /// DB に登録されている全ファイルパス + mtime を返す（削除検知用）
+    /// Returns all file paths + mtimes stored in the DB (for stale-record detection)
     pub fn all_known_files(&self) -> Result<Vec<(PathBuf, u64)>>;
 
-    // --- 依存関係 ---
-    /// Asset の依存関係を一括 upsert（古いものは削除して置き換え）
+    // --- Dependencies ---
+    /// Bulk-upsert asset dependencies (replaces old entries)
     pub fn replace_dependencies(&self, from_id: i64, to_paths: &[AssetPath]) -> Result<()>;
-    /// 全エッジ（from_path, to_path）を返す（DependencyGraph 構築用）
+    /// Returns all edges as (from_path, to_path) pairs (for DependencyGraph construction)
     pub fn all_edges(&self) -> Result<Vec<(AssetPath, AssetPath)>>;
 
-    // --- クエリ ---
-    /// asset_path で Asset を取得
+    // --- Queries ---
+    /// Look up an asset by its asset_path
     pub fn get_asset(&self, asset_path: &AssetPath) -> Result<Option<AssetRecord>>;
-    /// 全 Asset を返す（DependencyGraph のノード構築用）
+    /// Returns all assets (for DependencyGraph node construction)
     pub fn all_assets(&self) -> Result<Vec<AssetRecord>>;
-    /// この Asset が参照している Asset 一覧（順方向）
+    /// Returns the assets this asset depends on (forward direction)
     pub fn get_dependencies(&self, asset_path: &AssetPath) -> Result<Vec<AssetPath>>;
-    /// この Asset を参照している Asset 一覧（逆方向）
+    /// Returns the assets that depend on this asset (reverse direction)
     pub fn get_reverse_dependencies(&self, asset_path: &AssetPath) -> Result<Vec<AssetPath>>;
-    /// 型・サイズ・パターンでフィルタ検索（find コマンド用）
+    /// Filtered search by type, size, and path pattern (for the find command)
     pub fn find_assets(&self, filter: &AssetFilter) -> Result<Vec<AssetRecord>>;
 }
 ```
 
-### `asset-db` crate の依存クレート
+### `asset-db` crate dependencies
 
 ```toml
 [dependencies]
-rusqlite  = { workspace = true, features = ["bundled"] }  # SQLite を静的リンク
+rusqlite  = { workspace = true, features = ["bundled"] }  # statically link SQLite
 shared    = { path = "../shared" }
 thiserror = { workspace = true }
 ```
 
 ---
 
-## `scanner` crate 詳細設計
+## `scanner` crate
 
-### 設計方針
+### Design
 
-- `.uasset` / `.umap` 解析ロジックは完全自前実装（既存の UE 解析クレートは不使用）
-- バイナリ解析には `byteorder` + `Cursor` を使用する
-- ファイル単位で `rayon` による CPU 並列スキャンを行う
-- 破損ファイル・未知バージョンは警告ログを出してスキップし、スキャン全体は継続する
+- All `.uasset` / `.umap` parsing logic is hand-written (no third-party UE parsing crates)
+- Binary parsing uses `byteorder` + `Cursor`
+- CPU-parallel scanning at the file level via `rayon`
+- Corrupt files and unknown versions emit a warning log and are skipped; the overall scan continues
 
-### ファイル構成
+### File Structure
 
 ```
 crates/scanner/src/
   lib.rs
-  scanner.rs      # 並列スキャンのエントリポイント（ファイルリスト受け取り）
+  scanner.rs      # parallel scan entry point (accepts a file list)
   parser/
     mod.rs
-    header.rs     # FPackageFileSummary パース
-    name_table.rs # Name Table パース
-    import.rs     # Import Table（Hard Reference）パース
-    export.rs     # Export Table（AssetType 判定）パース
+    header.rs     # FPackageFileSummary parsing
+    name_table.rs # Name Table parsing
+    import.rs     # Import Table (Hard References) parsing
+    export.rs     # Export Table (AssetType determination) parsing
   error.rs
 ```
 
-### `AssetMetadata` 構造体
+### `AssetMetadata` struct
 
-scanner が 1 ファイルの解析結果として返す型。
+The type returned by the scanner for one parsed file.
 
 ```rust
 pub struct AssetMetadata {
     pub asset_path:    AssetPath,         // /Game/Characters/BP_Player
-    pub file_path:     PathBuf,           // ファイルシステム絶対パス
-    pub asset_type:    AssetType,         // Export Table から決定
-    pub file_size:     u64,               // バイト数
-    pub last_modified: u64,               // Unix タイムスタンプ（mtime）
-    pub dependencies:  Vec<AssetPath>,    // Import Table 由来の Hard Reference
+    pub file_path:     PathBuf,           // filesystem absolute path
+    pub asset_type:    AssetType,         // determined from Export Table
+    pub file_size:     u64,               // bytes
+    pub last_modified: u64,               // Unix timestamp (mtime)
+    pub dependencies:  Vec<AssetPath>,    // Hard References from Import Table
 }
 ```
 
-### パースパイプライン（1 ファイル）
+### Parse Pipeline (per file)
 
 ```
-ファイル読み込み
-  → Magic Number 検証（0x9E2A83C1）
-  → FPackageFileSummary パース
-      └─ LegacyFileVersion / FileVersionUE5 確認
-  → Name Table パース（オフセット・カウントはヘッダーから取得）
-  → Import Table パース
-      └─ /Script/ / /Engine/ プレフィックスをフィルタリング
-      └─ /Game/ のみ AssetPath に変換して dependencies に追加
-  → Export Table の先頭 Export からクラス名を取得
-      └─ Name Table を引いて AssetType に変換
-  → AssetMetadata を返す
+Read file
+  → Verify Magic Number (0x9E2A83C1)
+  → Parse FPackageFileSummary
+      └─ Check LegacyFileVersion / FileVersionUE5
+  → Parse Name Table (offset and count from header)
+  → Parse Import Table
+      └─ Filter /Script/ and /Engine/ prefixes
+      └─ Convert /Game/ paths to AssetPath and add to dependencies
+  → Get class name from first Export in Export Table
+      └─ Resolve via Name Table and convert to AssetType
+  → Return AssetMetadata
 ```
 
-### 公開 API
+### Public API
 
-scanner はファイルの走査・フィルタリングを一切行わない純粋なパーサー層。
-ディレクトリウォーク・`exclude_paths` フィルタ・差分判定はすべて `cli` が担い、
-解析すべきファイルのリストを渡してくる。
+The scanner is a pure parsing layer — it never walks directories or applies filters.
+Directory walking, `exclude_paths` filtering, and delta detection are all handled by `cli`,
+which passes the list of files to scan.
 
 ```rust
-/// 指定されたファイル一覧を rayon で並列パースして AssetMetadata を返す
-/// content_root: /Game/ パス変換のためのベースパス
+/// Parses the given file list in parallel with rayon and returns AssetMetadata
+/// content_root: base path used for /Game/ path conversion
 pub fn scan_files(
     files: &[PathBuf],
     content_root: &Path,
@@ -322,20 +321,20 @@ pub struct SkippedFile {
 }
 ```
 
-**差分スキャンのフロー（cli 側）**:
+**Delta scan flow (cli side)**:
 
 ```
-// フルスキャン（--full-scan）
+// Full scan (--full-scan)
 let all_files = walkdir(content_root, &exclude_paths);
 let results   = scanner::scan_files(&all_files, content_root);
 
-// 差分スキャン（デフォルト）
+// Delta scan (default)
 let all_files_with_mtime: Vec<(PathBuf, u64)> = walkdir(content_root, &exclude_paths);
 let changed = db.filter_changed(&all_files_with_mtime)?;
 let results = scanner::scan_files(&changed, content_root);
 ```
 
-### エラー型
+### Error type
 
 ```rust
 #[derive(Debug, thiserror::Error)]
@@ -351,9 +350,9 @@ pub enum ScanError {
 }
 ```
 
-### `scanner` crate の依存クレート
+### `scanner` crate dependencies
 
-`walkdir` は `cli` crate に移動（scanner はファイルリストを受け取るだけでウォークしない）。
+`walkdir` lives in the `cli` crate (scanner only accepts a file list, it does not walk directories).
 
 ```toml
 [dependencies]
@@ -366,78 +365,79 @@ tracing   = { workspace = true }
 
 ---
 
-## `dependency-graph` crate 詳細設計
+## `dependency-graph` crate
 
-### 設計方針
+### Design
 
-- 純粋なグラフ計算層。DB や IO に依存しない（`shared` + `petgraph` のみ）。
-- データの取得は呼び出し側（`cli`）が担い、グラフはエッジリストから構築される。
-- `dead-asset-detector`・`impact-analyzer`・`redirector-analyzer` はこのクレートを利用する。
+- Pure graph computation layer. No DB or I/O dependencies (only `shared` + `petgraph`).
+- The caller (`cli`) fetches the data; the graph is built from an edge list.
+- `dead-asset-detector`, `impact-analyzer`, and `redirector-analyzer` use this crate.
 
-### 型定義
+### Type definitions
 
 ```rust
-/// グラフのノードデータ。パスと型情報を持つ
+/// Node data in the graph — holds path and type information
 pub struct AssetNode {
     pub path:       AssetPath,
     pub asset_type: AssetType,
 }
 
-/// find_impact() の戻り値。直接参照と推移的参照を分離して返す
+/// Return value of find_impact() — separates direct and transitive references
 pub struct ImpactResult {
-    /// 1 ホップで直接参照している Asset
+    /// Assets that directly reference the target (1 hop)
     pub direct:     Vec<AssetPath>,
-    /// 2 ホップ以上の推移的参照（direct は含まない）
+    /// Assets that transitively reference the target (2+ hops, excludes direct)
     pub transitive: Vec<AssetPath>,
 }
 ```
 
-### 内部構造
+### Internal structure
 
 ```rust
 pub struct DependencyGraph {
-    /// 有向グラフ（A → B は「A が B を参照する」を意味する）
+    /// Directed graph (A → B means "A references B")
     graph: DiGraph<AssetNode, ()>,
-    /// O(1) ルックアップ用インデックス
+    /// O(1) lookup index
     index: HashMap<AssetPath, NodeIndex>,
 }
 ```
 
-### 公開 API（Phase 1）
+### Public API (Phase 1)
 
 ```rust
 impl DependencyGraph {
-    /// ノード一覧 + エッジリストからグラフを構築
-    /// nodes: DB の全 Asset（AssetType 情報を持つ）
-    /// edges: (from_path, to_path) の依存関係
+    /// Build the graph from a node list and an edge list
+    /// nodes: all assets from the DB (with AssetType information)
+    /// edges: (from_path, to_path) dependency pairs
     pub fn build(
         nodes: impl IntoIterator<Item = AssetNode>,
         edges: impl IntoIterator<Item = (AssetPath, AssetPath)>,
     ) -> Self;
 
-    /// 全ノードを AssetNode のイテレータとして返す
+    /// Returns all nodes as an iterator of AssetNode
     pub fn nodes(&self) -> impl Iterator<Item = &AssetNode>;
 
-    /// 指定 Asset の入次数（何個の Asset から参照されているか）を返す
+    /// Returns the in-degree of the given asset (number of assets that reference it)
     pub fn in_degree(&self, path: &AssetPath) -> usize;
 
-    /// 循環依存するグループをすべて列挙（Tarjan の強連結成分分解）
+    /// Enumerates all groups involved in circular dependencies (Tarjan SCC)
     pub fn find_cycles(&self) -> Vec<Vec<AssetPath>>;
 
-    /// 指定 Asset を削除したときに壊れる Asset を直接参照・推移的参照に分けて返す
+    /// Returns the assets that would break if the given asset were deleted,
+    /// split into direct and transitive references
     pub fn find_impact(&self, target: &AssetPath) -> ImpactResult;
 }
 ```
 
-### アルゴリズム
+### Algorithms
 
-| メソッド | アルゴリズム | petgraph API |
-|---|---|---|
-| `find_cycles` | Tarjan の強連結成分分解（SCC） | `petgraph::algo::tarjan_scc` |
-| `find_impact` | 逆方向グラフ上での BFS（1 ホップで direct、残りを transitive） | `Reversed` + `Bfs` |
-| `in_degree` | ノードの入次数 | `graph.edges_directed(node, Incoming).count()` |
+| Method | Algorithm | petgraph API |
+|--------|-----------|--------------|
+| `find_cycles` | Tarjan's strongly connected components (SCC) | `petgraph::algo::tarjan_scc` |
+| `find_impact` | BFS on the reversed graph (1 hop = direct, rest = transitive) | `Reversed` + `Bfs` |
+| `in_degree` | Node in-degree | `graph.edges_directed(node, Incoming).count()` |
 
-### `dependency-graph` crate の依存クレート
+### `dependency-graph` crate dependencies
 
 ```toml
 [dependencies]
@@ -447,22 +447,22 @@ petgraph = { workspace = true }
 
 ---
 
-## `dead-asset-detector` crate 詳細設計
+## `dead-asset-detector` crate
 
-### 設計方針
+### Design
 
-- `DependencyGraph` を受け取り、入次数 0 のノード（どの Asset からも参照されていない Asset）を列挙する
-- DB / IO に依存しない純粋関数層
+- Accepts a `DependencyGraph` and enumerates nodes with in-degree 0 (assets not referenced by any other asset)
+- Pure function layer — no DB or I/O dependencies
 
-### 公開 API
+### Public API
 
 ```rust
-/// グラフ内で入次数が 0 の Asset（孤立ノード）を列挙する
-/// 戻り値は AssetPath のみ。型・サイズ等の詳細は呼び出し側が DB から補完する
+/// Enumerates assets in the graph with in-degree 0 (isolated nodes)
+/// Returns AssetPath only; the caller fetches type, size, etc. from the DB
 pub fn detect(graph: &DependencyGraph) -> Vec<AssetPath>;
 ```
 
-### 実装メモ
+### Implementation
 
 ```rust
 pub fn detect(graph: &DependencyGraph) -> Vec<AssetPath> {
@@ -473,7 +473,7 @@ pub fn detect(graph: &DependencyGraph) -> Vec<AssetPath> {
 }
 ```
 
-### `dead-asset-detector` crate の依存クレート
+### `dead-asset-detector` crate dependencies
 
 ```toml
 [dependencies]
@@ -483,21 +483,21 @@ dependency-graph  = { path = "../dependency-graph" }
 
 ---
 
-## `impact-analyzer` crate 詳細設計
+## `impact-analyzer` crate
 
-### Phase 1 スコープ
+### Phase 1 scope
 
-Phase 1 では `dependency-graph.find_impact()` が `ImpactResult` を返すため、
-`cli` は `dependency_graph.find_impact(target)` を直接呼び出す。
-この crate は Phase 2 以降の拡張に備えたプレースホルダーとして存在する。
+In Phase 1, `dependency-graph.find_impact()` returns an `ImpactResult` directly,
+so `cli` calls `dependency_graph.find_impact(target)` without going through this crate.
+This crate exists as a placeholder for Phase 2+ extensions.
 
-### Phase 2 以降で追加予定の機能
+### Planned additions in Phase 2+
 
-- リネーム安全性チェック（Redirector が補完できるか判定）
-- Soft Reference を含めた影響範囲の精度向上
-- 間接影響の深さ制限オプション
+- Rename-safety check (can a Redirector compensate?)
+- Higher-precision impact scope including Soft References
+- Depth limit option for transitive impact
 
-### `impact-analyzer` crate の依存クレート
+### `impact-analyzer` crate dependencies
 
 ```toml
 [dependencies]
@@ -507,22 +507,22 @@ dependency-graph  = { path = "../dependency-graph" }
 
 ---
 
-## `redirector-analyzer` crate 詳細設計
+## `redirector-analyzer` crate
 
-### 設計方針
+### Design
 
-- `DependencyGraph` のノードを走査し `ObjectRedirector` 型の Asset を列挙する
-- DB / IO に依存しない純粋関数層
-- Phase 1 スコープ: 検出・列挙のみ。redirect 先の解決は Phase 2 以降
+- Walks `DependencyGraph` nodes and enumerates assets of type `ObjectRedirector`
+- Pure function layer — no DB or I/O dependencies
+- Phase 1 scope: detection and listing only. Redirect target resolution is Phase 2+
 
-### 公開 API
+### Public API
 
 ```rust
-/// グラフ内の ObjectRedirector 型 Asset を列挙する
+/// Enumerates ObjectRedirector assets in the graph
 pub fn detect(graph: &DependencyGraph) -> Vec<AssetPath>;
 ```
 
-### 実装メモ
+### Implementation
 
 ```rust
 pub fn detect(graph: &DependencyGraph) -> Vec<AssetPath> {
@@ -533,7 +533,7 @@ pub fn detect(graph: &DependencyGraph) -> Vec<AssetPath> {
 }
 ```
 
-### `redirector-analyzer` crate の依存クレート
+### `redirector-analyzer` crate dependencies
 
 ```toml
 [dependencies]
@@ -543,7 +543,7 @@ dependency-graph  = { path = "../dependency-graph" }
 
 ---
 
-## `cli` crate の依存クレート（参考）
+## `cli` crate dependencies (reference)
 
 ```toml
 [dependencies]
@@ -557,7 +557,7 @@ redirector-analyzer  = { path = "../redirector-analyzer" }
 clap      = { workspace = true }
 anyhow    = { workspace = true }
 tracing   = { workspace = true }
-walkdir   = { workspace = true }   # ディレクトリウォーク（scanner から移動）
-toml      = { workspace = true }   # .uasset-lens.toml 読み込み
+walkdir   = { workspace = true }   # directory walk (moved from scanner)
+toml      = { workspace = true }   # .uasset-lens.toml parsing
 serde     = { workspace = true }
 ```

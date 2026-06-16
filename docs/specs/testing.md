@@ -1,40 +1,40 @@
-# テスト戦略
+# Test Strategy
 
-## 方針
+## Philosophy
 
-`.uasset` ファイルは UE 開発において通常 VCS（Git / SVN）にコミットされるバイナリアセットである。
-同様に、uasset-lens のテストフィクスチャも実際の `.uasset` ファイルをリポジトリにコミットして使用する。
-これにより、UE のインストールなしに CI（マルチ OS）でパーサーの動作を検証できる。
+`.uasset` files are binary assets that are normally committed to VCS (Git / SVN) in UE development.
+uasset-lens test fixtures follow the same convention — real `.uasset` files committed to the repository.
+This lets the parser be verified on CI (multi-OS) without requiring a UE installation.
 
 ---
 
-## フィクスチャ配置
+## Fixture Layout
 
 ```
 tests/
   fixtures/
     valid/
-      BP_Simple.uasset          # Blueprint（Import あり・Export あり）
+      BP_Simple.uasset          # Blueprint (with imports and exports)
       T_Rock_D.uasset            # Texture2D
       SM_Cube.uasset             # StaticMesh
       M_Basic.uasset             # Material
       OldName.uasset             # ObjectRedirector
       L_TestMap.umap             # World
     invalid/
-      bad_magic.bin              # 先頭 4 バイトが不正（0x00000000）
-      truncated.bin              # ヘッダー途中で終端
+      bad_magic.bin              # first 4 bytes invalid (0x00000000)
+      truncated.bin              # truncated mid-header
 ```
 
-- `valid/` 配下: 実際の UE5 プロジェクトからエクスポートした最小構成の .uasset / .umap
-- `invalid/` 配下: エラーケース用の合成バイナリ（テストコード内でインラインに定義してもよい）
+- `valid/`: minimal `.uasset` / `.umap` files exported from a real UE5 project
+- `invalid/`: synthetic binaries for error cases (may also be defined inline in test code)
 
 ---
 
-## テスト分類
+## Test Classification
 
-### ユニットテスト（`#[cfg(test)]`）
+### Unit tests (`#[cfg(test)]`)
 
-各パーサーモジュール内に記述する。対象は個別のパース関数。
+Written inside each parser module. Target individual parsing functions.
 
 ```rust
 // crates/scanner/src/parser/header.rs
@@ -48,9 +48,9 @@ mod tests {
 }
 ```
 
-### 統合テスト（`tests/` ディレクトリ）
+### Integration tests (`tests/` directory)
 
-crate ルートの `tests/` に配置し、公開 API を通じて実フィクスチャを使ってテストする。
+Placed in the crate root's `tests/` directory. Test the public API against real fixtures.
 
 ```rust
 // crates/scanner/tests/integration.rs
@@ -64,15 +64,15 @@ fn parses_blueprint_fixture() {
 }
 ```
 
-### エラーケース
+### Error cases
 
-エラーケース用フィクスチャは `tests/fixtures/invalid/` に配置するか、
-テストコード内で直接バイト列として定義する（短い場合は後者を推奨）。
+Place error-case fixtures in `tests/fixtures/invalid/`,
+or define them inline as byte arrays (preferred for short inputs).
 
 ```rust
 #[test]
 fn rejects_truncated_file() {
-    let data = b"\xC1\x83\x2A\x9E"; // magic のみ、残り欠損
+    let data = b"\xC1\x83\x2A\x9E"; // magic only, rest missing
     let path = write_temp_file(data);
     let result = scanner::scan_files(&[path], Path::new("/"));
     assert_eq!(result.skipped.len(), 1);
@@ -82,11 +82,11 @@ fn rejects_truncated_file() {
 
 ---
 
-## CI 設定
+## CI Configuration
 
-- マルチ OS テスト: Windows / macOS / Linux（GitHub Actions matrix）
-- フィクスチャは通常の `git checkout` で取得できるためセットアップ不要
-- `.uasset` ファイルは `.gitattributes` で `binary` 属性を付与し、LF 変換を防ぐ
+- Multi-OS testing: Windows / macOS / Linux (GitHub Actions matrix)
+- Fixtures are checked out with a normal `git checkout` — no additional setup required
+- `.uasset` files must have the `binary` attribute in `.gitattributes` to prevent LF conversion
 
 ```
 # .gitattributes
@@ -96,7 +96,7 @@ tests/fixtures/**/*.umap   binary
 
 ---
 
-## フィクスチャのメンテナンス
+## Fixture Maintenance
 
-- UE のアップデートで `.uasset` フォーマットが変わった場合、フィクスチャを再生成して PR でコミットする
-- フィクスチャの元プロジェクトは `tests/fixtures/README.md` に UE バージョン・生成手順を記載する
+- If a UE update changes the `.uasset` format, regenerate the fixtures and commit them in a PR
+- Document the UE version and generation steps in `tests/fixtures/README.md`
