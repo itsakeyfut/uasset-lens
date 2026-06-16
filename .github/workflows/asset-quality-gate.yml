@@ -22,7 +22,7 @@ jobs:
             ${{ runner.os }}-cargo-
 
       - name: Build uasset-lens
-        run: cargo build --release -p uasset-lens-cli
+        run: cargo build --release -p uasset-lens
 
       - name: Scan assets
         run: ./target/release/uasset-lens scan ./tests/fixtures/valid

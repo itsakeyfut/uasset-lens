@@ -1,0 +1,22 @@
+﻿[package]
+name                 = "uasset-lens-scanner"
+publish             = false
+version.workspace    = true
+edition.workspace    = true
+license.workspace    = true
+description.workspace = true
+repository.workspace = true
+homepage.workspace   = true
+keywords.workspace   = true
+categories.workspace = true
+authors.workspace    = true
+
+[features]
+test-support = []
+
+[dependencies]
+uasset-lens-shared = { workspace = true }
+byteorder          = { workspace = true }
+rayon              = { workspace = true }
+thiserror          = { workspace = true }
+tracing            = { workspace = true }

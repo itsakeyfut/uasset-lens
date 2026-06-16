@@ -1,0 +1,18 @@
+﻿[package]
+name                 = "uasset-lens-lint-engine"
+publish             = false
+version.workspace    = true
+edition.workspace    = true
+license.workspace    = true
+description.workspace = true
+repository.workspace = true
+homepage.workspace   = true
+keywords.workspace   = true
+categories.workspace = true
+authors.workspace    = true
+
+[dependencies]
+uasset-lens-asset-db    = { workspace = true }
+uasset-lens-bp-analyzer = { workspace = true }
+uasset-lens-scanner     = { workspace = true }
+uasset-lens-shared      = { workspace = true }

@@ -1,0 +1,21 @@
+﻿[package]
+name                 = "uasset-lens"
+publish             = false
+version.workspace    = true
+edition.workspace    = true
+license.workspace    = true
+description.workspace = true
+homepage.workspace   = true
+keywords.workspace   = true
+categories.workspace = true
+repository.workspace = true
+authors.workspace    = true
+
+[[bin]]
+name = "uasset-lens"
+path = "src/main.rs"
+
+[dependencies]
+uasset-lens-cli = { workspace = true }
+clap            = { workspace = true }
+clap_complete   = "4.6.5"

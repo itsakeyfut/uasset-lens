@@ -1,0 +1,80 @@
+name: Publish
+
+# Publishes all workspace crates to crates.io via Trusted Publishing (OIDC) —
+# no long-lived API token. Triggered by pushing a version tag (e.g. v0.2.0),
+# or manually via workflow_dispatch (publish only, no GitHub Release).
+#
+# Prerequisites:
+#   - Each crate must have a Trusted Publisher configured on crates.io
+#     (crate Settings -> Trusted Publishing): owner itsakeyfut, repo uasset-lens,
+#     workflow publish.yml, environment crates-io.
+#   - A GitHub environment named "crates-io" (optionally with required
+#     reviewers) gates the publish job — a workflow_dispatch run then waits
+#     for approval before any crate is published.
+#
+# Third-party actions are pinned to a full commit SHA (tag noted in a comment)
+# because this workflow holds the crates.io OIDC token and contents:write.
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+
+permissions:
+  id-token: write  # crates.io Trusted Publishing (OIDC)
+
+jobs:
+  publish:
+    name: Publish to crates.io
+    runs-on: ubuntu-latest
+    # Defense-in-depth: scopes the OIDC token to this environment and lets a
+    # maintainer require manual approval for any (e.g. dispatched) run.
+    environment: crates-io
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+
+      - uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable
+        with:
+          toolchain: "1.96.0"
+
+      - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
+
+      # Verify the whole workspace builds once, up front. This lets the publish
+      # step use --no-verify so all 16 uploads finish inside the 30-minute OIDC
+      # token window (a fresh per-crate verify build would risk token expiry).
+      - name: Verify workspace builds
+        run: cargo build --workspace --all-features
+
+      - name: Authenticate to crates.io (Trusted Publishing)
+        id: auth
+        uses: rust-lang/crates-io-auth-action@bbd81622f20ce9e2dd9622e3218b975523e45bbe # v1
+
+      - name: Publish crates in dependency order
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ steps.auth.outputs.token }}
+        run: |
+          set -euo pipefail
+          for c in uasset-lens-shared \
+                   uasset-lens-scanner \
+                   uasset-lens-asset-db \
+                   uasset-lens-dependency-graph \
+                   uasset-lens-dead-asset-detector \
+                   uasset-lens-impact-analyzer \
+                   uasset-lens-redirector-analyzer \
+                   uasset-lens-bp-analyzer \
+                   uasset-lens-duplicate-detector \
+                   uasset-lens-lint-engine \
+                   uasset-lens-material-analyzer \
+                   uasset-lens-budget-tracker \
+                   uasset-lens-watcher \
+                   uasset-lens-git-diff \
+                   uasset-lens-cli \
+                   uasset-lens; do
+            echo "::group::Publishing $c"
+            cargo publish -p "$c" --no-verify
+            echo "::endgroup::"
+          done

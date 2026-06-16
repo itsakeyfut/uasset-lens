@@ -1,0 +1,22 @@
+﻿[package]
+name                 = "uasset-lens-watcher"
+publish             = false
+version.workspace    = true
+edition.workspace    = true
+license.workspace    = true
+description.workspace = true
+repository.workspace = true
+homepage.workspace   = true
+keywords.workspace   = true
+categories.workspace = true
+authors.workspace    = true
+
+[dependencies]
+notify                          = { workspace = true }
+thiserror                       = { workspace = true }
+tracing                         = { workspace = true }
+uasset-lens-shared              = { workspace = true }
+uasset-lens-scanner             = { workspace = true }
+uasset-lens-asset-db            = { workspace = true }
+uasset-lens-dependency-graph    = { workspace = true }
+uasset-lens-dead-asset-detector = { workspace = true }
