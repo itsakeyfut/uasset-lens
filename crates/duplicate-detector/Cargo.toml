@@ -3,6 +3,7 @@ name    = "duplicate-detector"
 publish = false
 version.workspace = true
 edition.workspace = true
+license.workspace = true
 
 [dependencies]
 asset-db = { path = "../asset-db" }
