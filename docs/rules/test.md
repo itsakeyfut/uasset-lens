@@ -60,7 +60,7 @@ mod tests {
 ### 2. Integration tests
 
 Integration tests live in `crates/<crate>/tests/` and use **real fixture files** from `tests/fixtures/`.
-Fixture 構成・ソースは `docs/specs/testing.md` を参照。
+See `docs/specs/testing.md` for fixture layout and sources.
 
 ```rust
 // crates/scanner/tests/integration.rs
@@ -75,11 +75,11 @@ fn scan_files_should_parse_blueprint_fixture() {
 
 ### 3. Property-based tests (proptest)
 
-任意の入力に対して不変条件が成立することを検証する。uasset-lens での対象：
+Verify that invariants hold for arbitrary inputs. Targets in uasset-lens:
 
-- `AssetPath::new()` — 任意の文字列で panic しない
-- `DependencyGraph::find_impact()` — 任意のグラフで panic しない
-- `find_cycles()` — 返されるサイクルが自己一貫している
+- `AssetPath::new()` — never panics on any string input
+- `DependencyGraph::find_impact()` — never panics on any graph
+- `find_cycles()` — returned cycles are self-consistent
 
 ```toml
 [dev-dependencies]
@@ -99,7 +99,7 @@ proptest! {
 
 ### 4. Criterion benchmarks
 
-`docs/rules/perf.md` を参照。パフォーマンスクリティカルなパスにのみ追加する。
+See `docs/rules/perf.md`. Add only to performance-critical paths.
 
 ---
 
@@ -107,91 +107,91 @@ proptest! {
 
 ### `shared`
 
-| 対象 | テスト |
-|------|-------|
-| `AssetPath::new()` | 空文字・先頭スラッシュなし・拡張子付きを拒否; 有効パスを受け入れる |
-| `AssetPath::from_fs_path()` | content_root 外のファイルを拒否; `/Game/` プレフィックスへの正しい変換 |
-| `AssetPath::package_name()` | オブジェクト名サフィックスを正しく除去 |
-| `AssetType` serde | 全バリアントが serialize/deserialize でロスなく往復する |
+| Target | Test |
+|--------|------|
+| `AssetPath::new()` | rejects empty string, missing leading slash, paths with extensions; accepts valid paths |
+| `AssetPath::from_fs_path()` | rejects files outside content_root; correctly converts to `/Game/` prefix |
+| `AssetPath::package_name()` | correctly strips object-name suffix |
+| `AssetType` serde | all variants round-trip through serialize/deserialize without loss |
 
 ### `scanner`
 
-| 対象 | テスト |
-|------|-------|
-| `scan_files()` — valid fixtures | 正しい `AssetType` 検出; dependency 一覧に期待パスが含まれる; skipped なし |
-| `scan_files()` — bad magic | `ScanError::InvalidMagic` で skipped に入る |
-| `scan_files()` — truncated | `ScanError::UnexpectedEof` で skipped に入る |
-| `scan_files()` — `.umap` | `AssetType::World` が返る |
-| `scan_files()` — ObjectRedirector | 型が正しく検出される |
-| Import フィルタリング | `/Script/` / `/Engine/` 参照が dependencies に含まれない |
-| 並列正確性 | rayon 並列の結果がシングルスレッドと一致する |
+| Target | Test |
+|--------|------|
+| `scan_files()` — valid fixtures | correct `AssetType` detected; expected paths in dependencies; nothing in skipped |
+| `scan_files()` — bad magic | enters skipped as `ScanError::InvalidMagic` |
+| `scan_files()` — truncated | enters skipped as `ScanError::UnexpectedEof` |
+| `scan_files()` — `.umap` | returns `AssetType::World` |
+| `scan_files()` — ObjectRedirector | type is detected correctly |
+| Import filtering | `/Script/` and `/Engine/` references are absent from dependencies |
+| Parallel correctness | rayon parallel results match single-threaded results |
 
 ### `asset-db`
 
-| 対象 | テスト |
-|------|-------|
-| `open()` | 初回でスキーマ作成; 既存 DB は正常オープン |
-| `upsert_asset()` + `get_asset()` | 保存・取得の往復 |
-| `filter_changed()` | 新規ファイルを返す; mtime 変化なしを除外; mtime 変化ありを返す |
-| `all_edges()` | upsert 後に正しいエッジペアが返る |
-| `all_assets()` | upsert した全 Asset が返る |
-| `find_assets()` with `AssetFilter` | type・size・path パターンが単独/複合で機能する |
-| `delete_asset()` | レコード削除; 依存エッジが CASCADE で削除される |
+| Target | Test |
+|--------|------|
+| `open()` | creates schema on first open; opens existing DB without error |
+| `upsert_asset()` + `get_asset()` | round-trip save and retrieve |
+| `filter_changed()` | returns new files; excludes unchanged mtime; returns changed mtime |
+| `all_edges()` | returns correct edge pairs after upsert |
+| `all_assets()` | returns all upserted assets |
+| `find_assets()` with `AssetFilter` | type, size, and path-pattern filters work individually and in combination |
+| `delete_asset()` | removes the record; dependency edges are CASCADE-deleted |
 
 ### `dependency-graph`
 
-| 対象 | テスト |
-|------|-------|
-| `build()` | エッジなし孤立ノードが存在する; エッジが正しく追加される |
-| `find_cycles()` | サイクルあり→返す; DAG→空; 2 ノード相互参照→検出 |
-| `find_impact()` — 直接のみ | `direct` 正しい; `transitive` 空 |
-| `find_impact()` — 推移的あり | direct と transitive が正しく分離 |
-| `find_impact()` — 影響なし | 両リスト空 |
-| `in_degree()` | 孤立ノードは 0; 参照されるノードは正しいカウント |
-| `nodes()` | 孤立ノードを含む全ノードが返る |
+| Target | Test |
+|--------|------|
+| `build()` | isolated nodes (no edges) are present; edges are added correctly |
+| `find_cycles()` | returns cycle when present; empty for a DAG; detects two-node mutual reference |
+| `find_impact()` — direct only | `direct` is correct; `transitive` is empty |
+| `find_impact()` — with transitive | `direct` and `transitive` are correctly separated |
+| `find_impact()` — no impact | both lists are empty |
+| `in_degree()` | isolated node is 0; referenced node has correct count |
+| `nodes()` | returns all nodes including isolated ones |
 
 ### `dead-asset-detector`
 
-| 対象 | テスト |
-|------|-------|
-| `detect()` — 孤立ノードあり | 結果に含まれる |
-| `detect()` — 全て参照済み | 空リスト |
-| `detect()` — 混在 | 未参照のみ返す |
+| Target | Test |
+|--------|------|
+| `detect()` — isolated nodes present | included in result |
+| `detect()` — all nodes referenced | empty list |
+| `detect()` — mixed | returns only unreferenced nodes |
 
 ### `redirector-analyzer`
 
-| 対象 | テスト |
-|------|-------|
-| `detect()` — ObjectRedirector あり | 結果に含まれる |
-| `detect()` — Redirector なし | 空リスト |
-| `detect()` — 混在型 | ObjectRedirector のパスのみ返す |
+| Target | Test |
+|--------|------|
+| `detect()` — ObjectRedirector present | included in result |
+| `detect()` — no Redirector | empty list |
+| `detect()` — mixed types | returns only ObjectRedirector paths |
 
-### `cli`（integration）
+### `cli` (integration)
 
-| 対象 | テスト |
-|------|-------|
-| `scan` exit codes | クリーン → `0`; ディレクトリ不在 → `2` |
-| `graph --cycles-only` | サイクルあり → `1`; クリーン → `0` |
-| `dead-assets` | 未参照 Asset あり → `1` |
-| `--format json` | 全コマンドが仕様に沿ったパース可能な JSON を出力する |
-| `impact` JSON | `direct`/`transitive`/`total` キーが存在する |
+| Target | Test |
+|--------|------|
+| `scan` exit codes | clean → `0`; directory not found → `2` |
+| `graph --cycles-only` | cycle detected → `1`; clean → `0` |
+| `dead-assets` | unreferenced asset found → `1` |
+| `--format json` | all commands emit spec-compliant, parseable JSON |
+| `impact` JSON | `direct`, `transitive`, and `total` keys are present |
 
 ---
 
 ## What NOT to Test
 
-- 内部フィールド名・プライベート構造体のレイアウト
-- サードパーティクレートの内部（`rusqlite`・`petgraph`）
-- プラットフォーム固有のファイルシステム挙動（抽象パスでテストする）
-- マクロが生成したコード
-- ロジックを含まない trivial な getter/setter
+- Internal field names and private struct layouts
+- Third-party crate internals (`rusqlite`, `petgraph`)
+- Platform-specific filesystem behavior (test with abstract paths)
+- Macro-generated code
+- Trivial getters/setters with no logic
 
 ---
 
 ## Test Helpers
 
-共有のテストユーティリティは `#[cfg(test)] mod tests` 内のヘルパー関数、
-または統合テスト用の `tests/common/` に定義する。
+Define shared test utilities as helper functions inside `#[cfg(test)] mod tests`,
+or in `tests/common/` for integration tests.
 
 ```rust
 #[cfg(test)]

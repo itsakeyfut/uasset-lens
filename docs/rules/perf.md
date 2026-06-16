@@ -10,29 +10,29 @@
 
 ## Performance Targets
 
-**release ビルド** (`cargo build --release`) での目標値。
+Targets measured on a **release build** (`cargo build --release`).
 
-| メトリクス | 目標値 | 計測方法 |
-|-----------|--------|---------|
-| フルスキャン — 1,000 assets | **< 5 秒** | `time uasset-lens scan --full-scan ./Project` |
-| フルスキャン — 10,000 assets | **< 30 秒** | 同上 |
-| メモリ使用量 — 100,000 assets | **< 100 MB** | OS プロセスモニター |
-| `impact` コマンド応答 | **< 1 秒** | スキャン済み状態・100k assets のグラフ |
-| `dead-assets` コマンド応答 | **< 1 秒** | 同上 |
-| `graph --cycles-only` 応答 | **< 2 秒** | 同上 |
+| Metric | Target | How to measure |
+|--------|--------|---------------|
+| Full scan — 1,000 assets | **< 5 s** | `time uasset-lens scan --full-scan ./Project` |
+| Full scan — 10,000 assets | **< 30 s** | same |
+| Memory — 100,000 assets | **< 100 MB** | OS process monitor |
+| `impact` command response | **< 1 s** | pre-scanned state, 100k-asset graph |
+| `dead-assets` command response | **< 1 s** | same |
+| `graph --cycles-only` response | **< 2 s** | same |
 
-各リリース前に手動で検証する。
+Verify manually before each release.
 
 ---
 
 ## Binary Parsing Performance
 
-バイナリパーサーのパターンは `docs/rules/binary-parser.md` を参照。
+See `docs/rules/binary-parser.md` for binary parser patterns.
 
-### ファイルを 1 回だけ読む
+### Read each file exactly once
 
-ファイル全体を `Vec<u8>` に読み込んでからスライスをパースする。
-シーク操作を繰り返さない。
+Read the entire file into a `Vec<u8>`, then parse from slices.
+Do not repeat seek operations.
 
 ```rust
 // ✅ Single read, parse from slice
@@ -40,10 +40,10 @@ let data = std::fs::read(path)?;
 let metadata = parse_asset(&data, content_root)?;
 ```
 
-### パースパスでのアロケーションを最小化
+### Minimize allocations on the parse path
 
-- Name Table のエントリは `&str` スライスで参照し、長期保持が必要な場合のみ `.to_owned()`
-- Import Table のフィルタリング（`/Script/` / `/Engine/` 除外）は `AssetPath` 変換より前に行う
+- Reference Name Table entries as `&str` slices; call `.to_owned()` only when the value must outlive the parse
+- Filter Import Table entries (`/Script/` / `/Engine/` exclusion) before converting to `AssetPath`
 
 ```rust
 // ✅ Filter early — avoid allocating discarded entries
@@ -57,10 +57,10 @@ let deps: Vec<AssetPath> = raw_imports.iter()
 
 ## Parallel Scanning
 
-### rayon でファイルレベルの並列化
+### File-level parallelism with rayon
 
-`.uasset` ファイルは独立してパースできる。`par_iter()` を使う。
-rayon ワーカースレッド間で可変状態を共有しない。
+`.uasset` files can be parsed independently. Use `par_iter()`.
+Do not share mutable state across rayon worker threads.
 
 ```rust
 // ✅ Parallel parse
@@ -70,10 +70,10 @@ let results: Vec<_> = files
     .collect();
 ```
 
-### DB への書き込みは並列化しない
+### Do not parallelize DB writes
 
-rayon で並列パースした結果を収集してから、SQLite へは逐次書き込みを行う。
-DB 書き込みを rayon ワーカーから呼ぶことを禁止する。
+Collect rayon parallel parse results first, then write to SQLite sequentially.
+DB writes must never be called from a rayon worker.
 
 ```rust
 // ✅ Parallel parse → sequential DB write
@@ -92,20 +92,20 @@ tx.commit()?;
 
 ## Memory Management
 
-### 全 Asset を一度にメモリに展開しない
+### Never expand all assets into memory at once
 
-CLI コマンドは必要なデータのみ DB から取得する。
-100k assets 分の `AssetMetadata` を `Vec` で保持しない。
-`graph`/`impact`/`dead-assets` は DB のエッジリストのみからグラフを構築する。
+CLI commands fetch only the data they need from the DB.
+Do not hold 100k `AssetMetadata` entries in a `Vec`.
+`graph` / `impact` / `dead-assets` build the in-memory graph from the DB edge list only.
 
-### サイズが既知ならあらかじめ確保する
+### Pre-allocate when the size is known
 
 ```rust
 // ✅ Avoid repeated reallocations
 let mut deps = Vec::with_capacity(import_count as usize);
 ```
 
-### バッファは drop せず clear して再利用する
+### Reuse buffers by calling clear() instead of dropping them
 
 ```rust
 // ✅ Reuse allocation
@@ -116,20 +116,20 @@ self.import_buf.clear(); // clears contents, keeps capacity
 
 ## Benchmarking with Criterion
 
-クリティカルパスには [Criterion](https://bheisler.github.io/criterion.rs/book/) でベンチマークを作成する。
-ベンチマークは各クレートの `benches/` に置く。
+Add [Criterion](https://bheisler.github.io/criterion.rs/book/) benchmarks to critical paths.
+Place benchmarks in each crate's `benches/` directory.
 
-### ベンチマーク対象
+### What to benchmark
 
-| クレート | 対象 | ファイル |
-|---------|------|---------|
-| `scanner` | `scan_files()` — ファイル数を変えて計測 | `crates/scanner/benches/scan.rs` |
-| `scanner` | `parse_file()` — 1 ファイルのパース時間 | `crates/scanner/benches/parse.rs` |
+| Crate | Target | File |
+|-------|--------|------|
+| `scanner` | `scan_files()` — vary file count | `crates/scanner/benches/scan.rs` |
+| `scanner` | `parse_file()` — single-file parse time | `crates/scanner/benches/parse.rs` |
 | `dependency-graph` | `DependencyGraph::build()` | `crates/dependency-graph/benches/build.rs` |
-| `dependency-graph` | `find_impact()`・`find_cycles()` | `crates/dependency-graph/benches/queries.rs` |
-| `asset-db` | `filter_changed()`・`all_edges()` | `crates/asset-db/benches/queries.rs` |
+| `dependency-graph` | `find_impact()` / `find_cycles()` | `crates/dependency-graph/benches/queries.rs` |
+| `asset-db` | `filter_changed()` / `all_edges()` | `crates/asset-db/benches/queries.rs` |
 
-### ベンチマーク構造
+### Benchmark structure
 
 ```rust
 // crates/scanner/benches/parse.rs
@@ -154,19 +154,19 @@ criterion_group!(benches, bench_parse_blueprint);
 criterion_main!(benches);
 ```
 
-### 実行方法
+### How to run
 
 ```bash
 cargo bench -p scanner
 cargo bench -p dependency-graph
 ```
 
-ベンチマークは CI では実行しない。パフォーマンスに影響する変更前後に手動で実行する。
+Do not run benchmarks in CI. Run them manually before and after changes that affect performance.
 
 ```bash
-# 変更前のベースラインを保存
+# Save baseline before the change
 cargo bench -p scanner -- --save-baseline before
-# 変更後に比較
+# Compare after the change
 cargo bench -p scanner -- --load-baseline before --save-baseline after
 ```
 
@@ -184,4 +184,4 @@ Measure-Command { .\target\release\uasset-lens.exe scan --full-scan ./Project }
 time ./target/release/uasset-lens scan --full-scan ./Project
 ```
 
-メモリ計測: Windows は Task Manager / Process Hacker、macOS は Instruments、Linux は `heaptrack`。
+Memory measurement: Task Manager / Process Hacker on Windows, Instruments on macOS, `heaptrack` on Linux.

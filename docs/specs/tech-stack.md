@@ -1,17 +1,17 @@
-# 技術スタック
+# Tech Stack
 
-## コア
+## Core
 
 - Rust
 
-## 対象 Unreal Engine バージョン
+## Target Unreal Engine Version
 
-- UE5 のみ（5.1 以降）
+- UE5 only (5.1+)
 
-## 対象ファイル形式
+## Target File Formats
 
-- **解析対象**: 開発中のコンテンツ（`.uasset` / `.umap`）のみ
-- **永続的スコープ外**: IoStore 形式（`.utoc` / `.ucas`）— Cook / Package 済みビルドは対象外。将来フェーズでも対応しない。ただしパーサーのアーキテクチャは拡張可能に設計する。
+- **Analysis targets**: development content (`.uasset` / `.umap`) only
+- **Permanently out of scope**: IoStore format (`.utoc` / `.ucas`) — cooked / packaged builds are not supported and will not be added in future phases. However, the parser architecture is designed to be extensible.
 
 ## GUI
 
@@ -19,36 +19,36 @@
 
 ## Database
 
-- SQLite（将来的に DuckDB へ移行可能な設計にする）
+- SQLite (designed to be migratable to DuckDB in the future)
 
-## .uasset パーサー実装方針
+## .uasset Parser Implementation
 
-- **`.uasset` 解析ロジックは完全自前実装**（既存の `.uasset` / UE 解析クレートは使用しない）
-- バイナリ解析の汎用ユーティリティ（`byteorder` + `Cursor`）は積極的に使用する
-- Binary Parsing スキルのポートフォリオ価値を最大化するため
-- Asset Registry（`AssetRegistry.bin`）は補助的に参照する（存在する場合のみ）
+- **All `.uasset` parsing logic is hand-written** (no third-party `.uasset` / UE parsing crates)
+- General binary parsing utilities (`byteorder` + `Cursor`) are used freely
+- Maximizes portfolio value as a binary parsing skill demonstration
+- The Asset Registry (`AssetRegistry.bin`) is referenced only as a supplement (when present)
 
-### 解析対象フォーマット（UE5）
+### Parsed Format (UE5)
 
-`.uasset` は以下の構造を持つバイナリファイル。
+`.uasset` is a binary file with the following structure:
 
 ```
-FPackageFileSummary（ファイルヘッダー）
+FPackageFileSummary (file header)
  ├─ Magic Number      : 0x9E2A83C1
  ├─ LegacyFileVersion / FileVersionUE5
- ├─ Name Table        : パッケージ内で使われる全文字列
- ├─ Import Table      : 他 Asset への Hard Reference（FObjectImport）
- ├─ Export Table      : このパッケージが定義するオブジェクト（FObjectExport）
- └─ Soft Reference    : プロパティデータに埋め込まれた Soft Object Path
+ ├─ Name Table        : all strings used within the package
+ ├─ Import Table      : Hard References to other assets (FObjectImport)
+ ├─ Export Table      : objects defined by this package (FObjectExport)
+ └─ Soft Reference    : Soft Object Paths embedded in property data
 ```
 
-### Phase 別の実装深度
+### Implementation Depth per Phase
 
-- Phase 1: ヘッダー + Name Table + Import/Export Table（依存解析に必要な最小限）
-- Phase 2: Export データのプロパティ解析（Blueprint ノードの読み取り）
-- Phase 3 以降: Soft Reference の完全解析
+- Phase 1: header + Name Table + Import/Export Table (minimum needed for dependency analysis)
+- Phase 2: Export data property analysis (reading Blueprint nodes)
+- Phase 3+: full Soft Reference analysis
 
-## グラフ処理
+## Graph Processing
 
 - petgraph
 
@@ -56,48 +56,48 @@ FPackageFileSummary（ファイルヘッダー）
 
 - clap
 
-## スキャン方式
+## Scan Mode
 
-- **デフォルト**: 差分スキャン（mtime ベース）
-  - DB に各ファイルの最終更新時刻（mtime）を保存
-  - 前回スキャン時から mtime が変化したファイルのみ再解析
-- **`--full-scan` オプション**: 全 Asset を強制再解析
+- **Default**: delta scan (mtime-based)
+  - Stores each file's last-modified time (mtime) in the DB
+  - Re-parses only files whose mtime has changed since the last scan
+- **`--full-scan` option**: forces re-analysis of all assets
 
-DB への保存項目（scanner）:
+Items stored in DB per scan (scanner):
 - `file_path`
-- `last_modified`（mtime）
+- `last_modified` (mtime)
 
-## CLI 出力フォーマット
+## CLI Output Format
 
-- テキスト（デフォルト、人間向け）
-- JSON（`--format json` オプション、CI / 他ツール連携向け）
+- Text (default, human-readable)
+- JSON (`--format json` option, for CI / tool integration)
 
 ## Serialization
 
 - serde
 
-## 並列処理
+## Parallelism
 
-| 用途 | ライブラリ |
-|---|---|
-| CPU バウンド（スキャン・解析） | `rayon` |
-| 非同期 I/O・イベント駆動（Watch Mode・将来の HTTP 連携） | `tokio` |
+| Use case | Library |
+|----------|---------|
+| CPU-bound work (scanning and analysis) | `rayon` |
+| Async I/O and event-driven (Watch Mode, future HTTP integration) | `tokio` |
 
-## エラーハンドリング
+## Error Handling
 
-- アプリ層（CLI / GUI）: `anyhow`
-- ライブラリ層（各 crate）: `thiserror`
+- Application layer (CLI / GUI): `anyhow`
+- Library layer (each crate): `thiserror`
 
-## ログ・トレース
+## Logging and Tracing
 
-- `tracing`（構造化ログ・スパン情報）
+- `tracing` (structured logging and span information)
 
-## その他ライブラリ
+## Other Libraries
 
-| 用途 | ライブラリ |
-|---|---|
-| ディレクトリ再帰ウォーク（`cli` crate で使用） | `walkdir` |
-| ファイル監視（Watch Mode） | `notify` |
-| TOML パース（設定ファイル） | `toml` |
-| HTML テンプレート（Report Generator） | `askama` |
-| ファイルハッシュ（将来の重複検出用） | `xxhash-rust` |
+| Use case | Library |
+|----------|---------|
+| Recursive directory walk (used by `cli` crate) | `walkdir` |
+| File system watching (Watch Mode) | `notify` |
+| TOML parsing (config file) | `toml` |
+| HTML templates (Report Generator) | `askama` |
+| File hashing (future duplicate detection) | `xxhash-rust` |

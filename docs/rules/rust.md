@@ -78,17 +78,17 @@ let results: Vec<Result<AssetMetadata, _>> = files
 `scan_files()` produces an immutable `Vec<AssetMetadata>`. CLI writes to DB sequentially after collection.
 Do not share mutable state across rayon threads.
 
-### tokio は Phase 1 では使用しない
+### tokio is not used in Phase 1
 
-tokio は Watch Mode (Phase 4) 以降に追加する。Phase 1 のライブラリクレート（`scanner`・`asset-db` 等）に
-`tokio` を追加することを禁止する。
+tokio is added in Phase 5 (Watch Mode) and later. Do not add `tokio` to Phase 1 library crates
+(`scanner`, `asset-db`, etc.).
 
 ---
 
 ## Cross-platform Path Handling
 
-ファイルシステムパスには必ず `std::path::PathBuf` / `Path` を使用する。
-OS 固有のパス区切り文字（`\` / `/`）をリテラルで書いてはならない。
+Always use `std::path::PathBuf` / `Path` for filesystem paths.
+Never write OS-specific path separators (`\` / `/`) as literals.
 
 ```rust
 // ❌ FORBIDDEN — hardcoded separator
@@ -104,25 +104,25 @@ if path.to_string_lossy().starts_with("Content\\") { ... }
 if path.starts_with("Content") { ... }
 ```
 
-`AssetPath`（`/Game/...` 形式のゲームパス）は常に `/` 区切りの `String` であり、
-ファイルシステムパスとは別物として明確に区別する。
+`AssetPath` (a `/Game/...`-style game path) is always a `/`-delimited `String`.
+Keep it clearly separate from filesystem paths.
 
 ---
 
 ## Database (SQLite)
 
-### バッチ書き込みはトランザクションで囲む
+### Wrap batch writes in a transaction
 
-SQLite は 1 行ごとにトランザクションを作ると著しく遅くなる。
-`scan` コマンドのように大量の upsert を行う場合は単一トランザクションに包む。
+SQLite is significantly slower when each row commits its own transaction.
+Wrap bulk upserts (such as in the `scan` command) in a single transaction.
 
 ```rust
-// ❌ 1 行ずつコミット（遅い）
+// ❌ One commit per row (slow)
 for meta in &results {
     db.upsert_asset(meta)?;
 }
 
-// ✅ トランザクション一括
+// ✅ Single transaction for the batch
 let tx = conn.transaction()?;
 for meta in &results {
     upsert_asset_tx(&tx, meta)?;
@@ -130,16 +130,16 @@ for meta in &results {
 tx.commit()?;
 ```
 
-### rusqlite は bundled feature を使う
+### Use the bundled feature for rusqlite
 
-SQLite はシステム依存を避けるため静的リンク（`features = ["bundled"]`）する。
+Statically link SQLite (`features = ["bundled"]`) to avoid system dependency issues.
 
 ---
 
 ## Logging
 
-`tracing` を使う。production コードで `println!` / `eprintln!` を使用してはならない。
-stdout/stderr への書き込みは `cli` クレートのみ行う（`docs/rules/cli-output.md` 参照）。
+Use `tracing`. Never use `println!` / `eprintln!` in production code.
+Only the `cli` crate writes to stdout/stderr (see `docs/rules/cli-output.md`).
 
 ```rust
 // ✅ Structured logging with field names
@@ -150,10 +150,10 @@ tracing::error!(error = ?e, "Fatal error in scan handler");
 ```
 
 Log levels:
-- `error`: 正確性に影響する予期しない失敗
-- `warn`: 回復可能な問題（ファイルスキップ、パースエラー）
-- `info`: ライフサイクルイベント（スキャン開始/終了、DB オープン）
-- `debug`: ファイル単位のトレース（パス、タイミング）
+- `error`: unexpected failures that affect correctness
+- `warn`: recoverable problems (file skipped, parse error)
+- `info`: lifecycle events (scan start/end, DB open)
+- `debug`: per-file trace (path, timing)
 
 ---
 
@@ -176,14 +176,14 @@ pub struct AssetMetadata {
 ### Newtype for domain values
 
 ```rust
-// ✅ AssetPath は String だが、ラップすることで生 String との誤用を防ぐ
+// ✅ AssetPath wraps String to prevent misuse with raw strings
 pub struct AssetPath(String);
 ```
 
 ### Builder pattern for complex construction
 
-3 つ以上のオプションフィールドを持つ構造体にはビルダーパターンを使う。
-必須フィールドは `new()` に置く。
+Use the builder pattern for structs with three or more optional fields.
+Place required fields in `new()`.
 
 ---
 
@@ -209,7 +209,7 @@ let dead: Vec<_> = graph.nodes()
 
 ### Non-obvious clones must be annotated
 
-クロージャや `Arc` のクローンには、なぜクローンが必要かをコメントで明記する。
+Document why a clone is necessary for closures and `Arc` clones.
 
 ```rust
 // clone required: rayon::spawn requires 'static + Send
@@ -218,7 +218,7 @@ let content_root = content_root.clone();
 
 ### No `unsafe` without justification
 
-`unsafe` ブロックには必ず `// SAFETY:` コメントで不変条件を説明する。
+Every `unsafe` block must have a `// SAFETY:` comment explaining the invariant it relies on.
 
 ```rust
 // SAFETY: `ptr` is valid for the lifetime of this function and aligned to T.
@@ -227,20 +227,20 @@ let value = unsafe { ptr.read() };
 
 ### No dead code in committed branches
 
-コミット前に未使用の `use`・関数・変数を削除する。
-`#[allow(dead_code)]` を使う場合は残す理由をコメントで記述する。
+Remove unused `use` statements, functions, and variables before committing.
+If `#[allow(dead_code)]` is necessary, explain the reason with a comment.
 
 ---
 
-## コメントポリシー
+## Comment Policy
 
-- コメントは「なぜ」のみ書く（「何をするか」は書かない）。
-- 自明なコードにコメントは不要。
-- **バイナリ形式・外部仕様（UE5 バイナリレイアウト等）を文書化する関数・構造体**では
-  multi-line コメントを許容する。1 行に収まらない仕様はこちらを優先する。
+- Comments explain **why** only — never what the code does.
+- Self-evident code needs no comment.
+- **Functions and structs that document binary formats or external specs** (e.g., UE5 binary layout)
+  may use multi-line block comments when a single line cannot capture the spec.
 
 ```rust
-// ✅ OK — バイナリ仕様の文書化（multi-line 許容）
+// ✅ OK — binary spec documentation (multi-line permitted)
 // FObjectImport layout (UE5.4, FileVersionUE5 >= 1012):
 //   ClassPackage (FName: i32 index + i32 number) = 8 bytes
 //   ClassName    (FName: i32 index + i32 number) = 8 bytes
@@ -250,11 +250,11 @@ let value = unsafe { ptr.read() };
 //   bImportOptional (serialised as i32)          = 4 bytes
 pub fn parse_import_table(...) { ... }
 
-// ✅ OK — 非自明な WHY を 1 行で
+// ✅ OK — non-obvious WHY in one line
 // from_utf8 consumes the Vec directly — no copy in the happy path
 String::from_utf8(bytes).unwrap_or_else(...)
 
-// ❌ NG — 自明なコードに "what" コメント
+// ❌ NG — "what" comment on self-evident code
 // Loop over all entries
 for entry in &entries { ... }
 ```

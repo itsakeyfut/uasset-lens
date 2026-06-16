@@ -1,43 +1,43 @@
-# Phase 設計
+# Phase Design
 
-6フェーズ構成。**Phase 2 完了時点が MVP**。
+Six-phase structure. **Phase 2 completion is the MVP.**
 
-| Phase | テーマ | MVP |
-|-------|--------|-----|
+| Phase | Theme | MVP |
+|-------|-------|-----|
 | 1 | Foundation: Binary Scanner | — |
 | 2 | Core Analysis | **MVP** |
-| 3 | CLI 完成 | — |
-| 4 | 静的解析 | — |
-| 5 | 開発フロー統合 | — |
-| 6 | 可視化・レポート | — |
+| 3 | CLI Completion | — |
+| 4 | Static Analysis | — |
+| 5 | Dev Workflow Integration | — |
+| 6 | Visualization and Reports | — |
 
-詳細は `docs/roadmap/phase{N}/ROADMAP.md` を参照。
+For details, see `docs/roadmap/phase{N}/ROADMAP.md`.
 
 ---
 
 ## Phase 1 — Foundation: Binary Scanner
 
-### 目標
+### Goal
 
-`.uasset` / `.umap` バイナリをパースし、Asset メタデータと依存関係を SQLite に索引できる状態にする。
-`uasset-lens scan ./Project` が動作すれば完了。
+Parse `.uasset` / `.umap` binaries and index asset metadata and dependencies into SQLite.
+Complete when `uasset-lens scan ./Project` works end-to-end.
 
-### 実装範囲
+### Implementation Scope
 
 #### 1. Asset Scanner
 
-- `.uasset` / `.umap` バイナリパース（Magic / NameTable / ImportTable / ExportTable）
-- AssetType 自動判定
-- メタデータ抽出（path / type / size / last_modified / dependencies）
-- rayon 並列スキャン + mtime 差分スキャン
+- `.uasset` / `.umap` binary parsing (Magic / NameTable / ImportTable / ExportTable)
+- Automatic AssetType detection
+- Metadata extraction (path / type / size / last_modified / dependencies)
+- rayon parallel scanning + mtime delta scanning
 
 #### 2. Asset DB
 
-- SQLite による Asset インデックス管理
-- mtime 差分スキャン対応スキーマ
-- 削除検知・バッチ upsert
+- SQLite-backed asset index management
+- mtime delta scan schema
+- Stale record detection and batch upsert
 
-#### 3. CLI: `scan` コマンド
+#### 3. CLI: `scan` command
 
 ```bash
 uasset-lens scan ./Project
@@ -48,24 +48,24 @@ uasset-lens scan ./Project --full-scan
 
 ## Phase 2 — Core Analysis ✅ MVP
 
-### 目標
+### Goal
 
-「この Asset を削除して大丈夫か？」に CLI 単体で即答できる状態にする。
-`graph` / `dead-assets` / `impact` の 3 コマンドが動作した時点で **MVP 達成**。
+Answer "is it safe to delete this asset?" from the CLI alone.
+**MVP achieved** when `graph` / `dead-assets` / `impact` all work.
 
-### 実装範囲
+### Implementation Scope
 
 #### 1. Dependency Graph
 
-- Hard Reference 解析
-- Circular Dependency 検出（Tarjan SCC）
-- Impact 分析（direct / transitive 分離）
+- Hard Reference analysis
+- Circular dependency detection (Tarjan SCC)
+- Impact analysis (direct / transitive separated)
 
 #### 2. Dead Asset Detector
 
-- 未参照 Asset 検出（in_degree == 0）
+- Detect unreferenced assets (in_degree == 0)
 
-#### 3. CLI: 3 コマンド追加
+#### 3. CLI: 3 new commands
 
 ```bash
 uasset-lens graph ./Project
@@ -77,31 +77,31 @@ uasset-lens impact /Game/Characters/BP_Player
 
 ---
 
-## Phase 3 — CLI 完成
+## Phase 3 — CLI Completion
 
-### 目標
+### Goal
 
-残りの全 CLI コマンドと設定ファイルを実装し、OSS として公開できるレベルに仕上げる。
+Implement all remaining CLI commands and the config file. Polish to OSS-publishable quality.
 
-### 実装範囲
+### Implementation Scope
 
 #### 1. Redirector Analyzer
 
-- ObjectRedirector Asset の検出・列挙
+- Detect and list ObjectRedirector assets
 
 #### 2. Asset Search CLI
 
-- 型 / サイズ / パス / 未参照フラグによるフィルタ検索
-- glob パターン対応
+- Filtered search by type / size / path / unreferenced flag
+- Glob pattern support
 
-#### 3. 設定ファイル（`.uasset-lens.toml`）
+#### 3. Config File (`.uasset-lens.toml`)
 
 ```toml
 [scan]
 exclude_paths = ["Content/Dev/", "Content/Test/"]
 ```
 
-#### 4. CLI: 2 コマンド追加
+#### 4. CLI: 2 new commands
 
 ```bash
 uasset-lens redirectors ./Project
@@ -112,36 +112,36 @@ uasset-lens find ./Project --path "**/Characters/**"
 
 ---
 
-## Phase 4 — 静的解析
+## Phase 4 — Static Analysis
 
-### 目標
+### Goal
 
-「削除の安全性」から「Blueprint / Asset 品質分析」へ価値を拡大する。
-`lint` コマンドを CI 品質ゲートとして使える状態にする。
+Expand value from "delete safety" to "Blueprint / asset quality analysis."
+`lint` should be usable as a CI quality gate.
 
-### 実装範囲
+### Implementation Scope
 
 #### 1. Blueprint Analyzer
 
-- Node Count / Branch Count / Event Tick / Cast / Dependency Depth
-- 複雑度閾値判定（Linter から呼び出し）
+- Node count / branch count / Event Tick / Cast / dependency depth
+- Complexity threshold evaluation (called by the Linter)
 
 #### 2. Duplicate Asset Detector
 
-- 同名 Asset の重複検出
-- Texture 重複検出（サイズ + 型 + 名前ベース）
+- Same-name asset duplicate detection
+- Texture duplicate detection (size + type + name based)
 
 #### 3. Linter
 
-- 命名規則（T_ / M_ / SM_ / BP_ 等プレフィックス）
-- Texture サイズ上限
-- Blueprint 複雑度
-- exit code `1` で CI ゲートとして機能
+- Naming conventions (T_ / M_ / SM_ / BP_ prefixes, etc.)
+- Texture size limit
+- Blueprint complexity
+- Exit code `1` as a CI quality gate
 
 #### 4. Material Analyzer
 
-- テクスチャサンプル数
-- MaterialInstance チェーン深度
+- Texture sample count
+- MaterialInstance chain depth
 
 #### 5. Performance Budget Tracking
 
@@ -151,7 +151,7 @@ Texture2D.max_size = 4194304    # 4 MB
 SoundWave.max_size = 2097152    # 2 MB
 ```
 
-#### 6. CLI: 4 コマンド追加
+#### 6. CLI: 4 new commands
 
 ```bash
 uasset-lens blueprint ./Project
@@ -162,31 +162,32 @@ uasset-lens duplicates ./Project
 
 ---
 
-## Phase 5 — 開発フロー統合
+## Phase 5 — Dev Workflow Integration
 
-### 目標
+### Goal
 
-ツールを開発ワークフローに組み込む。
-Asset 変更をリアルタイム検知する Watch Mode、Blueprint 構造の Git 差分可視化、GitHub Actions CI 統合を実現する。
+Integrate the tool into the development workflow.
+Real-time asset change detection (Watch Mode), Git diff visualization for Blueprint structure,
+and GitHub Actions CI integration.
 
-### 実装範囲
+### Implementation Scope
 
 #### 1. Watch Mode
 
-- `notify` クレートによるファイルシステム監視
-- デバウンス処理 + 変更時即時再スキャン + 問題通知
+- File system monitoring via the `notify` crate
+- Debounce + immediate re-scan on change + issue notification
 
 #### 2. Git Diff Analyzer
 
-- `git show HEAD:path` で旧バージョンを取得して比較
-- 依存関係の追加 / 削除、Blueprint メトリクスの変化を表示
+- Fetch old version via `git show HEAD:path` for comparison
+- Display added/removed dependencies and changed Blueprint metrics
 
 #### 3. CI Integration
 
-- GitHub Actions サンプルワークフロー
-- `lint` の exit code `1` によるパイプライン停止
+- GitHub Actions sample workflow
+- `lint` exit code `1` to halt the pipeline
 
-#### 4. CLI: `watch` コマンド追加
+#### 4. CLI: `watch` command
 
 ```bash
 uasset-lens watch ./Project
@@ -194,33 +195,33 @@ uasset-lens watch ./Project
 
 ---
 
-## Phase 6 — 可視化・レポート
+## Phase 6 — Visualization and Reports
 
-### 目標
+### Goal
 
-CLI 解析結果を egui GUI ダッシュボードと HTML/Markdown レポートで可視化する。
-Level / Map 固有の分析機能を追加する。
+Visualize CLI analysis results in an egui GUI dashboard and HTML/Markdown reports.
+Add Level / Map specific analysis.
 
-### 実装範囲
+### Implementation Scope
 
 #### 1. Level / Map Analyzer
 
-- Level 内 Actor タイプ別カウント
-- Level 間依存グラフ
-- World Partition 検知
+- Actor type counts per Level
+- Level dependency graph
+- World Partition detection
 
 #### 2. Report Generator
 
-- HTML レポート（オフライン動作、CDN 不要）
-- Markdown レポート（GitHub Flavored Markdown）
+- HTML reports (offline, no CDN required)
+- Markdown reports (GitHub Flavored Markdown)
 
-#### 3. GUI Dashboard（egui / eframe）
+#### 3. GUI Dashboard (egui / eframe)
 
-- スキャン結果のダッシュボード表示
-- 未参照 Asset / 循環依存 / Blueprint ランキング
-- リアルタイム Asset 検索
+- Dashboard for scan results
+- Unreferenced asset / circular dependency / Blueprint ranking views
+- Real-time asset search
 
-#### 4. CLI: `report` コマンド追加 + GUI バイナリ
+#### 4. CLI: `report` command + GUI binary
 
 ```bash
 uasset-lens report ./Project --format html -o report.html

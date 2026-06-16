@@ -1,107 +1,107 @@
-# 開発戦略・ロードマップ
+# Development Strategy and Roadmap
 
 ## MVP
 
-### 最初に作るべきもの
+### What to build first
 
-#### MVP 機能（Phase 2 完了時点）
+#### MVP features (as of Phase 2 completion)
 
 - uasset scan
 - dependency graph
 - circular dependency detection
 - dead asset detection
-- impact analysis（削除・リネーム影響範囲の表示）
+- impact analysis (display the scope of delete / rename impact)
 
-#### MVP の目的
+#### Goal of the MVP
 
-以下を成立させる。
+Enable the following:
 
-> 「この Asset を削除して大丈夫か？」
+> "Is it safe to delete this asset?"
 
 ---
 
-## 6フェーズ構成
+## Six-Phase Structure
 
-| Phase | テーマ | 主要コマンド | MVP |
-|-------|--------|-------------|-----|
+| Phase | Theme | Key Commands | MVP |
+|-------|-------|-------------|-----|
 | 1 | Foundation: Binary Scanner | `scan` | — |
 | 2 | Core Analysis | `graph` / `dead-assets` / `impact` | **MVP** |
-| 3 | CLI 完成 | `redirectors` / `find` + 設定ファイル | — |
-| 4 | 静的解析 | `blueprint` / `lint` / `budget` / `duplicates` | — |
-| 5 | 開発フロー統合 | `watch` + CI ドキュメント | — |
-| 6 | 可視化・レポート | `report` + GUI ダッシュボード | — |
+| 3 | CLI Completion | `redirectors` / `find` + config file | — |
+| 4 | Static Analysis | `blueprint` / `lint` / `budget` / `duplicates` | — |
+| 5 | Dev Workflow Integration | `watch` + CI documentation | — |
+| 6 | Visualization and Reports | `report` + GUI dashboard | — |
 
-各フェーズの詳細タスク・完了条件は `docs/roadmap/phase{N}/ROADMAP.md` を参照。
+For detailed tasks and completion criteria per phase, see `docs/roadmap/phase{N}/ROADMAP.md`.
 
 ---
 
-## 開発戦略
+## Development Strategy
 
-最初から全機能を実装しない。Phase 2 完了でリリースし、フィードバックを得ながら段階的に拡張する。
+Do not implement all features at once. Release after Phase 2 and iterate with feedback.
 
-### 実装順序（フェーズ内優先順位）
+### Implementation Order (within each phase)
 
 #### Phase 1
-1. `shared` crate（共通型定義）
-2. `scanner` crate（バイナリパーサー）
-3. `asset-db` crate（SQLite）
-4. `cli` crate（`scan` コマンド）
+1. `shared` crate (common type definitions)
+2. `scanner` crate (binary parser)
+3. `asset-db` crate (SQLite)
+4. `cli` crate (`scan` command)
 
 #### Phase 2
 1. `dependency-graph` crate
 2. `dead-asset-detector` crate
-3. `impact-analyzer` crate（stub）
-4. `cli` 拡張（3 コマンド）
+3. `impact-analyzer` crate (stub)
+4. `cli` extension (3 commands)
 
 #### Phase 3
 1. `redirector-analyzer` crate
-2. `asset-db` glob 対応
-3. `cli` 拡張（2 コマンド + 設定ファイル）
-4. README / `cargo publish` 準備
+2. `asset-db` glob support
+3. `cli` extension (2 commands + config file)
+4. README / `cargo publish` preparation
 
 #### Phase 4
-1. パーサー Phase 2（Export プロパティ解析）
+1. Parser Phase 2 (Export property analysis)
 2. `bp-analyzer` crate
 3. `duplicate-detector` crate
 4. `lint-engine` crate
 5. `material-analyzer` / `budget-tracker` crates
-6. `cli` 拡張（4 コマンド）
+6. `cli` extension (4 commands)
 
 #### Phase 5
 1. `watcher` crate
 2. `git-diff` crate
-3. `cli` 拡張（`watch` コマンド）
-4. CI 統合ドキュメント
+3. `cli` extension (`watch` command)
+4. CI integration documentation
 
 #### Phase 6
 1. `level-analyzer` crate
 2. `report-generator` crate
-3. `cli` 拡張（`report` コマンド）
-4. `apps/uasset-lens-desktop`（egui GUI）
+3. `cli` extension (`report` command)
+4. `apps/uasset-lens-desktop` (egui GUI)
 
 ---
 
-## 将来的な拡張案
+## Future Extension Ideas
 
 ### GitHub PR Integration
 
-PR 時に以下を自動通知:
+Automatically notify on the following during a PR:
 
-- BP Complexity 増加
-- Circular Dependency 検出
-- Asset Budget 超過
+- Blueprint complexity increase
+- Circular dependency detected
+- Asset budget exceeded
 
 ### Plugin System
 
-将来的には Analyzer / Rule を Plugin 化し、プロジェクト固有ルールを追加できる設計にする。
+In the future, make Analyzers and Rules pluggable so projects can add their own rules.
 
 ---
 
-## プロジェクト名
+## Project Name
 
 **uasset-lens**
 
-- CLI バイナリ名: `uasset-lens`
-- GUI バイナリ名: `uasset-lens-desktop`
-- Cargo パッケージ名: `uasset-lens`
-- リポジトリ名: `uasset-lens`
+- CLI binary name: `uasset-lens`
+- GUI binary name: `uasset-lens-desktop`
+- Cargo package name: `uasset-lens`
+- Repository name: `uasset-lens`
