@@ -9,6 +9,27 @@ pub struct BudgetConfig {
     pub limits: HashMap<String, AssetBudget>,
 }
 
+impl BudgetConfig {
+    pub fn effective(user: &BudgetConfig) -> BudgetConfig {
+        let mut limits = HashMap::new();
+        limits.insert(
+            "Texture2D".to_owned(),
+            AssetBudget {
+                max_size: 4 * 1024 * 1024,
+            },
+        );
+        for (k, v) in &user.limits {
+            limits.insert(
+                k.clone(), // clone required: HashMap insert takes ownership of the key
+                AssetBudget {
+                    max_size: v.max_size,
+                },
+            );
+        }
+        BudgetConfig { limits }
+    }
+}
+
 #[derive(serde::Deserialize)]
 pub struct AssetBudget {
     pub max_size: u64,
@@ -148,6 +169,56 @@ mod tests {
                 .violations
                 .iter()
                 .any(|v| v.asset_path.as_str() == "/Game/SW_Big")
+        );
+    }
+
+    #[test]
+    fn effective_should_apply_texture2d_default_when_user_config_is_empty() {
+        let user = BudgetConfig::default();
+        let effective = BudgetConfig::effective(&user);
+        assert_eq!(
+            effective.limits.get("Texture2D").map(|b| b.max_size),
+            Some(4 * 1024 * 1024)
+        );
+    }
+
+    #[test]
+    fn effective_should_override_default_when_texture2d_is_in_user_config() {
+        let user = BudgetConfig {
+            limits: [(
+                "Texture2D".to_owned(),
+                AssetBudget {
+                    max_size: 8 * 1024 * 1024,
+                },
+            )]
+            .into(),
+        };
+        let effective = BudgetConfig::effective(&user);
+        assert_eq!(
+            effective.limits.get("Texture2D").map(|b| b.max_size),
+            Some(8 * 1024 * 1024)
+        );
+    }
+
+    #[test]
+    fn effective_should_include_both_default_texture2d_and_user_defined_types() {
+        let user = BudgetConfig {
+            limits: [(
+                "SoundWave".to_owned(),
+                AssetBudget {
+                    max_size: 2 * 1024 * 1024,
+                },
+            )]
+            .into(),
+        };
+        let effective = BudgetConfig::effective(&user);
+        assert_eq!(
+            effective.limits.get("Texture2D").map(|b| b.max_size),
+            Some(4 * 1024 * 1024)
+        );
+        assert_eq!(
+            effective.limits.get("SoundWave").map(|b| b.max_size),
+            Some(2 * 1024 * 1024)
         );
     }
 }

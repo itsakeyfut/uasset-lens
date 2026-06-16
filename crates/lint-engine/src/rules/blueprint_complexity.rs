@@ -35,7 +35,7 @@ impl LintRule for BlueprintComplexityRule {
             .into_iter()
             .map(|w| LintViolation {
                 severity: Severity::Error,
-                rule_id: w.rule,
+                rule_id: w.rule.to_owned(),
                 message: w.message,
                 asset_path: asset.asset_path.clone(), // clone required: cannot move out of shared reference
             })

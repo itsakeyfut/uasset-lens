@@ -18,7 +18,7 @@ pub enum Severity {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LintViolation {
     pub severity: Severity,
-    pub rule_id: &'static str,
+    pub rule_id: String,
     pub message: String,
     pub asset_path: AssetPath,
 }

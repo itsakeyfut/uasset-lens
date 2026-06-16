@@ -32,7 +32,10 @@ pub fn handle_budget(
         .all_assets()
         .context("Failed to read assets from database")?;
 
-    let report = budget_tracker::check_budget(&assets, &cfg.budget);
+    let report = budget_tracker::check_budget(
+        &assets,
+        &budget_tracker::BudgetConfig::effective(&cfg.budget),
+    );
 
     let entries: Vec<BudgetViolationEntry> = report
         .violations
@@ -209,7 +212,7 @@ mod tests {
     }
 
     #[test]
-    fn handle_budget_should_return_0_when_budget_config_is_empty() {
+    fn handle_budget_should_return_0_when_no_assets_in_db() {
         let (dir, db_path) = test_db_in_tempdir("budget_empty");
         asset_db::AssetDb::open(&db_path).unwrap();
 
@@ -272,6 +275,25 @@ mod tests {
         let cfg = crate::config::load_config(&dir);
         let result = handle_budget(&dir, &db_path, &cfg, &FormatKind::Text).unwrap();
 
+        assert_eq!(result, 1);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn handle_budget_should_return_1_when_texture_exceeds_4mb_built_in_default() {
+        let (dir, db_path) = test_db_in_tempdir("budget_builtin_dflt");
+        {
+            let mut db = asset_db::AssetDb::open(&db_path).unwrap();
+            db.upsert_all(&[crate::commands::make_meta(
+                "/Game/T_Large",
+                dir.join("T_Large.uasset"),
+                AssetType::Texture2D,
+                5 * 1024 * 1024,
+                vec![],
+            )])
+            .unwrap();
+        }
+        let result = handle_budget(&dir, &db_path, &Default::default(), &FormatKind::Text).unwrap();
         assert_eq!(result, 1);
         let _ = std::fs::remove_dir_all(&dir);
     }

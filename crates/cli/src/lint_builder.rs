@@ -52,11 +52,7 @@ pub fn build_lint_rules(cfg: &LintConfig) -> Vec<Box<dyn LintRule>> {
         depth_by_type,
     };
 
-    vec![
-        Box::new(naming),
-        Box::new(lint_engine::TextureSizeRule::default()),
-        Box::new(complexity),
-    ]
+    vec![Box::new(naming), Box::new(complexity)]
 }
 
 #[cfg(test)]

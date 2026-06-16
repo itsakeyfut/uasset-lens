@@ -80,7 +80,7 @@ impl LintRule for NamingPrefixRule {
         };
         vec![LintViolation {
             severity: Severity::Warning,
-            rule_id: "naming/prefix",
+            rule_id: "naming/prefix".to_owned(),
             message: format!("asset `{name}` should start with {expected}"),
             asset_path: asset.asset_path.clone(), // clone required: cannot move out of shared reference
         }]

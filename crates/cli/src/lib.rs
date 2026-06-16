@@ -162,7 +162,8 @@ pub enum Commands {
     Budget { project_dir: PathBuf },
     /// List same-name and texture duplicate asset groups
     Duplicates { project_dir: PathBuf },
-    /// Run all lint rules and report violations (exit 1 if any found)
+    /// Run all lint rules and report violations (exit 1 if any found).
+    /// Size budget rules (budget/*) are controlled by [budget] in .uasset-lens.toml.
     Lint { project_dir: PathBuf },
     /// Run all (or selected) health checks; exits 1 if any check finds problems
     #[command(name = "check")]
