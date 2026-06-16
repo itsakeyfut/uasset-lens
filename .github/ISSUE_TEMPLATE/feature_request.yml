@@ -1,5 +1,5 @@
 name: Feature Request
-description: Suggest a new feature or improvement
+description: Suggest a new feature or improvement for uasset-lens
 title: "[Feature]: "
 labels: ["T-Feat"]
 assignees: []
@@ -8,14 +8,18 @@ body:
   - type: markdown
     attributes:
       value: |
-        Thank you for suggesting a feature! Please provide enough detail to evaluate and implement it.
+        Thank you for suggesting a feature! Please describe the UE5 workflow problem
+        you are solving and how you envision the solution fitting into uasset-lens.
 
   - type: textarea
     id: summary
     attributes:
       label: Summary
       description: A concise description of the feature in 1-2 sentences.
-      placeholder: Add a read-only schema browser panel showing tables, columns, and indexes for the active connection.
+      placeholder: |
+        Add a `uasset-lens unused-slots` command that lists Material assets containing
+        texture sample slots that are connected to the default engine texture instead of
+        a project texture, flagging potential "forgotten placeholder" setups.
     validations:
       required: true
 
@@ -24,17 +28,21 @@ body:
     attributes:
       label: Design Notes
       description: |
-        Architecture considerations, relevant file paths, APIs to investigate, or implementation constraints.
+        Architecture considerations, relevant crates, file paths, or implementation constraints.
         Use `> **Note**:` for anything that requires investigation before implementation.
       placeholder: |
-        Files: `app/ui/schema_browser.slint`, `app/src/controller/schema.rs`, `crates/wf-db/src/schema.rs`
+        Affected crates: `crates/material-analyzer/`, `crates/lint-engine/src/rules/`, `crates/cli/`
 
-        - `wf-db` already exposes `DbService::fetch_schema()` — reuse this for the browser.
-        - Toggle via a `Command` sent through `tx_cmd`; result returned as `Event::SchemaLoaded`.
-        - Use `Rc<VecModel<TableItem>>` for the Slint list binding; convert `SchemaTable` domain types first.
+        - Parse texture sample count from `material-analyzer` (already implemented via
+          `MaterialStats::texture_sample_count`).
+        - Add a new lint rule `material/unused-texture-slot` in `crates/lint-engine/src/rules/`.
+        - Wire up the rule in `LintEngine::rules()` alongside existing material checks.
+        - CLI: the rule fires through the existing `uasset-lens lint` command — no new subcommand needed.
 
-        > **Note**: Investigate Slint `TreeView` or nested `ListView` for hierarchical table → column display.
-        > Check whether `fetch_schema()` returns column metadata (type, nullable) needed for the detail pane.
+        > **Note**: Investigate whether the `.uasset` export table for a Material stores
+        > the referenced texture path or only the slot index. Check `parser/export.rs`.
+    validations:
+      required: false
 
   - type: textarea
     id: requirements
@@ -42,12 +50,14 @@ body:
       label: Requirements
       description: Implementation checklist. Each line becomes a trackable task on the issue.
       placeholder: |
-        - [ ] Schema browser panel can be toggled open/closed (keyboard shortcut or toolbar)
-        - [ ] Lists all tables for the active connection, grouped by schema
-        - [ ] Expanding a table shows column names, types, and nullable flags
-        - [ ] Selecting a table inserts its name at the cursor in the SQL editor
-        - [ ] Panel refreshes on `Event::ConnectionChanged`
-        - [ ] Unit tests verify `wf-db` schema fetch returns expected metadata for SQLite
+        - [ ] New lint rule `material/unused-texture-slot` detects default-engine textures
+              referenced by project Material assets
+        - [ ] Rule is controlled by `.uasset-lens.toml` (can be disabled per-project)
+        - [ ] `uasset-lens lint` JSON output includes the rule_id and the offending slot path
+        - [ ] Exit code is `1` when at least one violation is found
+        - [ ] Unit tests cover: no violation (all slots are project textures),
+              one violation (one default engine texture), and disabled-rule case
+        - [ ] `cargo test --workspace` passes
     validations:
       required: true
 
@@ -55,11 +65,12 @@ body:
     id: related
     attributes:
       label: Related
-      description: Dependencies, related issues, or prior art.
+      description: Dependencies, related issues, UE5 workflow context, or prior art.
       placeholder: |
-        Depends on: #12 (DbService schema API)
-        Related: #43 (completion popup — shares schema metadata source)
-        Prior art: TablePlus schema panel, DataGrip database tree
+        Depends on: #88 (material-analyzer texture path export parsing)
+        Related: #101 (lint rule for excessive texture sample count)
+        UE5 context: default engine textures (T_Default_Material_Grid, etc.) are placeholders;
+        shipping with them is a common oversight in large teams
 
   - type: checkboxes
     id: contribution
@@ -68,7 +79,7 @@ body:
       options:
         - label: I am willing to help implement this feature
           required: false
-        - label: I can provide test cases or sample SQL
+        - label: I can provide a sample `.uasset` file or test fixture
           required: false
 
   - type: checkboxes
@@ -80,5 +91,5 @@ body:
           required: true
         - label: I have checked the roadmap to see if this is already planned
           required: false
-        - label: This feature aligns with the project's goals (fast, keyboard-centric SQL client)
+        - label: This feature aligns with the project's goals (fast UE5 static analysis from the CLI)
           required: false

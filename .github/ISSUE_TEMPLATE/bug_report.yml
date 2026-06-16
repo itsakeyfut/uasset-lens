@@ -1,5 +1,5 @@
 name: Bug Report
-description: Report a bug or unexpected behavior
+description: Report a bug or unexpected behavior in uasset-lens
 title: "[Bug]: "
 labels: ["T-Fix"]
 assignees: []
@@ -8,32 +8,26 @@ body:
   - type: markdown
     attributes:
       value: |
-        Thank you for reporting a bug! Please provide detailed information to help us understand and fix the issue.
+        Thank you for reporting a bug! Please provide enough detail to reproduce the problem.
 
   - type: textarea
     id: problem
     attributes:
       label: Problem
       description: |
-        Describe the bug in detail. Include relevant code snippets, struct definitions, or API surfaces
-        that demonstrate the missing or broken behavior.
+        Describe the bug. Include the exact command you ran, the assets involved,
+        and what went wrong (wrong output, panic, incorrect exit code, etc.).
       placeholder: |
-        `CompletionService` does not debounce correctly when the SQL editor contains
-        a multi-statement query. Completions fire on every keystroke instead of waiting
-        for the configured interval:
+        Running `uasset-lens lint /Content` on a project with ~800 assets produces a
+        false positive on every Blueprint asset:
 
-        ```rust
-        // crates/wf-completion/src/service.rs — debounce timer (abridged)
-        pub struct CompletionService {
-            debounce_ms: u64,
-            // timer resets on text change but not on cursor movement
-        }
+        ```
+        $ uasset-lens lint /Game/UI
+        WARN  BP_HUDWidget [naming/blueprint-prefix]: name does not start with "BP_"
         ```
 
-        Observed: the completion popup appears immediately after each keystroke when
-        editing the second statement in `SELECT 1; SELECT |` (cursor after the pipe).
-        Expected: completions fire after `debounce_ms` of inactivity regardless of
-        cursor position within the document.
+        The asset name IS `BP_HUDWidget`, so the prefix check is incorrectly rejecting it.
+        The rule fires on the class name instead of the asset file name.
     validations:
       required: true
 
@@ -41,11 +35,11 @@ body:
     id: desired_behaviour
     attributes:
       label: Desired Behaviour
-      description: What should happen instead? Describe the correct API, behavior, or output.
+      description: What should uasset-lens do instead?
       placeholder: |
-        `CompletionService` debounce timer should reset on every keystroke and cursor
-        movement, firing only after the configured interval of inactivity.
-        The popup should not appear mid-keystroke when typing rapidly.
+        The `naming/blueprint-prefix` rule should check the asset file name
+        (e.g. `BP_HUDWidget.uasset`), not the internal class name stored in the export table.
+        Assets whose file name already starts with `BP_` should pass the rule.
     validations:
       required: true
 
@@ -57,21 +51,22 @@ body:
         Proposed implementation — file paths, code changes, and steps.
         Leave blank if you are unsure how to fix it.
       placeholder: |
-        ### Step 1 — Reset debounce on cursor movement
+        ### Step 1 — Read asset name from AssetPath, not export class name
 
         ```rust
-        // crates/wf-completion/src/service.rs
-        pub fn on_cursor_moved(&mut self) {
-            self.reset_debounce();
+        // crates/lint-engine/src/rules/naming.rs
+        fn check(&self, asset: &AssetRecord) -> Vec<LintViolation> {
+            let file_stem = asset.path.asset_name(); // was: asset.class_name
+            if !file_stem.starts_with("BP_") { … }
         }
         ```
 
-        ### Step 2 — Add unit test
+        ### Step 2 — Add regression test
 
         ```rust
-        // crates/wf-completion/tests/debounce.rs
+        // crates/lint-engine/src/rules/naming.rs — mod tests
         #[test]
-        fn debounce_resets_on_cursor_move_should_not_fire_immediately() { … }
+        fn blueprint_prefix_should_pass_when_filename_starts_with_bp() { … }
         ```
 
   - type: textarea
@@ -80,10 +75,11 @@ body:
       label: Acceptance Criteria
       description: Conditions that must hold for this bug to be considered fixed.
       placeholder: |
-        - [ ] Completion does not fire during rapid keystrokes within `debounce_ms`.
-        - [ ] Debounce resets on cursor movement as well as text changes.
-        - [ ] Unit test `debounce_resets_on_cursor_move_should_not_fire_immediately` passes.
-        - [ ] `just ci` passes.
+        - [ ] `uasset-lens lint` does not report `naming/blueprint-prefix` for assets whose
+              file name starts with `BP_`
+        - [ ] Unit test `blueprint_prefix_should_pass_when_filename_starts_with_bp` passes
+        - [ ] `cargo test --workspace` passes
+        - [ ] Exit code is `0` when no real violations are found
     validations:
       required: true
 
@@ -91,12 +87,13 @@ body:
     id: environment
     attributes:
       label: Environment
-      description: wellfeather version, OS, Rust toolchain, and DB type if relevant.
+      description: uasset-lens version, OS, Rust toolchain, and UE5 project details if relevant.
       placeholder: |
-        - wellfeather: 0.9.1 (`wellfeather --version` or title bar)
+        - uasset-lens: 0.1.0 (`uasset-lens --version`)
         - OS: Windows 11 / macOS 15 / Ubuntu 24.04
-        - Rust: rustc 1.87.0 (`rustc --version`)
-        - DB type: PostgreSQL 17 / MySQL 8.4 / SQLite 3.47
+        - Rust: rustc 1.96.0 (`rustc --version`)
+        - UE version: 5.4.4
+        - Asset count: ~800
       render: markdown
 
   - type: textarea
@@ -105,10 +102,11 @@ body:
       label: Additional Context
       description: Error output, backtraces (`RUST_BACKTRACE=1`), related issues, or workarounds.
       placeholder: |
-        - Only reproducible when the editor contains multiple semicolon-separated statements
-        - `RUST_LOG=wf_completion=debug just run` shows timer resets being skipped
-        - Workaround: move cursor to the first statement before triggering completion
-        - Related: #43 (completion popup UI)
+        - `RUST_LOG=lint_engine=debug uasset-lens lint /Game/UI` shows the class name
+          lookup path is triggered instead of the file stem path
+        - Only occurs on Blueprint assets; StaticMesh and Texture2D are not affected
+        - Related: #42 (naming rule refactor)
+        - Workaround: disable `naming/blueprint-prefix` in `.uasset-lens.toml`
 
   - type: checkboxes
     id: checklist
