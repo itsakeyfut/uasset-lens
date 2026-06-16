@@ -1,6 +1,6 @@
-﻿use byteorder::{LittleEndian, ReadBytesExt};
-use uasset_lens_shared::{AssetPath, AssetType};
+use byteorder::{LittleEndian, ReadBytesExt};
 use std::io::Cursor;
+use uasset_lens_shared::{AssetPath, AssetType};
 
 use crate::ScanError;
 

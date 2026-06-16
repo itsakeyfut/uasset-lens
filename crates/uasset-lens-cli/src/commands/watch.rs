@@ -1,4 +1,4 @@
-﻿use std::path::Path;
+use std::path::Path;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
@@ -43,10 +43,11 @@ pub fn handle_watch(
         }
     }
 
-    let watcher =
-        uasset_lens_watcher::Watcher::new(project_dir).context("Failed to start file system watcher")?;
+    let watcher = uasset_lens_watcher::Watcher::new(project_dir)
+        .context("Failed to start file system watcher")?;
 
-    let mut session = uasset_lens_watcher::WatchSession::new(db, content_root, config.scan.external_roots);
+    let mut session =
+        uasset_lens_watcher::WatchSession::new(db, content_root, config.scan.external_roots);
     session
         .init()
         .context("Failed to initialize watch session")?;

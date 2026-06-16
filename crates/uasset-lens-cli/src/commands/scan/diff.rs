@@ -1,4 +1,4 @@
-﻿use std::collections::{HashMap, HashSet};
+use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 
 use anyhow::Context;
@@ -258,8 +258,8 @@ pub(super) fn compute_size_increases<'a>(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use uasset_lens_shared::{AssetPath, AssetType};
     use std::path::PathBuf;
+    use uasset_lens_shared::{AssetPath, AssetType};
 
     fn make_bp_meta(
         asset_path: &str,

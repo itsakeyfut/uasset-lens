@@ -1,4 +1,4 @@
-﻿use std::collections::{HashMap, HashSet};
+use std::collections::{HashMap, HashSet};
 use std::path::Path;
 
 use anyhow::Context;
@@ -91,21 +91,23 @@ pub fn handle_check(
         let rows = db
             .all_blueprint_metrics()
             .context("Failed to read blueprint metrics from database")?;
-        let map: HashMap<uasset_lens_shared::AssetPath, uasset_lens_scanner::BlueprintMetrics> = rows
-            .into_iter()
-            .map(|row| {
-                (
-                    row.asset_path,
-                    uasset_lens_scanner::BlueprintMetrics {
-                        node_count: row.node_count,
-                        event_tick_count: row.event_tick_count,
-                        cast_count: row.cast_count,
-                        dependency_depth: row.dependency_depth,
-                    },
-                )
-            })
-            .collect();
-        let engine = uasset_lens_lint_engine::LintEngine::new(crate::lint_builder::build_lint_rules(&cfg.lint));
+        let map: HashMap<uasset_lens_shared::AssetPath, uasset_lens_scanner::BlueprintMetrics> =
+            rows.into_iter()
+                .map(|row| {
+                    (
+                        row.asset_path,
+                        uasset_lens_scanner::BlueprintMetrics {
+                            node_count: row.node_count,
+                            event_tick_count: row.event_tick_count,
+                            cast_count: row.cast_count,
+                            dependency_depth: row.dependency_depth,
+                        },
+                    )
+                })
+                .collect();
+        let engine = uasset_lens_lint_engine::LintEngine::new(
+            crate::lint_builder::build_lint_rules(&cfg.lint),
+        );
         (Some(map), Some(engine))
     } else {
         (None, None)
@@ -119,8 +121,10 @@ pub fn handle_check(
                 let g = graph.as_ref().ok_or_else(|| {
                     anyhow::anyhow!("internal: graph not loaded for dead-assets check")
                 })?;
-                let dead =
-                    uasset_lens_dead_asset_detector::detect(g, uasset_lens_dead_asset_detector::DEFAULT_EXCLUDED_TYPES);
+                let dead = uasset_lens_dead_asset_detector::detect(
+                    g,
+                    uasset_lens_dead_asset_detector::DEFAULT_EXCLUDED_TYPES,
+                );
                 let count = dead.len();
                 let findings = dead.iter().map(|p| p.as_str().to_owned()).collect();
                 CheckResult {

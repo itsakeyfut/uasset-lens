@@ -1,4 +1,4 @@
-﻿use std::collections::{HashMap, HashSet};
+use std::collections::{HashMap, HashSet};
 use std::io::{self, Write};
 use std::path::Path;
 use std::time::UNIX_EPOCH;
@@ -55,8 +55,10 @@ pub fn handle_clean(
     let db = crate::open_db(db_path)?;
     let graph = crate::load_graph(&db, &cfg.scan.external_roots)?;
 
-    let dead_paths =
-        uasset_lens_dead_asset_detector::detect(&graph, uasset_lens_dead_asset_detector::DEFAULT_EXCLUDED_TYPES);
+    let dead_paths = uasset_lens_dead_asset_detector::detect(
+        &graph,
+        uasset_lens_dead_asset_detector::DEFAULT_EXCLUDED_TYPES,
+    );
 
     let type_map: HashMap<&uasset_lens_shared::AssetPath, String> = graph
         .nodes()

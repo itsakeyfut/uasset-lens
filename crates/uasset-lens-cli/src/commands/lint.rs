@@ -1,4 +1,4 @@
-﻿use std::collections::HashMap;
+use std::collections::HashMap;
 use std::path::Path;
 
 use anyhow::Context;
@@ -23,7 +23,8 @@ pub fn handle_lint(
     crate::maybe_hint_github_actions(format);
     let db = crate::open_db(db_path)?;
 
-    let engine = uasset_lens_lint_engine::LintEngine::new(crate::lint_builder::build_lint_rules(&cfg.lint));
+    let engine =
+        uasset_lens_lint_engine::LintEngine::new(crate::lint_builder::build_lint_rules(&cfg.lint));
 
     let assets = db
         .all_assets()
@@ -33,20 +34,21 @@ pub fn handle_lint(
         .all_blueprint_metrics()
         .context("Failed to read blueprint metrics from database")?;
 
-    let metrics_map: HashMap<uasset_lens_shared::AssetPath, uasset_lens_scanner::BlueprintMetrics> = bp_rows
-        .into_iter()
-        .map(|row| {
-            (
-                row.asset_path,
-                uasset_lens_scanner::BlueprintMetrics {
-                    node_count: row.node_count,
-                    event_tick_count: row.event_tick_count,
-                    cast_count: row.cast_count,
-                    dependency_depth: row.dependency_depth,
-                },
-            )
-        })
-        .collect();
+    let metrics_map: HashMap<uasset_lens_shared::AssetPath, uasset_lens_scanner::BlueprintMetrics> =
+        bp_rows
+            .into_iter()
+            .map(|row| {
+                (
+                    row.asset_path,
+                    uasset_lens_scanner::BlueprintMetrics {
+                        node_count: row.node_count,
+                        event_tick_count: row.event_tick_count,
+                        cast_count: row.cast_count,
+                        dependency_depth: row.dependency_depth,
+                    },
+                )
+            })
+            .collect();
 
     let mut violations = engine.run(&assets, &metrics_map);
     let effective_budget = uasset_lens_budget_tracker::BudgetConfig::effective(&cfg.budget);
@@ -163,8 +165,8 @@ fn truncate_path(path: &str, max_len: usize) -> String {
 mod tests {
     use super::*;
     use crate::commands::test_db_in_tempdir;
-    use uasset_lens_shared::{AssetPath, AssetType};
     use std::path::PathBuf;
+    use uasset_lens_shared::{AssetPath, AssetType};
 
     fn make_bp_asset(path: &str, dir: &std::path::Path) -> uasset_lens_scanner::AssetMetadata {
         uasset_lens_scanner::AssetMetadata {

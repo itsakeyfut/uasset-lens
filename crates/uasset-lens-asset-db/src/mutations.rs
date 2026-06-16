@@ -1,10 +1,13 @@
-﻿use rusqlite::Connection;
+use rusqlite::Connection;
 use uasset_lens_shared::AssetPath;
 
 use crate::db::AssetDb;
 use crate::error::DbError;
 
-fn upsert_asset_conn(conn: &Connection, meta: &uasset_lens_scanner::AssetMetadata) -> Result<i64, DbError> {
+fn upsert_asset_conn(
+    conn: &Connection,
+    meta: &uasset_lens_scanner::AssetMetadata,
+) -> Result<i64, DbError> {
     let asset_type = serde_json::to_string(&meta.asset_type)?;
     conn.execute(
         "INSERT OR REPLACE INTO assets \
@@ -48,7 +51,10 @@ impl AssetDb {
         upsert_asset_conn(&self.conn, meta)
     }
 
-    pub fn upsert_all(&mut self, assets: &[uasset_lens_scanner::AssetMetadata]) -> Result<(), DbError> {
+    pub fn upsert_all(
+        &mut self,
+        assets: &[uasset_lens_scanner::AssetMetadata],
+    ) -> Result<(), DbError> {
         let tx = self.conn.transaction()?;
         for meta in assets {
             let id = upsert_asset_conn(&tx, meta)?;
@@ -144,8 +150,8 @@ impl AssetDb {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use uasset_lens_shared::{AssetPath, AssetType};
     use std::path::{Path, PathBuf};
+    use uasset_lens_shared::{AssetPath, AssetType};
 
     #[test]
     fn record_scan_snapshot_should_return_inserted_row_id() {

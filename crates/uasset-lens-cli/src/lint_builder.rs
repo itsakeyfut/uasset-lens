@@ -1,4 +1,4 @@
-﻿use crate::config::LintConfig;
+use crate::config::LintConfig;
 use uasset_lens_lint_engine::LintRule;
 
 fn parse_asset_type(s: &str) -> Option<uasset_lens_shared::AssetType> {
@@ -59,14 +59,16 @@ pub fn build_lint_rules(cfg: &LintConfig) -> Vec<Box<dyn LintRule>> {
 mod tests {
     use super::*;
     use crate::config::LintConfig;
-    use uasset_lens_shared::AssetType;
     use std::collections::HashMap;
+    use uasset_lens_shared::AssetType;
 
     #[test]
     fn build_lint_rules_should_use_defaults_when_naming_prefix_is_empty() {
         let rules = build_lint_rules(&LintConfig::default());
-        let t_rock = uasset_lens_asset_db::make_record("/Game/Textures/T_Rock", AssetType::Texture2D);
-        let bp_player = uasset_lens_asset_db::make_record("/Game/Blueprints/BP_Player", AssetType::Blueprint);
+        let t_rock =
+            uasset_lens_asset_db::make_record("/Game/Textures/T_Rock", AssetType::Texture2D);
+        let bp_player =
+            uasset_lens_asset_db::make_record("/Game/Blueprints/BP_Player", AssetType::Blueprint);
         for rule in &rules {
             assert!(rule.check(&t_rock, None).is_empty());
             assert!(rule.check(&bp_player, None).is_empty());
@@ -80,8 +82,10 @@ mod tests {
             ..LintConfig::default()
         };
         let rules = build_lint_rules(&cfg);
-        let tx_rock = uasset_lens_asset_db::make_record("/Game/Textures/TX_Rock", AssetType::Texture2D);
-        let t_rock = uasset_lens_asset_db::make_record("/Game/Textures/T_Rock", AssetType::Texture2D);
+        let tx_rock =
+            uasset_lens_asset_db::make_record("/Game/Textures/TX_Rock", AssetType::Texture2D);
+        let t_rock =
+            uasset_lens_asset_db::make_record("/Game/Textures/T_Rock", AssetType::Texture2D);
         let ok_violations: Vec<_> = rules.iter().flat_map(|r| r.check(&tx_rock, None)).collect();
         let naming_violations: Vec<_> = rules.iter().flat_map(|r| r.check(&t_rock, None)).collect();
         assert!(ok_violations.is_empty());
@@ -116,7 +120,8 @@ mod tests {
             ..LintConfig::default()
         };
         let rules = build_lint_rules(&cfg);
-        let t_rock = uasset_lens_asset_db::make_record("/Game/Textures/T_Rock", AssetType::Texture2D);
+        let t_rock =
+            uasset_lens_asset_db::make_record("/Game/Textures/T_Rock", AssetType::Texture2D);
         let ok_violations: Vec<_> = rules.iter().flat_map(|r| r.check(&t_rock, None)).collect();
         assert!(ok_violations.is_empty());
     }

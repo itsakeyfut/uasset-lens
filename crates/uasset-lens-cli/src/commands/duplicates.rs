@@ -1,4 +1,4 @@
-﻿use std::collections::{HashMap, HashSet};
+use std::collections::{HashMap, HashSet};
 use std::path::Path;
 
 use anyhow::Context;
@@ -167,11 +167,17 @@ mod tests {
             db.upsert_all(&[
                 uasset_lens_scanner::AssetMetadata {
                     file_size: 1024,
-                    ..uasset_lens_scanner::make_meta("/Game/Characters/T_Rock", AssetType::Texture2D)
+                    ..uasset_lens_scanner::make_meta(
+                        "/Game/Characters/T_Rock",
+                        AssetType::Texture2D,
+                    )
                 },
                 uasset_lens_scanner::AssetMetadata {
                     file_size: 2048,
-                    ..uasset_lens_scanner::make_meta("/Game/Environment/T_Rock", AssetType::Texture2D)
+                    ..uasset_lens_scanner::make_meta(
+                        "/Game/Environment/T_Rock",
+                        AssetType::Texture2D,
+                    )
                 },
             ])
             .unwrap();
@@ -192,11 +198,17 @@ mod tests {
             db.upsert_all(&[
                 uasset_lens_scanner::AssetMetadata {
                     file_size: 4096,
-                    ..uasset_lens_scanner::make_meta("/Game/Characters/T_Rock", AssetType::Texture2D)
+                    ..uasset_lens_scanner::make_meta(
+                        "/Game/Characters/T_Rock",
+                        AssetType::Texture2D,
+                    )
                 },
                 uasset_lens_scanner::AssetMetadata {
                     file_size: 4096,
-                    ..uasset_lens_scanner::make_meta("/Game/Environment/T_Rock", AssetType::Texture2D)
+                    ..uasset_lens_scanner::make_meta(
+                        "/Game/Environment/T_Rock",
+                        AssetType::Texture2D,
+                    )
                 },
             ])
             .unwrap();
@@ -217,11 +229,17 @@ mod tests {
             db.upsert_all(&[
                 uasset_lens_scanner::AssetMetadata {
                     file_size: 1024,
-                    ..uasset_lens_scanner::make_meta("/Game/Characters/T_Rock", AssetType::Texture2D)
+                    ..uasset_lens_scanner::make_meta(
+                        "/Game/Characters/T_Rock",
+                        AssetType::Texture2D,
+                    )
                 },
                 uasset_lens_scanner::AssetMetadata {
                     file_size: 1024,
-                    ..uasset_lens_scanner::make_meta("/Game/Environment/T_Rock", AssetType::Texture2D)
+                    ..uasset_lens_scanner::make_meta(
+                        "/Game/Environment/T_Rock",
+                        AssetType::Texture2D,
+                    )
                 },
             ])
             .unwrap();
@@ -243,11 +261,17 @@ mod tests {
             db.upsert_all(&[
                 uasset_lens_scanner::AssetMetadata {
                     file_size: 4096,
-                    ..uasset_lens_scanner::make_meta("/Game/Characters/T_Rock", AssetType::Texture2D)
+                    ..uasset_lens_scanner::make_meta(
+                        "/Game/Characters/T_Rock",
+                        AssetType::Texture2D,
+                    )
                 },
                 uasset_lens_scanner::AssetMetadata {
                     file_size: 4096,
-                    ..uasset_lens_scanner::make_meta("/Game/Environment/T_Rock", AssetType::Texture2D)
+                    ..uasset_lens_scanner::make_meta(
+                        "/Game/Environment/T_Rock",
+                        AssetType::Texture2D,
+                    )
                 },
             ])
             .unwrap();

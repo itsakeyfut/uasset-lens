@@ -1,4 +1,4 @@
-﻿mod diff;
+mod diff;
 mod format_time;
 
 use std::collections::{HashMap, HashSet};
@@ -378,7 +378,11 @@ mod tests {
         );
     }
 
-    fn make_meta(asset_path: &str, file_path: PathBuf, mtime: u64) -> uasset_lens_scanner::AssetMetadata {
+    fn make_meta(
+        asset_path: &str,
+        file_path: PathBuf,
+        mtime: u64,
+    ) -> uasset_lens_scanner::AssetMetadata {
         uasset_lens_scanner::AssetMetadata {
             asset_path: AssetPath::new(asset_path).unwrap(),
             file_path,

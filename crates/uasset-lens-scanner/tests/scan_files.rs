@@ -1,7 +1,7 @@
-﻿use uasset_lens_scanner::{ScanError, scan_files};
-use uasset_lens_shared::AssetType;
 use std::collections::HashMap;
 use std::path::Path;
+use uasset_lens_scanner::{ScanError, scan_files};
+use uasset_lens_shared::AssetType;
 
 const FIXTURES_DIR: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../../tests/fixtures");
 

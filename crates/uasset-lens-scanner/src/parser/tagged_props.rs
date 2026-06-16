@@ -1,4 +1,4 @@
-﻿// Tagged-property stream scanner for extracting FSoftObjectPath values.
+// Tagged-property stream scanner for extracting FSoftObjectPath values.
 //
 // UE5 tagged property stream layout (per property):
 //   PropName  FName  (i32 index + i32 number) = 8 bytes
@@ -12,8 +12,8 @@
 // Used by both anim_montage and level_sequence to avoid duplicating ~170 lines.
 
 use byteorder::{LittleEndian, ReadBytesExt};
-use uasset_lens_shared::AssetPath;
 use std::io::Cursor;
+use uasset_lens_shared::AssetPath;
 
 use super::{advance, map_io, skip_fstring};
 use crate::ScanError;

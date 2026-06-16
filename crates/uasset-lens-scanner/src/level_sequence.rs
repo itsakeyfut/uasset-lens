@@ -1,5 +1,5 @@
-﻿use uasset_lens_shared::{AssetPath, AssetType};
 use std::io::Cursor;
+use uasset_lens_shared::{AssetPath, AssetType};
 
 use crate::parser::tagged_props::scan_props_depth;
 

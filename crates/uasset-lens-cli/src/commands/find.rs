@@ -1,4 +1,4 @@
-﻿use std::collections::HashSet;
+use std::collections::HashSet;
 use std::path::Path;
 
 use anyhow::Context;
@@ -59,12 +59,15 @@ pub fn handle_find(
 
     if unreferenced && let Some(g) = &graph {
         let dead: HashSet<uasset_lens_shared::AssetPath> =
-            uasset_lens_dead_asset_detector::detect(g, &[]).into_iter().collect();
+            uasset_lens_dead_asset_detector::detect(g, &[])
+                .into_iter()
+                .collect();
         results.retain(|r| dead.contains(&r.asset_path));
     }
 
     if let Some(refs_path) = refs {
-        let target = uasset_lens_shared::AssetPath::new(refs_path).map_err(|e| anyhow::anyhow!("{e}"))?;
+        let target =
+            uasset_lens_shared::AssetPath::new(refs_path).map_err(|e| anyhow::anyhow!("{e}"))?;
         if let Some(g) = &graph {
             let impact = g.find_impact(&target);
             let ref_set: HashSet<uasset_lens_shared::AssetPath> =
@@ -74,7 +77,8 @@ pub fn handle_find(
     }
 
     if let Some(deps_path) = deps {
-        let target = uasset_lens_shared::AssetPath::new(deps_path).map_err(|e| anyhow::anyhow!("{e}"))?;
+        let target =
+            uasset_lens_shared::AssetPath::new(deps_path).map_err(|e| anyhow::anyhow!("{e}"))?;
         if let Some(g) = &graph {
             let dep_set: HashSet<uasset_lens_shared::AssetPath> = g
                 .dependencies_of(&target)
@@ -394,9 +398,10 @@ mod tests {
 
         let db = uasset_lens_asset_db::AssetDb::open(&db_path).unwrap();
         let graph = crate::load_graph(&db, &[]).unwrap();
-        let dead: std::collections::HashSet<AssetPath> = uasset_lens_dead_asset_detector::detect(&graph, &[])
-            .into_iter()
-            .collect();
+        let dead: std::collections::HashSet<AssetPath> =
+            uasset_lens_dead_asset_detector::detect(&graph, &[])
+                .into_iter()
+                .collect();
 
         assert!(
             !dead.contains(&AssetPath::new("/Game/B").unwrap()),

@@ -1,5 +1,5 @@
-﻿use uasset_lens_shared::{AssetPath, AssetType};
 use std::path::PathBuf;
+use uasset_lens_shared::{AssetPath, AssetType};
 
 use crate::record::AssetRecord;
 

@@ -1,4 +1,4 @@
-﻿use std::collections::HashSet;
+use std::collections::HashSet;
 
 use uasset_lens_dependency_graph::DependencyGraph;
 use uasset_lens_scanner::AssetMetadata;
@@ -57,9 +57,9 @@ fn walk_instance_chain(path: &AssetPath, graph: &DependencyGraph) -> u32 {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::path::PathBuf;
     use uasset_lens_dependency_graph::AssetNode;
     use uasset_lens_shared::AssetPath;
-    use std::path::PathBuf;
 
     const FIXTURES_DIR: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../../tests/fixtures/valid");
 

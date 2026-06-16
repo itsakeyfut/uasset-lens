@@ -1,4 +1,4 @@
-﻿use std::collections::HashMap;
+use std::collections::HashMap;
 use std::path::PathBuf;
 
 use rusqlite::types::Value;
@@ -302,10 +302,14 @@ impl AssetDb {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use uasset_lens_shared::{AssetPath, AssetType};
     use std::path::Path;
+    use uasset_lens_shared::{AssetPath, AssetType};
 
-    fn make_meta(asset_path: &str, file_path: &str, mtime: u64) -> uasset_lens_scanner::AssetMetadata {
+    fn make_meta(
+        asset_path: &str,
+        file_path: &str,
+        mtime: u64,
+    ) -> uasset_lens_scanner::AssetMetadata {
         uasset_lens_scanner::AssetMetadata {
             file_path: PathBuf::from(file_path),
             last_modified: mtime,

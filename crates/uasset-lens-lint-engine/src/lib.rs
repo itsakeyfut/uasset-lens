@@ -1,4 +1,4 @@
-﻿use std::collections::HashMap;
+use std::collections::HashMap;
 
 use uasset_lens_asset_db::AssetRecord;
 use uasset_lens_scanner::BlueprintMetrics;
@@ -56,8 +56,8 @@ impl LintEngine {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use uasset_lens_shared::{AssetPath, AssetType};
     use std::path::PathBuf;
+    use uasset_lens_shared::{AssetPath, AssetType};
 
     fn make_record(asset_path: &str) -> AssetRecord {
         AssetRecord {

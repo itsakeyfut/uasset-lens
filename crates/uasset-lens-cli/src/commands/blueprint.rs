@@ -1,4 +1,4 @@
-﻿use std::collections::HashMap;
+use std::collections::HashMap;
 use std::path::Path;
 
 use anyhow::Context;
@@ -116,8 +116,8 @@ fn truncate_path(path: &str, max_len: usize) -> String {
 mod tests {
     use super::*;
     use crate::commands::test_db_in_tempdir;
-    use uasset_lens_shared::{AssetPath, AssetType};
     use std::path::PathBuf;
+    use uasset_lens_shared::{AssetPath, AssetType};
 
     fn make_db_with_blueprints(path: &std::path::Path) -> uasset_lens_asset_db::AssetDb {
         let mut db = uasset_lens_asset_db::AssetDb::open(path).unwrap();

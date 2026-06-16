@@ -1,4 +1,4 @@
-﻿use std::collections::HashMap;
+use std::collections::HashMap;
 
 use uasset_lens_asset_db::AssetRecord;
 use uasset_lens_shared::{AssetPath, AssetType};
@@ -109,7 +109,10 @@ mod tests {
             },
             uasset_lens_asset_db::AssetRecord {
                 file_size: 4096,
-                ..uasset_lens_asset_db::make_record("/Game/Environment/T_Rock", AssetType::Texture2D)
+                ..uasset_lens_asset_db::make_record(
+                    "/Game/Environment/T_Rock",
+                    AssetType::Texture2D,
+                )
             },
         ];
         let groups = detect_texture_duplicates(&assets);
@@ -127,7 +130,10 @@ mod tests {
             },
             uasset_lens_asset_db::AssetRecord {
                 file_size: 8192,
-                ..uasset_lens_asset_db::make_record("/Game/Environment/T_Rock", AssetType::Texture2D)
+                ..uasset_lens_asset_db::make_record(
+                    "/Game/Environment/T_Rock",
+                    AssetType::Texture2D,
+                )
             },
         ];
         assert!(detect_texture_duplicates(&assets).is_empty());
@@ -142,7 +148,10 @@ mod tests {
             },
             uasset_lens_asset_db::AssetRecord {
                 file_size: 4096,
-                ..uasset_lens_asset_db::make_record("/Game/Environment/T_Grass", AssetType::Texture2D)
+                ..uasset_lens_asset_db::make_record(
+                    "/Game/Environment/T_Grass",
+                    AssetType::Texture2D,
+                )
             },
         ];
         assert!(detect_texture_duplicates(&assets).is_empty());
@@ -157,7 +166,10 @@ mod tests {
             },
             uasset_lens_asset_db::AssetRecord {
                 file_size: 4096,
-                ..uasset_lens_asset_db::make_record("/Game/Environment/T_Rock", AssetType::StaticMesh)
+                ..uasset_lens_asset_db::make_record(
+                    "/Game/Environment/T_Rock",
+                    AssetType::StaticMesh,
+                )
             },
         ];
         assert!(detect_texture_duplicates(&assets).is_empty());

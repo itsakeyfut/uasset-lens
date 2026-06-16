@@ -1,4 +1,4 @@
-﻿use std::collections::HashSet;
+use std::collections::HashSet;
 use std::io;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -26,7 +26,11 @@ pub struct WatchSession {
 }
 
 impl WatchSession {
-    pub fn new(db: uasset_lens_asset_db::AssetDb, content_root: PathBuf, external_roots: Vec<String>) -> Self {
+    pub fn new(
+        db: uasset_lens_asset_db::AssetDb,
+        content_root: PathBuf,
+        external_roots: Vec<String>,
+    ) -> Self {
         Self {
             db,
             content_root,
@@ -233,7 +237,10 @@ mod tests {
         let t_rock = PathBuf::from(FIXTURES_DIR).join("T_Rock.uasset");
 
         // Seed the DB with T_Rock so there is something to delete.
-        let scan = uasset_lens_scanner::scan_files(std::slice::from_ref(&t_rock), &PathBuf::from(FIXTURES_DIR));
+        let scan = uasset_lens_scanner::scan_files(
+            std::slice::from_ref(&t_rock),
+            &PathBuf::from(FIXTURES_DIR),
+        );
         session.db.upsert_all(&scan.assets).unwrap();
         assert_eq!(
             session.db.all_assets().unwrap().len(),

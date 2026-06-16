@@ -1,7 +1,7 @@
-﻿use uasset_lens_asset_db::AssetRecord;
+use std::collections::HashMap;
+use uasset_lens_asset_db::AssetRecord;
 use uasset_lens_scanner::BlueprintMetrics;
 use uasset_lens_shared::AssetType;
-use std::collections::HashMap;
 
 use crate::{LintRule, LintViolation, Severity};
 
@@ -46,8 +46,8 @@ impl LintRule for BlueprintComplexityRule {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use uasset_lens_shared::{AssetPath, AssetType};
     use std::path::PathBuf;
+    use uasset_lens_shared::{AssetPath, AssetType};
 
     fn make_record(asset_path: &str) -> AssetRecord {
         AssetRecord {
@@ -131,8 +131,8 @@ mod tests {
 
     #[test]
     fn blueprint_complexity_rule_should_use_per_type_depth_when_type_is_in_depth_by_type() {
-        use uasset_lens_shared::AssetType;
         use std::collections::HashMap;
+        use uasset_lens_shared::AssetType;
         let rule = BlueprintComplexityRule {
             thresholds: ComplexityThresholds {
                 max_dependency_depth: 20,
@@ -156,8 +156,8 @@ mod tests {
     #[test]
     fn blueprint_complexity_rule_should_fall_back_to_global_threshold_when_type_not_in_depth_by_type()
      {
-        use uasset_lens_shared::AssetType;
         use std::collections::HashMap;
+        use uasset_lens_shared::AssetType;
         let rule = BlueprintComplexityRule {
             thresholds: ComplexityThresholds {
                 max_dependency_depth: 5,
@@ -180,8 +180,8 @@ mod tests {
 
     #[test]
     fn blueprint_complexity_rule_should_not_fire_when_depth_equals_per_type_threshold() {
-        use uasset_lens_shared::AssetType;
         use std::collections::HashMap;
+        use uasset_lens_shared::AssetType;
         let rule = BlueprintComplexityRule {
             thresholds: ComplexityThresholds::default(),
             depth_by_type: HashMap::from([(AssetType::Blueprint, 10u32)]),
