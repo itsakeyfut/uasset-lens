@@ -146,10 +146,7 @@ pub fn handle_lint(
 }
 
 fn budget_rule_id(asset_type: &AssetType) -> String {
-    match asset_type {
-        AssetType::Texture2D => "budget/texture-size".to_owned(),
-        other => format!("budget/{}", other.to_string().to_lowercase()),
-    }
+    format!("budget/{}", asset_type.to_string().to_lowercase())
 }
 
 fn truncate_path(path: &str, max_len: usize) -> String {
