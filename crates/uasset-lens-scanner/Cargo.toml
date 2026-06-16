@@ -14,7 +14,7 @@ authors.workspace    = true
 test-support = []
 
 [dependencies]
-uasset-lens-shared = { path = "../uasset-lens-shared" }
+uasset-lens-shared = { workspace = true }
 byteorder          = { workspace = true }
 rayon              = { workspace = true }
 thiserror          = { workspace = true }

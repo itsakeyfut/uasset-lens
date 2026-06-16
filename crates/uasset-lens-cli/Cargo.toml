@@ -11,17 +11,17 @@ categories.workspace = true
 authors.workspace    = true
 
 [dependencies]
-uasset-lens-shared              = { path = "../uasset-lens-shared" }
-uasset-lens-scanner             = { path = "../uasset-lens-scanner" }
-uasset-lens-asset-db            = { path = "../uasset-lens-asset-db" }
-uasset-lens-dependency-graph    = { path = "../uasset-lens-dependency-graph" }
-uasset-lens-dead-asset-detector = { path = "../uasset-lens-dead-asset-detector" }
-uasset-lens-impact-analyzer     = { path = "../uasset-lens-impact-analyzer" }
-uasset-lens-duplicate-detector  = { path = "../uasset-lens-duplicate-detector" }
-uasset-lens-redirector-analyzer = { path = "../uasset-lens-redirector-analyzer" }
-uasset-lens-lint-engine         = { path = "../uasset-lens-lint-engine" }
-uasset-lens-budget-tracker      = { path = "../uasset-lens-budget-tracker" }
-uasset-lens-watcher             = { path = "../uasset-lens-watcher" }
+uasset-lens-shared              = { workspace = true }
+uasset-lens-scanner             = { workspace = true }
+uasset-lens-asset-db            = { workspace = true }
+uasset-lens-dependency-graph    = { workspace = true }
+uasset-lens-dead-asset-detector = { workspace = true }
+uasset-lens-impact-analyzer     = { workspace = true }
+uasset-lens-duplicate-detector  = { workspace = true }
+uasset-lens-redirector-analyzer = { workspace = true }
+uasset-lens-lint-engine         = { workspace = true }
+uasset-lens-budget-tracker      = { workspace = true }
+uasset-lens-watcher             = { workspace = true }
 ctrlc      = { workspace = true }
 clap       = { workspace = true }
 anyhow     = { workspace = true }
@@ -33,5 +33,5 @@ toml       = { workspace = true }
 globset    = { workspace = true }
 
 [dev-dependencies]
-uasset-lens-scanner  = { path = "../uasset-lens-scanner",  features = ["test-support"] }
-uasset-lens-asset-db = { path = "../uasset-lens-asset-db", features = ["test-support"] }
+uasset-lens-scanner  = { workspace = true, features = ["test-support"] }
+uasset-lens-asset-db = { workspace = true, features = ["test-support"] }

@@ -11,5 +11,5 @@ categories.workspace = true
 authors.workspace    = true
 
 [dependencies]
-uasset-lens-shared           = { path = "../uasset-lens-shared" }
-uasset-lens-dependency-graph = { path = "../uasset-lens-dependency-graph" }
+uasset-lens-shared           = { workspace = true }
+uasset-lens-dependency-graph = { workspace = true }

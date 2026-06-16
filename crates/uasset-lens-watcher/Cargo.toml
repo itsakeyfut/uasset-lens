@@ -11,11 +11,11 @@ categories.workspace = true
 authors.workspace    = true
 
 [dependencies]
-notify                       = { workspace = true }
-thiserror                    = { workspace = true }
-tracing                      = { workspace = true }
-uasset-lens-shared           = { path = "../uasset-lens-shared" }
-uasset-lens-scanner          = { path = "../uasset-lens-scanner" }
-uasset-lens-asset-db         = { path = "../uasset-lens-asset-db" }
-uasset-lens-dependency-graph = { path = "../uasset-lens-dependency-graph" }
-uasset-lens-dead-asset-detector = { path = "../uasset-lens-dead-asset-detector" }
+notify                          = { workspace = true }
+thiserror                       = { workspace = true }
+tracing                         = { workspace = true }
+uasset-lens-shared              = { workspace = true }
+uasset-lens-scanner             = { workspace = true }
+uasset-lens-asset-db            = { workspace = true }
+uasset-lens-dependency-graph    = { workspace = true }
+uasset-lens-dead-asset-detector = { workspace = true }

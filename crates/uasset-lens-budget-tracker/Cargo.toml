@@ -11,9 +11,9 @@ categories.workspace = true
 authors.workspace    = true
 
 [dependencies]
-uasset-lens-asset-db = { path = "../uasset-lens-asset-db" }
-uasset-lens-shared   = { path = "../uasset-lens-shared" }
+uasset-lens-asset-db = { workspace = true }
+uasset-lens-shared   = { workspace = true }
 serde                = { workspace = true }
 
 [dev-dependencies]
-uasset-lens-asset-db = { path = "../uasset-lens-asset-db", features = ["test-support"] }
+uasset-lens-asset-db = { workspace = true, features = ["test-support"] }

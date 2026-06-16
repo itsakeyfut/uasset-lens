@@ -11,8 +11,8 @@ categories.workspace = true
 authors.workspace    = true
 
 [dependencies]
-uasset-lens-scanner = { path = "../uasset-lens-scanner" }
+uasset-lens-scanner = { workspace = true }
 
 [dev-dependencies]
-uasset-lens-shared  = { path = "../uasset-lens-shared" }
-uasset-lens-scanner = { path = "../uasset-lens-scanner", features = ["test-support"] }
+uasset-lens-shared  = { workspace = true }
+uasset-lens-scanner = { workspace = true, features = ["test-support"] }

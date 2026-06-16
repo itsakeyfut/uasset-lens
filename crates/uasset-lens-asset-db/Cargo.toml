@@ -14,12 +14,12 @@ authors.workspace    = true
 test-support = ["uasset-lens-scanner/test-support"]
 
 [dependencies]
-uasset-lens-shared  = { path = "../uasset-lens-shared" }
-uasset-lens-scanner = { path = "../uasset-lens-scanner" }
+uasset-lens-shared  = { workspace = true }
+uasset-lens-scanner = { workspace = true }
 rusqlite            = { workspace = true, features = ["bundled"] }
 serde_json          = { workspace = true }
 thiserror           = { workspace = true }
 globset             = { workspace = true }
 
 [dev-dependencies]
-uasset-lens-scanner = { path = "../uasset-lens-scanner", features = ["test-support"] }
+uasset-lens-scanner = { workspace = true, features = ["test-support"] }

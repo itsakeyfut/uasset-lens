@@ -32,6 +32,23 @@ keywords     = ["unreal-engine", "uasset", "static-analysis", "game-development"
 categories   = ["development-tools", "command-line-utilities"]
 
 [workspace.dependencies]
+# Internal crates (path + version required for crates.io publishing)
+uasset-lens-shared              = { path = "crates/uasset-lens-shared",              version = "0.1.0" }
+uasset-lens-scanner             = { path = "crates/uasset-lens-scanner",             version = "0.1.0" }
+uasset-lens-asset-db            = { path = "crates/uasset-lens-asset-db",            version = "0.1.0" }
+uasset-lens-dependency-graph    = { path = "crates/uasset-lens-dependency-graph",    version = "0.1.0" }
+uasset-lens-dead-asset-detector = { path = "crates/uasset-lens-dead-asset-detector", version = "0.1.0" }
+uasset-lens-impact-analyzer     = { path = "crates/uasset-lens-impact-analyzer",     version = "0.1.0" }
+uasset-lens-redirector-analyzer = { path = "crates/uasset-lens-redirector-analyzer", version = "0.1.0" }
+uasset-lens-bp-analyzer         = { path = "crates/uasset-lens-bp-analyzer",         version = "0.1.0" }
+uasset-lens-duplicate-detector  = { path = "crates/uasset-lens-duplicate-detector",  version = "0.1.0" }
+uasset-lens-lint-engine         = { path = "crates/uasset-lens-lint-engine",         version = "0.1.0" }
+uasset-lens-material-analyzer   = { path = "crates/uasset-lens-material-analyzer",   version = "0.1.0" }
+uasset-lens-budget-tracker      = { path = "crates/uasset-lens-budget-tracker",      version = "0.1.0" }
+uasset-lens-watcher             = { path = "crates/uasset-lens-watcher",             version = "0.1.0" }
+uasset-lens-git-diff            = { path = "crates/uasset-lens-git-diff",            version = "0.1.0" }
+uasset-lens-cli                 = { path = "crates/uasset-lens-cli",                 version = "0.1.0" }
+
 thiserror  = "2.0.18"
 serde      = { version = "1.0.228", features = ["derive"] }
 byteorder  = "1.5.0"

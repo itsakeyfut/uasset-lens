@@ -11,7 +11,7 @@ categories.workspace = true
 authors.workspace    = true
 
 [dependencies]
-uasset-lens-asset-db    = { path = "../uasset-lens-asset-db" }
-uasset-lens-bp-analyzer = { path = "../uasset-lens-bp-analyzer" }
-uasset-lens-scanner     = { path = "../uasset-lens-scanner" }
-uasset-lens-shared      = { path = "../uasset-lens-shared" }
+uasset-lens-asset-db    = { workspace = true }
+uasset-lens-bp-analyzer = { workspace = true }
+uasset-lens-scanner     = { workspace = true }
+uasset-lens-shared      = { workspace = true }
