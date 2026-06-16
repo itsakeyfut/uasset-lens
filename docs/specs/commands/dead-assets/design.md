@@ -59,7 +59,7 @@ enum GroupMode { Type, Dir }
 
 - `Type`: groups by `asset_type` string (e.g. `"Texture2D"`, `"Blueprint"`)
 - `Dir`: groups by `path_depth_prefix(path)` — first 3 path segments
-  (e.g. `/Game/Characters/Enemies/BP_Goblin` → `/Game/Characters/`)
+  (e.g. `/Game/Characters/Enemies/BP_Goblin` → `/Game/Characters/Enemies/`)
 
 Groups are sorted descending by `total_size_bytes`. The group view replaces
 individual asset listing and shows `(count assets, total size)` per group.

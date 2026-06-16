@@ -40,8 +40,8 @@
 Folders are bucketed by taking the first 3 segments of the game path:
 
 ```
-/Game/Characters/Enemies/BP_Goblin → /Game/Characters/
-/Game/UI/HUD/WBP_Health            → /Game/UI/
+/Game/Characters/Enemies/BP_Goblin → /Game/Characters/Enemies/
+/Game/UI/HUD/WBP_Health            → /Game/UI/HUD/
 /Game/Effects/T_Fire               → /Game/Effects/
 ```
 

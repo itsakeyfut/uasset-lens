@@ -10,7 +10,7 @@ CI pipelines can gate on. Aggregates the results of `dead-assets`, `cycles`,
 uasset-lens check ./Project
 ```
 
-Requires `uasset-lens scan` to have been run first.
+Automatically runs an mtime delta scan before checks unless `--skip-scan` is given.
 
 ---
 

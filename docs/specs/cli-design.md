@@ -182,7 +182,7 @@ Single CI entry point. Runs all enabled checks from `.uasset-lens.toml` and exit
 a code that CI pipelines can gate on. Always runs `scan` first (mtime delta) unless
 `--skip-scan` is given.
 
-See `docs/specs/check-command.md` for the full spec.
+See `docs/specs/commands/check/specification.md` for the full spec.
 
 ```
 Options:
