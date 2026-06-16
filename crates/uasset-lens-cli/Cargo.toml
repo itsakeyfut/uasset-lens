@@ -16,10 +16,7 @@ uasset-lens-shared              = { workspace = true }
 uasset-lens-scanner             = { workspace = true }
 uasset-lens-asset-db            = { workspace = true }
 uasset-lens-dependency-graph    = { workspace = true }
-uasset-lens-dead-asset-detector = { workspace = true }
-uasset-lens-impact-analyzer     = { workspace = true }
 uasset-lens-duplicate-detector  = { workspace = true }
-uasset-lens-redirector-analyzer = { workspace = true }
 uasset-lens-lint-engine         = { workspace = true }
 uasset-lens-budget-tracker      = { workspace = true }
 uasset-lens-watcher             = { workspace = true }

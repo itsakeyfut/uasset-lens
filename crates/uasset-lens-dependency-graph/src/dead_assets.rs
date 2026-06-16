@@ -1,5 +1,6 @@
-﻿use uasset_lens_dependency_graph::DependencyGraph;
-use uasset_lens_shared::{AssetPath, is_ofpa_path};
+﻿use uasset_lens_shared::{AssetPath, is_ofpa_path};
+
+use crate::DependencyGraph;
 
 /// UE5 generates these sub-object types internally. They can never appear
 /// in another asset's import table by design, so in_degree == 0 is structural
@@ -34,8 +35,9 @@ pub fn detect(graph: &DependencyGraph, excluded_type_names: &[&str]) -> Vec<Asse
 #[cfg(test)]
 mod tests {
     use super::*;
-    use uasset_lens_dependency_graph::AssetNode;
     use uasset_lens_shared::AssetType;
+
+    use crate::AssetNode;
 
     fn node(path: &str) -> AssetNode {
         AssetNode {

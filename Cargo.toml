@@ -5,9 +5,6 @@ members = [
     "crates/uasset-lens-scanner",
     "crates/uasset-lens-asset-db",
     "crates/uasset-lens-dependency-graph",
-    "crates/uasset-lens-dead-asset-detector",
-    "crates/uasset-lens-impact-analyzer",
-    "crates/uasset-lens-redirector-analyzer",
     "crates/uasset-lens-bp-analyzer",
     "crates/uasset-lens-duplicate-detector",
     "crates/uasset-lens-lint-engine",
@@ -37,9 +34,6 @@ uasset-lens-shared              = { path = "crates/uasset-lens-shared",         
 uasset-lens-scanner             = { path = "crates/uasset-lens-scanner",             version = "0.1.0" }
 uasset-lens-asset-db            = { path = "crates/uasset-lens-asset-db",            version = "0.1.0" }
 uasset-lens-dependency-graph    = { path = "crates/uasset-lens-dependency-graph",    version = "0.1.0" }
-uasset-lens-dead-asset-detector = { path = "crates/uasset-lens-dead-asset-detector", version = "0.1.0" }
-uasset-lens-impact-analyzer     = { path = "crates/uasset-lens-impact-analyzer",     version = "0.1.0" }
-uasset-lens-redirector-analyzer = { path = "crates/uasset-lens-redirector-analyzer", version = "0.1.0" }
 uasset-lens-bp-analyzer         = { path = "crates/uasset-lens-bp-analyzer",         version = "0.1.0" }
 uasset-lens-duplicate-detector  = { path = "crates/uasset-lens-duplicate-detector",  version = "0.1.0" }
 uasset-lens-lint-engine         = { path = "crates/uasset-lens-lint-engine",         version = "0.1.0" }

@@ -4,6 +4,9 @@ use petgraph::Direction;
 use petgraph::graph::{DiGraph, NodeIndex};
 use uasset_lens_shared::{AssetPath, AssetType, is_ofpa_path};
 
+pub mod dead_assets;
+pub mod redirectors;
+
 pub struct AssetNode {
     pub path: AssetPath,
     pub asset_type: AssetType,

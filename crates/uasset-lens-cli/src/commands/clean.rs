@@ -55,9 +55,9 @@ pub fn handle_clean(
     let db = crate::open_db(db_path)?;
     let graph = crate::load_graph(&db, &cfg.scan.external_roots)?;
 
-    let dead_paths = uasset_lens_dead_asset_detector::detect(
+    let dead_paths = uasset_lens_dependency_graph::dead_assets::detect(
         &graph,
-        uasset_lens_dead_asset_detector::DEFAULT_EXCLUDED_TYPES,
+        uasset_lens_dependency_graph::dead_assets::DEFAULT_EXCLUDED_TYPES,
     );
 
     let type_map: HashMap<&uasset_lens_shared::AssetPath, String> = graph
