@@ -19,5 +19,5 @@
 ## Test Plan
 
 - [ ] `cargo fmt --all -- --check` passes
-- [ ] `cargo clippy --workspace -- -D warnings` passes
-- [ ] `cargo test --workspace` passes
+- [ ] `cargo clippy --workspace --all-features -- -D warnings` passes
+- [ ] `cargo test --workspace --all-features` passes
