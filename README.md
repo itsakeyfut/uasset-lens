@@ -70,7 +70,7 @@ Extract the archive and place `uasset-lens` (or `uasset-lens.exe`) somewhere on 
 
 ### Build from source
 
-Requires Rust 1.85+ (edition 2024):
+Requires Rust 1.96+:
 
 ```bash
 git clone https://github.com/itsakeyfut/uasset-lens
