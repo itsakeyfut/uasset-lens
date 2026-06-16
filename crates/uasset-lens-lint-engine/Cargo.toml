@@ -1,5 +1,6 @@
-[package]
+﻿[package]
 name                 = "uasset-lens-lint-engine"
+publish             = false
 version.workspace    = true
 edition.workspace    = true
 license.workspace    = true
