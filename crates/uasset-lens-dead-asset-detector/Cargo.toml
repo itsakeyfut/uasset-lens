@@ -1,0 +1,15 @@
+[package]
+name                 = "uasset-lens-dead-asset-detector"
+version.workspace    = true
+edition.workspace    = true
+license.workspace    = true
+description.workspace = true
+repository.workspace = true
+homepage.workspace   = true
+keywords.workspace   = true
+categories.workspace = true
+authors.workspace    = true
+
+[dependencies]
+uasset-lens-shared           = { path = "../uasset-lens-shared" }
+uasset-lens-dependency-graph = { path = "../uasset-lens-dependency-graph" }

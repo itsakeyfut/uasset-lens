@@ -1,0 +1,37 @@
+[package]
+name                 = "uasset-lens-cli"
+version.workspace    = true
+edition.workspace    = true
+license.workspace    = true
+description.workspace = true
+repository.workspace = true
+homepage.workspace   = true
+keywords.workspace   = true
+categories.workspace = true
+authors.workspace    = true
+
+[dependencies]
+uasset-lens-shared              = { path = "../uasset-lens-shared" }
+uasset-lens-scanner             = { path = "../uasset-lens-scanner" }
+uasset-lens-asset-db            = { path = "../uasset-lens-asset-db" }
+uasset-lens-dependency-graph    = { path = "../uasset-lens-dependency-graph" }
+uasset-lens-dead-asset-detector = { path = "../uasset-lens-dead-asset-detector" }
+uasset-lens-impact-analyzer     = { path = "../uasset-lens-impact-analyzer" }
+uasset-lens-duplicate-detector  = { path = "../uasset-lens-duplicate-detector" }
+uasset-lens-redirector-analyzer = { path = "../uasset-lens-redirector-analyzer" }
+uasset-lens-lint-engine         = { path = "../uasset-lens-lint-engine" }
+uasset-lens-budget-tracker      = { path = "../uasset-lens-budget-tracker" }
+uasset-lens-watcher             = { path = "../uasset-lens-watcher" }
+ctrlc      = { workspace = true }
+clap       = { workspace = true }
+anyhow     = { workspace = true }
+tracing    = { workspace = true }
+walkdir    = { workspace = true }
+serde      = { workspace = true }
+serde_json = { workspace = true }
+toml       = { workspace = true }
+globset    = { workspace = true }
+
+[dev-dependencies]
+uasset-lens-scanner  = { path = "../uasset-lens-scanner",  features = ["test-support"] }
+uasset-lens-asset-db = { path = "../uasset-lens-asset-db", features = ["test-support"] }

@@ -68,18 +68,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7f202df86484c868dbad7eaa557ef785d5c66295e41b460ef922eca0723b842c"
 
 [[package]]
-name = "asset-db"
-version = "0.1.0"
-dependencies = [
- "globset",
- "rusqlite",
- "scanner",
- "serde_json",
- "shared",
- "thiserror",
-]
-
-[[package]]
 name = "bitflags"
 version = "1.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -101,14 +89,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "bp-analyzer"
-version = "0.1.0"
-dependencies = [
- "scanner",
- "shared",
-]
-
-[[package]]
 name = "bstr"
 version = "1.12.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -116,15 +96,6 @@ checksum = "63044e1ae8e69f3b5a92c736ca6269b8d12fa7efe39bf34ddb06d102cf0e2cab"
 dependencies = [
  "memchr",
  "serde",
-]
-
-[[package]]
-name = "budget-tracker"
-version = "0.1.0"
-dependencies = [
- "asset-db",
- "serde",
- "shared",
 ]
 
 [[package]]
@@ -211,32 +182,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c8d4a3bb8b1e0c1050499d1815f5ab16d04f0959b233085fb31653fbfc9d98f9"
 
 [[package]]
-name = "cli"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "asset-db",
- "budget-tracker",
- "clap",
- "ctrlc",
- "dead-asset-detector",
- "dependency-graph",
- "duplicate-detector",
- "globset",
- "impact-analyzer",
- "lint-engine",
- "redirector-analyzer",
- "scanner",
- "serde",
- "serde_json",
- "shared",
- "toml",
- "tracing",
- "walkdir",
- "watcher",
-]
-
-[[package]]
 name = "colorchoice"
 version = "1.0.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -288,22 +233,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "dead-asset-detector"
-version = "0.1.0"
-dependencies = [
- "dependency-graph",
- "shared",
-]
-
-[[package]]
-name = "dependency-graph"
-version = "0.1.0"
-dependencies = [
- "petgraph",
- "shared",
-]
-
-[[package]]
 name = "dispatch2"
 version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -313,14 +242,6 @@ dependencies = [
  "block2",
  "libc",
  "objc2",
-]
-
-[[package]]
-name = "duplicate-detector"
-version = "0.1.0"
-dependencies = [
- "asset-db",
- "shared",
 ]
 
 [[package]]
@@ -420,17 +341,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "git-diff"
-version = "0.1.0"
-dependencies = [
- "scanner",
- "shared",
- "tempfile",
- "thiserror",
- "tracing",
-]
-
-[[package]]
 name = "globset"
 version = "0.4.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -487,14 +397,6 @@ name = "id-arena"
 version = "2.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3d3067d79b975e8844ca9eb072e16b31c3c1c36928edf9c6789548c524d0d954"
-
-[[package]]
-name = "impact-analyzer"
-version = "0.1.0"
-dependencies = [
- "dependency-graph",
- "shared",
-]
 
 [[package]]
 name = "indexmap"
@@ -595,16 +497,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "lint-engine"
-version = "0.1.0"
-dependencies = [
- "asset-db",
- "bp-analyzer",
- "scanner",
- "shared",
-]
-
-[[package]]
 name = "linux-raw-sys"
 version = "0.12.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -615,15 +507,6 @@ name = "log"
 version = "0.4.29"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5e5032e24019045c762d3c0f28f5b6b8bbf38563a65908389bf7978758920897"
-
-[[package]]
-name = "material-analyzer"
-version = "0.1.0"
-dependencies = [
- "dependency-graph",
- "scanner",
- "shared",
-]
 
 [[package]]
 name = "memchr"
@@ -780,14 +663,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "redirector-analyzer"
-version = "0.1.0"
-dependencies = [
- "dependency-graph",
- "shared",
-]
-
-[[package]]
 name = "regex-automata"
 version = "0.4.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -858,17 +733,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "scanner"
-version = "0.1.0"
-dependencies = [
- "byteorder",
- "rayon",
- "shared",
- "thiserror",
- "tracing",
-]
-
-[[package]]
 name = "semver"
 version = "1.0.28"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -924,15 +788,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6662b5879511e06e8999a8a235d848113e942c9124f211511b16466ee2995f26"
 dependencies = [
  "serde_core",
-]
-
-[[package]]
-name = "shared"
-version = "0.1.0"
-dependencies = [
- "serde",
- "serde_json",
- "thiserror",
 ]
 
 [[package]]
@@ -1080,12 +935,171 @@ dependencies = [
 ]
 
 [[package]]
-name = "uasset-lens-cli"
+name = "uasset-lens"
 version = "0.1.0"
 dependencies = [
  "clap",
  "clap_complete",
- "cli",
+ "uasset-lens-cli",
+]
+
+[[package]]
+name = "uasset-lens-asset-db"
+version = "0.1.0"
+dependencies = [
+ "globset",
+ "rusqlite",
+ "serde_json",
+ "thiserror",
+ "uasset-lens-scanner",
+ "uasset-lens-shared",
+]
+
+[[package]]
+name = "uasset-lens-bp-analyzer"
+version = "0.1.0"
+dependencies = [
+ "uasset-lens-scanner",
+ "uasset-lens-shared",
+]
+
+[[package]]
+name = "uasset-lens-budget-tracker"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "uasset-lens-asset-db",
+ "uasset-lens-shared",
+]
+
+[[package]]
+name = "uasset-lens-cli"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "clap",
+ "ctrlc",
+ "globset",
+ "serde",
+ "serde_json",
+ "toml",
+ "tracing",
+ "uasset-lens-asset-db",
+ "uasset-lens-budget-tracker",
+ "uasset-lens-dead-asset-detector",
+ "uasset-lens-dependency-graph",
+ "uasset-lens-duplicate-detector",
+ "uasset-lens-impact-analyzer",
+ "uasset-lens-lint-engine",
+ "uasset-lens-redirector-analyzer",
+ "uasset-lens-scanner",
+ "uasset-lens-shared",
+ "uasset-lens-watcher",
+ "walkdir",
+]
+
+[[package]]
+name = "uasset-lens-dead-asset-detector"
+version = "0.1.0"
+dependencies = [
+ "uasset-lens-dependency-graph",
+ "uasset-lens-shared",
+]
+
+[[package]]
+name = "uasset-lens-dependency-graph"
+version = "0.1.0"
+dependencies = [
+ "petgraph",
+ "uasset-lens-shared",
+]
+
+[[package]]
+name = "uasset-lens-duplicate-detector"
+version = "0.1.0"
+dependencies = [
+ "uasset-lens-asset-db",
+ "uasset-lens-shared",
+]
+
+[[package]]
+name = "uasset-lens-git-diff"
+version = "0.1.0"
+dependencies = [
+ "tempfile",
+ "thiserror",
+ "tracing",
+ "uasset-lens-scanner",
+ "uasset-lens-shared",
+]
+
+[[package]]
+name = "uasset-lens-impact-analyzer"
+version = "0.1.0"
+dependencies = [
+ "uasset-lens-dependency-graph",
+ "uasset-lens-shared",
+]
+
+[[package]]
+name = "uasset-lens-lint-engine"
+version = "0.1.0"
+dependencies = [
+ "uasset-lens-asset-db",
+ "uasset-lens-bp-analyzer",
+ "uasset-lens-scanner",
+ "uasset-lens-shared",
+]
+
+[[package]]
+name = "uasset-lens-material-analyzer"
+version = "0.1.0"
+dependencies = [
+ "uasset-lens-dependency-graph",
+ "uasset-lens-scanner",
+ "uasset-lens-shared",
+]
+
+[[package]]
+name = "uasset-lens-redirector-analyzer"
+version = "0.1.0"
+dependencies = [
+ "uasset-lens-dependency-graph",
+ "uasset-lens-shared",
+]
+
+[[package]]
+name = "uasset-lens-scanner"
+version = "0.1.0"
+dependencies = [
+ "byteorder",
+ "rayon",
+ "thiserror",
+ "tracing",
+ "uasset-lens-shared",
+]
+
+[[package]]
+name = "uasset-lens-shared"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "thiserror",
+]
+
+[[package]]
+name = "uasset-lens-watcher"
+version = "0.1.0"
+dependencies = [
+ "notify",
+ "thiserror",
+ "tracing",
+ "uasset-lens-asset-db",
+ "uasset-lens-dead-asset-detector",
+ "uasset-lens-dependency-graph",
+ "uasset-lens-scanner",
+ "uasset-lens-shared",
 ]
 
 [[package]]
@@ -1223,20 +1237,6 @@ dependencies = [
  "hashbrown 0.15.5",
  "indexmap",
  "semver",
-]
-
-[[package]]
-name = "watcher"
-version = "0.1.0"
-dependencies = [
- "asset-db",
- "dead-asset-detector",
- "dependency-graph",
- "notify",
- "scanner",
- "shared",
- "thiserror",
- "tracing",
 ]
 
 [[package]]

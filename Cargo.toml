@@ -1,22 +1,22 @@
 [workspace]
 resolver = "2"
 members = [
-    "crates/shared",
-    "crates/scanner",
-    "crates/asset-db",
-    "crates/dependency-graph",
-    "crates/dead-asset-detector",
-    "crates/impact-analyzer",
-    "crates/redirector-analyzer",
-    "crates/bp-analyzer",
-    "crates/duplicate-detector",
-    "crates/lint-engine",
-    "crates/material-analyzer",
-    "crates/budget-tracker",
-    "crates/watcher",
-    "crates/git-diff",
-    "crates/cli",
-    "apps/uasset-lens-cli",
+    "crates/uasset-lens-shared",
+    "crates/uasset-lens-scanner",
+    "crates/uasset-lens-asset-db",
+    "crates/uasset-lens-dependency-graph",
+    "crates/uasset-lens-dead-asset-detector",
+    "crates/uasset-lens-impact-analyzer",
+    "crates/uasset-lens-redirector-analyzer",
+    "crates/uasset-lens-bp-analyzer",
+    "crates/uasset-lens-duplicate-detector",
+    "crates/uasset-lens-lint-engine",
+    "crates/uasset-lens-material-analyzer",
+    "crates/uasset-lens-budget-tracker",
+    "crates/uasset-lens-watcher",
+    "crates/uasset-lens-git-diff",
+    "crates/uasset-lens-cli",
+    "apps/uasset-lens",
 ]
 
 [workspace.package]

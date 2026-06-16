@@ -1,0 +1,19 @@
+[package]
+name                 = "uasset-lens-budget-tracker"
+version.workspace    = true
+edition.workspace    = true
+license.workspace    = true
+description.workspace = true
+repository.workspace = true
+homepage.workspace   = true
+keywords.workspace   = true
+categories.workspace = true
+authors.workspace    = true
+
+[dependencies]
+uasset-lens-asset-db = { path = "../uasset-lens-asset-db" }
+uasset-lens-shared   = { path = "../uasset-lens-shared" }
+serde                = { workspace = true }
+
+[dev-dependencies]
+uasset-lens-asset-db = { path = "../uasset-lens-asset-db", features = ["test-support"] }
