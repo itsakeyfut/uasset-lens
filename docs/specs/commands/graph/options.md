@@ -44,11 +44,34 @@ uasset-lens graph ./Project --cycles-only --full-cycles
 
 ---
 
+### `--soft-refs`
+
+Include soft object references (`FSoftObjectPath`) in the graph in addition to
+hard import-table references.
+
+Soft references are extracted as a separate edge type and stored in the
+`soft_dependencies` table. See `docs/specs/analyzers/soft-ref-cycles.md`.
+
+```bash
+uasset-lens graph ./Project --soft-refs --cycles-only
+```
+
+---
+
 ## Global Options (apply to all commands)
 
 | Flag | Short | Description |
 |---|---|---|
-| `--format <text\|json\|github-actions>` | | Output format (default: `text`) |
+| `--format <text\|json\|dot>` | | Output format (default: `text`) |
 | `--db <path>` | | Override the database file path |
 | `--config <path>` | | Override the config file path |
 | `--yes` | `-y` | Skip confirmation prompts |
+
+When `--format dot` is used, the full dependency graph is exported in Graphviz DOT
+format. For large projects (>10k assets) the output can be very large; consider
+combining with a filter flag or using `deps` for a subgraph.
+
+```bash
+uasset-lens graph ./Project --format dot > full-graph.dot
+uasset-lens graph ./Project --cycles-only --format dot > cycles.dot
+```

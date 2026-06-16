@@ -33,6 +33,30 @@ uasset-lens impact ./Project /Game/Characters/BP_Player --tree
 
 ---
 
+### `--shortest-path <TARGET>`
+
+Find the shortest dependency chain between `<asset_path>` and `<TARGET>`.
+
+Prints the fewest-hop path from `<asset_path>` to `<TARGET>`, showing exactly how
+the target depends on the source through the chain.
+
+```bash
+uasset-lens impact ./Project /Game/Materials/M_Rock --shortest-path /Game/Levels/L_Main
+```
+
+Output:
+```
+Shortest path from /Game/Materials/M_Rock to /Game/Levels/L_Main (3 hops):
+  /Game/Materials/M_Rock
+  → /Game/Meshes/SM_Rock   (StaticMesh)
+  → /Game/Characters/BP_Goblin (Blueprint)
+  → /Game/Levels/L_Main    (World)
+```
+
+Exits `1` if no path exists between the two assets.
+
+---
+
 ## Global Options (apply to all commands)
 
 | Flag | Short | Description |

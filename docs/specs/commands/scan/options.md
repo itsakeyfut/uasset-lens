@@ -69,6 +69,50 @@ uasset-lens scan ./Project --diff-from main
 
 ---
 
+### `--exclude <PATTERN>`
+
+Exclude files matching a glob pattern in addition to `scan.exclude_paths` from config.
+Repeatable. Patterns are matched against the path relative to the content root.
+
+```bash
+uasset-lens scan ./Project --exclude "Content/Dev/**"
+uasset-lens scan ./Project --exclude "Content/**/Test*.uasset" --exclude "Content/QA/"
+```
+
+This flag provides a one-off override without modifying `.uasset-lens.toml`.
+
+---
+
+### `--hash`
+
+Use SHA-256 file content hashing in addition to `mtime` to detect changed assets.
+
+By default, `scan` uses `mtime` only (faster). With `--hash`, the SHA-256 digest of each
+file is computed and compared to the stored hash. This catches changes when `mtime` is
+reset (e.g., after `git checkout`, restoring from backup, or Perforce sync).
+
+```bash
+uasset-lens scan ./Project --hash
+```
+
+Hash values are stored in the `assets` table (`content_hash TEXT` column). The column is
+populated on first scan with `--hash`; subsequent scans without `--hash` use mtime only.
+
+---
+
+### `--no-progress`
+
+Suppress the animated progress bar. Output falls back to the static summary lines.
+
+Progress is displayed by default when stderr is a TTY. It is automatically disabled
+when stderr is redirected (pipes, CI environments, `--format github-actions`).
+
+```bash
+uasset-lens scan ./Project --no-progress
+```
+
+---
+
 ## Global Options (apply to all commands)
 
 | Flag | Short | Description |

@@ -103,6 +103,45 @@ uasset-lens dead-assets ./Project --group dir
 
 ---
 
+## Soft Reference Mode (`--include-soft-refs`)
+
+By default, only hard import-table references contribute to in-degree. With
+`--include-soft-refs`, soft object path references (`FSoftObjectPath`) also count.
+
+```bash
+uasset-lens dead-assets ./Project --include-soft-refs
+```
+
+Assets reachable only via soft references remain in the output without this flag,
+even if they are clearly "in use" at runtime. This flag is the conservative choice
+for projects using Asset Manager, Blueprint latent loading, or similar patterns.
+
+Requires soft reference data; see `docs/specs/analyzers/soft-ref-cycles.md`.
+
+---
+
+## Revival Preview (`--revival-preview`)
+
+Shows which existing assets could logically reference each dead asset — i.e., which
+assets would gain impact if the dead asset were connected to the graph.
+
+Intended as a planning tool before deciding to delete or reactivate assets.
+
+```bash
+uasset-lens dead-assets ./Project --revival-preview
+```
+
+Output:
+```
+/Game/Unused/M_LegacyRock (Material, 1.2 MB)
+  Candidate references:
+    /Game/Meshes/SM_Rock — already references similar material M_RockNew
+
+1 revival candidate shown. Verify in UE Editor before reconnecting.
+```
+
+---
+
 ## JSON Output (`--format json`)
 
 ```json

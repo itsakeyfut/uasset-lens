@@ -108,6 +108,40 @@ uasset-lens find ./Project --deps /Game/Characters/BP_Player
 
 ---
 
+### `--has-violation <RULE>`
+
+Filter to assets that have at least one active violation matching the given rule ID.
+
+Accepts a full rule ID or a category prefix.
+
+```bash
+uasset-lens find ./Project --has-violation lint/naming/blueprint-prefix
+uasset-lens find ./Project --has-violation budget/texture2d
+uasset-lens find ./Project --has-violation lint/blueprint
+```
+
+Requires violation data to be present. If `check` has never been run, returns 0 results with a warning.
+
+---
+
+### `--sort <FIELD>`
+
+Sort results by the given field (default: `path`).
+
+| Value | Sort order |
+|---|---|
+| `path` | Alphabetical by game path (default) |
+| `size` | File size descending |
+| `type` | Asset type alphabetical, then path |
+| `health` | Health score ascending (worst first) |
+
+```bash
+uasset-lens find ./Project --type Texture2D --sort size
+uasset-lens find ./Project --has-violation lint --sort health
+```
+
+---
+
 ## Global Options (apply to all commands)
 
 | Flag | Short | Description |

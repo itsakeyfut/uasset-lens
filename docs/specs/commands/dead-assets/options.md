@@ -98,6 +98,44 @@ uasset-lens dead-assets ./Project --include-all-types
 
 ---
 
+### `--include-soft-refs`
+
+Count soft object references (`FSoftObjectPath`) as incoming references when
+determining whether an asset is dead.
+
+By default, only hard import-table references are considered. With this flag,
+assets reachable via soft references are not classified as dead.
+
+Requires soft reference data to be populated (scanner must extract `FSoftObjectPath`
+strings — see `docs/specs/analyzers/soft-ref-cycles.md`).
+
+```bash
+uasset-lens dead-assets ./Project --include-soft-refs
+```
+
+---
+
+### `--revival-preview`
+
+For each dead asset, show which assets would start referencing it if it were
+connected into the dependency graph (i.e., a "what if this asset were used" analysis).
+
+This is a planning tool for developers deciding whether to delete or reactivate
+a dead asset.
+
+```bash
+uasset-lens dead-assets ./Project --revival-preview
+```
+
+Output per asset:
+```
+/Game/Unused/M_LegacyRock (Material, 1.2 MB)
+  Revival preview: add as dependency of...
+    /Game/Meshes/SM_Rock → would increase impact by 3 assets
+```
+
+---
+
 ## Global Options (apply to all commands)
 
 | Flag | Short | Description |

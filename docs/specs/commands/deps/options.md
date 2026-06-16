@@ -47,7 +47,18 @@ uasset-lens deps ./Project /Game/Characters/BP_Player --size-only
 
 | Flag | Short | Description |
 |---|---|---|
-| `--format <text\|json\|github-actions>` | | Output format (default: `text`) |
+| `--format <text\|json\|dot>` | | Output format (default: `text`) |
 | `--db <path>` | | Override the database file path |
 | `--config <path>` | | Override the config file path |
 | `--yes` | `-y` | Skip confirmation prompts |
+
+When `--format dot` is used, the dependency subgraph rooted at `<asset_path>` is
+exported in Graphviz DOT format for use with `dot`, `neato`, or similar tools:
+
+```bash
+uasset-lens deps ./Project /Game/Characters/BP_Player --format dot > deps.dot
+dot -Tsvg deps.dot -o deps.svg
+```
+
+Nodes are labeled with the short asset name; hover text contains the full path.
+Edge direction: `A → B` means A depends on B.

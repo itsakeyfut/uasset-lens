@@ -74,6 +74,33 @@ Default: 10 types, 5 folders, 10 largest assets.
 
 ---
 
+## Diff Mode (`--diff <NAME>`)
+
+Compare current stats against a saved baseline to see what changed.
+
+```bash
+uasset-lens stats ./Project --diff main
+```
+
+```
+Stats Diff vs baseline 'main' (saved 2026-06-15 09:11)
+
+Total assets : 1,024  (+3)
+Total size   : 2.1 GB (+82.4 MB)
+
+By Type (changes only):
+  Texture2D    412 (+2)   1.2 GB (+38.0 MB)
+  Blueprint    154 (+1)   38.5 MB (+0.3 MB)
+
+Graph Statistics:
+  Unreferenced : 47  (-1, resolved 1 dead asset)
+  Cycles       : 2   (unchanged)
+```
+
+Exit code is always `0` in diff mode; the output is informational.
+
+---
+
 ## JSON Output (`--format json`)
 
 ```json

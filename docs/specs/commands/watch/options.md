@@ -18,7 +18,19 @@ uasset-lens watch <project_dir>
 
 ## Options
 
-This command has no command-specific options.
+### `--no-cycle-check`
+
+Disable dependency cycle detection after each file change.
+
+By default, `watch` re-checks for new cycles after every file change. This can be
+slow on large projects (>50k assets). Use this flag to trade cycle detection for
+lower per-event latency.
+
+```bash
+uasset-lens watch ./Project --no-cycle-check
+```
+
+---
 
 `--format` is accepted globally but has no effect for `watch` — output is always text
 because the command produces a continuous stream of events.

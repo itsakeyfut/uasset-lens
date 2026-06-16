@@ -57,9 +57,30 @@ Watch stopped.
 
 ---
 
+## Cycle Detection Events
+
+When a file change creates or resolves a dependency cycle, `watch` emits a specific
+event line:
+
+```
+[12:37:10] Modified: Content/Characters/BP_Enemy.uasset
+  🔴 NEW CYCLE: BP_Player → BP_Enemy → BP_GameMode → BP_Player
+```
+
+```
+[12:38:55] Modified: Content/GameModes/BP_GameMode.uasset
+  ✅ CYCLE RESOLVED: BP_Player → BP_Enemy → BP_GameMode → BP_Player
+```
+
+Cycle detection runs after every asset change by re-evaluating the affected subgraph.
+
+---
+
 ## Notes
 
 - `watch` does not support `--format json` or `--format github-actions`. Output is
   always text, as it is an interactive continuous stream.
 - The command does not block on confirmation prompts. Any prompt-requiring operations
   (e.g., stale record cleanup) are handled automatically during the initial scan.
+- Cycle detection on each change may be slow for large projects (>50k assets).
+  Use `--no-cycle-check` to disable it if latency is a concern.

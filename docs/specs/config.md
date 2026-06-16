@@ -200,9 +200,54 @@ StaticMesh.severity        = "error"
 
 ---
 
+## Glob Pattern Support in `scan.exclude_paths`
+
+In addition to prefix-string matching, `scan.exclude_paths` supports glob patterns
+starting with `v0.2.0`:
+
+```toml
+[scan]
+exclude_paths = [
+    "Content/Dev/",                    # prefix match (existing)
+    "Content/**/Test*.uasset",         # glob pattern (new)
+    "Content/Developers/*/MyStuff/**", # nested glob
+]
+```
+
+Patterns are matched against the relative path from the content root (not the game path).
+
+For more expressive ignore rules (negation, per-directory granularity), see
+`docs/specs/integrations/ignore-file.md`.
+
+---
+
+## Config Inheritance
+
+Starting from `v0.4.0`, `.uasset-lens.toml` supports an `extends` key to inherit
+from a parent config file. This is useful for monorepos or multi-project setups where
+a base config is shared.
+
+```toml
+# MySubProject/.uasset-lens.toml
+extends = "../.uasset-lens.base.toml"
+
+# Override only what differs in this subproject
+[budget]
+Texture2D.max_file_size = "2MB"   # Stricter than the base config
+```
+
+Inheritance rules:
+- `extends` is resolved relative to the config file's directory.
+- Only one level of inheritance is supported (no chaining).
+- Keys defined in the child config override the parent. All other keys inherit from parent.
+- If the parent file is missing, `uasset-lens` exits with error `2`.
+
+---
+
 ## Config Loading Rules
 
 1. `uasset-lens` looks for `.uasset-lens.toml` by walking up from `<project_dir>`.
-2. The first file found is used; no merging of parent configs.
-3. Missing keys fall back to defaults — partial configs are valid.
-4. Unknown keys produce a warning on stderr but do not cause an error.
+2. The first file found is used.
+3. If the config contains `extends`, the parent config is loaded and merged (child overrides parent).
+4. Missing keys fall back to defaults — partial configs are valid.
+5. Unknown keys produce a warning on stderr but do not cause an error.

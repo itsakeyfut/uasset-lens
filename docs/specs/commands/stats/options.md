@@ -32,6 +32,21 @@ uasset-lens stats ./Project --top 0   # show all
 
 ---
 
+### `--diff <NAME>`
+
+Compare current stats against a named baseline and show what changed.
+
+Requires a baseline saved via `uasset-lens baseline save ./Project <NAME>`.
+
+Shows delta (+/-) for: total assets, total size, violations, dead assets, cycles.
+
+```bash
+uasset-lens stats ./Project --diff main
+uasset-lens stats ./Project --diff before-refactor
+```
+
+---
+
 ## Global Options (apply to all commands)
 
 | Flag | Short | Description |
