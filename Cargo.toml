@@ -6,7 +6,6 @@ members = [
     "crates/uasset-lens-asset-db",
     "crates/uasset-lens-dependency-graph",
     "crates/uasset-lens-bp-analyzer",
-    "crates/uasset-lens-duplicate-detector",
     "crates/uasset-lens-lint-engine",
     "crates/uasset-lens-material-analyzer",
     "crates/uasset-lens-budget-tracker",
@@ -35,7 +34,6 @@ uasset-lens-scanner             = { path = "crates/uasset-lens-scanner",        
 uasset-lens-asset-db            = { path = "crates/uasset-lens-asset-db",            version = "0.1.0" }
 uasset-lens-dependency-graph    = { path = "crates/uasset-lens-dependency-graph",    version = "0.1.0" }
 uasset-lens-bp-analyzer         = { path = "crates/uasset-lens-bp-analyzer",         version = "0.1.0" }
-uasset-lens-duplicate-detector  = { path = "crates/uasset-lens-duplicate-detector",  version = "0.1.0" }
 uasset-lens-lint-engine         = { path = "crates/uasset-lens-lint-engine",         version = "0.1.0" }
 uasset-lens-material-analyzer   = { path = "crates/uasset-lens-material-analyzer",   version = "0.1.0" }
 uasset-lens-budget-tracker      = { path = "crates/uasset-lens-budget-tracker",      version = "0.1.0" }

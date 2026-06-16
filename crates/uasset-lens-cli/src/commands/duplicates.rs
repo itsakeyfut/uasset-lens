@@ -24,8 +24,8 @@ pub fn handle_duplicates(
         .all_assets()
         .context("Failed to read assets from database")?;
 
-    let by_name_groups = uasset_lens_duplicate_detector::detect_by_name(&assets);
-    let texture_dup_groups = uasset_lens_duplicate_detector::detect_texture_duplicates(&assets);
+    let by_name_groups = uasset_lens_asset_db::duplicates::detect_by_name(&assets);
+    let texture_dup_groups = uasset_lens_asset_db::duplicates::detect_texture_duplicates(&assets);
 
     // Texture-dup is more specific (same name + size + type); suppress the same group
     // from appearing again under same-name.
@@ -279,8 +279,8 @@ mod tests {
 
         let db = uasset_lens_asset_db::AssetDb::open_existing(&db_path).unwrap();
         let assets = db.all_assets().unwrap();
-        let by_name = uasset_lens_duplicate_detector::detect_by_name(&assets);
-        let tex_dup = uasset_lens_duplicate_detector::detect_texture_duplicates(&assets);
+        let by_name = uasset_lens_asset_db::duplicates::detect_by_name(&assets);
+        let tex_dup = uasset_lens_asset_db::duplicates::detect_texture_duplicates(&assets);
 
         // Both detectors fire for T_Rock
         assert_eq!(by_name.len(), 1);

@@ -235,8 +235,9 @@ pub fn handle_check(
                 let assets_ref = assets.as_deref().ok_or_else(|| {
                     anyhow::anyhow!("internal: assets not loaded for duplicates check")
                 })?;
-                let by_name = uasset_lens_duplicate_detector::detect_by_name(assets_ref);
-                let tex_dup = uasset_lens_duplicate_detector::detect_texture_duplicates(assets_ref);
+                let by_name = uasset_lens_asset_db::duplicates::detect_by_name(assets_ref);
+                let tex_dup =
+                    uasset_lens_asset_db::duplicates::detect_texture_duplicates(assets_ref);
                 let tex_names: HashSet<&str> = tex_dup.iter().map(|g| g.name.as_str()).collect();
                 let mut findings: Vec<String> = tex_dup
                     .iter()

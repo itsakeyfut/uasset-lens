@@ -1,4 +1,5 @@
 mod db;
+pub mod duplicates;
 pub mod error;
 mod mutations;
 mod queries;

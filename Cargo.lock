@@ -987,7 +987,6 @@ dependencies = [
  "uasset-lens-asset-db",
  "uasset-lens-budget-tracker",
  "uasset-lens-dependency-graph",
- "uasset-lens-duplicate-detector",
  "uasset-lens-lint-engine",
  "uasset-lens-scanner",
  "uasset-lens-shared",
@@ -1000,14 +999,6 @@ name = "uasset-lens-dependency-graph"
 version = "0.1.0"
 dependencies = [
  "petgraph",
- "uasset-lens-shared",
-]
-
-[[package]]
-name = "uasset-lens-duplicate-detector"
-version = "0.1.0"
-dependencies = [
- "uasset-lens-asset-db",
  "uasset-lens-shared",
 ]
 
