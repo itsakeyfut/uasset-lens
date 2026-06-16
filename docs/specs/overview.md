@@ -2,8 +2,8 @@
 
 ## Overview
 
-A Rust-based static analysis, visualization, and audit tool for assets and Blueprints in
-Unreal Engine projects.
+A Rust-based static analysis tool for assets and Blueprints in Unreal Engine 5 projects.
+Designed to run in CI pipelines without opening the Unreal Editor.
 
 This tool addresses the following pain points that emerge as Unreal projects grow large:
 
@@ -16,9 +16,9 @@ This tool addresses the following pain points that emerge as Unreal projects gro
 - Bloated package / cook sizes
 - Hard-to-review changes in team development
 
-Rather than being just another Asset Viewer, the goal is to serve as an
+The goal is to be
 
-> Unreal Project Observability Platform
+> "Clippy for Unreal Assets" — place asset quality gates in CI without opening the editor
 
 ---
 
@@ -65,26 +65,27 @@ As a result, Blueprint maintainability drops sharply once they grow large.
 
 ### Concept
 
-"Clippy for Unreal Assets"
+"Clippy for Unreal Assets" — a CLI-first static analyzer that integrates into CI pipelines
+and enforces asset quality gates without requiring the Unreal Editor.
 
 ### Value Proposition
 
-- Asset visualization
-- Asset health analysis
-- Blueprint static analysis
-- Dependency graph
-- Lint
-- Git-friendly analysis
+- Asset health analysis (dead assets, circular deps, duplicates)
+- Blueprint static analysis (complexity, EventTick abuse, Cast chains)
+- Dependency graph with soft reference tracking
+- Naming convention and file size budget enforcement
+- Git-friendly: `--diff-from baseline` for PR regression detection
+- GitHub Actions annotation output for inline PR review
 
 ### Design Priorities
 
-- Fast
-- Parallel analysis
-- CLI first
-- CI integration
+- Fast (1,000 assets in under 5 seconds)
+- Parallel analysis (rayon)
+- CLI first — no GUI
+- CI integration (exit codes, `--format github-actions`)
 - Git friendly
 - Cross-platform
-- Large project friendly
+- Large project friendly (up to 100,000 assets)
 
 ### Non-Functional Requirements
 
@@ -118,17 +119,17 @@ Direction:
 
 ---
 
-## CLI First Approach
+## CLI First — No Desktop App
 
-CLI takes priority over GUI in the early stages.
+uasset-lens is CLI-only. There is no desktop GUI and no plans for one.
 
 Reasons:
 
-- Faster to implement
-- CI integration
-- OSS friendly
-- Automation friendly
-- Large project friendly
+- CI integration requires CLI (not GUI)
+- OSS adoption is driven by `cargo install` + GitHub Actions, not app stores
+- Automation and scripting require CLI
+- Large project analysis (100k assets) is impractical in a GUI
+- Static HTML reports replace any visualization need
 
 ---
 
@@ -149,16 +150,14 @@ uasset-lens fills that gap.
 
 ## Ultimate Vision
 
-The final goal of this project is to
+> Make UE asset quality gates as standard as code linting in CI.
 
-> Make Unreal projects observable
+Any Unreal Engine 5 project should be able to add asset quality gates to its CI pipeline
+in under 5 minutes with a single command:
 
-Specifically, to visualize:
+```yaml
+- run: uasset-lens check ./Project --format github-actions
+```
 
-- Assets
-- Blueprints
-- Dependencies
-- Complexity
-- Project health
-
-and improve the maintainability of large Unreal projects.
+The tool becomes the de facto answer to "how do I enforce asset quality in CI without
+opening the Unreal Editor?"

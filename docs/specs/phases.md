@@ -9,7 +9,7 @@ Six-phase structure. **Phase 2 completion is the MVP.**
 | 3 | CLI Completion | — |
 | 4 | Static Analysis | — |
 | 5 | Dev Workflow Integration | — |
-| 6 | Visualization and Reports | — |
+| 6 | Report Generation | — |
 
 For details, see `docs/roadmap/phase{N}/ROADMAP.md`.
 
@@ -195,35 +195,30 @@ uasset-lens watch ./Project
 
 ---
 
-## Phase 6 — Visualization and Reports
+## Phase 6 — Report Generation
 
 ### Goal
 
-Visualize CLI analysis results in an egui GUI dashboard and HTML/Markdown reports.
-Add Level / Map specific analysis.
+Generate human-readable reports from `check` results. Static HTML and Markdown output
+replaces any need for a GUI dashboard. No desktop app. No Level Analyzer.
 
 ### Implementation Scope
 
-#### 1. Level / Map Analyzer
+#### 1. Report Generator
 
-- Actor type counts per Level
-- Level dependency graph
-- World Partition detection
+- Offline static HTML (no CDN, no server required)
+- GitHub Flavored Markdown
+- Trend section when multiple baselines are present
 
-#### 2. Report Generator
-
-- HTML reports (offline, no CDN required)
-- Markdown reports (GitHub Flavored Markdown)
-
-#### 3. GUI Dashboard (egui / eframe)
-
-- Dashboard for scan results
-- Unreferenced asset / circular dependency / Blueprint ranking views
-- Real-time asset search
-
-#### 4. CLI: `report` command + GUI binary
+#### 2. CLI: `report` command
 
 ```bash
 uasset-lens report ./Project --format html -o report.html
 uasset-lens report ./Project --format markdown
 ```
+
+Report content:
+
+- Summary: total assets, violations by severity and rule
+- Violations table: rule / asset / message
+- Trend (optional): comparison to previous baseline if available
