@@ -986,24 +986,13 @@ dependencies = [
  "tracing",
  "uasset-lens-asset-db",
  "uasset-lens-budget-tracker",
- "uasset-lens-dead-asset-detector",
  "uasset-lens-dependency-graph",
  "uasset-lens-duplicate-detector",
- "uasset-lens-impact-analyzer",
  "uasset-lens-lint-engine",
- "uasset-lens-redirector-analyzer",
  "uasset-lens-scanner",
  "uasset-lens-shared",
  "uasset-lens-watcher",
  "walkdir",
-]
-
-[[package]]
-name = "uasset-lens-dead-asset-detector"
-version = "0.1.0"
-dependencies = [
- "uasset-lens-dependency-graph",
- "uasset-lens-shared",
 ]
 
 [[package]]
@@ -1034,14 +1023,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "uasset-lens-impact-analyzer"
-version = "0.1.0"
-dependencies = [
- "uasset-lens-dependency-graph",
- "uasset-lens-shared",
-]
-
-[[package]]
 name = "uasset-lens-lint-engine"
 version = "0.1.0"
 dependencies = [
@@ -1057,14 +1038,6 @@ version = "0.1.0"
 dependencies = [
  "uasset-lens-dependency-graph",
  "uasset-lens-scanner",
- "uasset-lens-shared",
-]
-
-[[package]]
-name = "uasset-lens-redirector-analyzer"
-version = "0.1.0"
-dependencies = [
- "uasset-lens-dependency-graph",
  "uasset-lens-shared",
 ]
 
@@ -1096,7 +1069,6 @@ dependencies = [
  "thiserror",
  "tracing",
  "uasset-lens-asset-db",
- "uasset-lens-dead-asset-detector",
  "uasset-lens-dependency-graph",
  "uasset-lens-scanner",
  "uasset-lens-shared",

@@ -46,9 +46,9 @@ pub fn handle_dead_assets(
     let excluded = if include_all_types {
         &[] as &[&str]
     } else {
-        uasset_lens_dead_asset_detector::DEFAULT_EXCLUDED_TYPES
+        uasset_lens_dependency_graph::dead_assets::DEFAULT_EXCLUDED_TYPES
     };
-    let dead_paths = uasset_lens_dead_asset_detector::detect(&graph, excluded);
+    let dead_paths = uasset_lens_dependency_graph::dead_assets::detect(&graph, excluded);
 
     let type_map: HashMap<&uasset_lens_shared::AssetPath, String> = graph
         .nodes()

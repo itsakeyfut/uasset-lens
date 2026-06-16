@@ -77,6 +77,28 @@ Impact Analysis: /Game/Characters/BP_Player
 
 ---
 
+## Shortest Path (`--shortest-path <TARGET>`)
+
+Find the fewest-hop dependency chain from `<asset_path>` to `<TARGET>`.
+
+```bash
+uasset-lens impact ./Project /Game/Materials/M_Rock \
+    --shortest-path /Game/Levels/L_Main
+```
+
+```
+Shortest path: /Game/Materials/M_Rock → /Game/Levels/L_Main (3 hops)
+
+  /Game/Materials/M_Rock       (Material)
+  → /Game/Meshes/SM_Rock       (StaticMesh)
+  → /Game/Characters/BP_Goblin (Blueprint)
+  → /Game/Levels/L_Main        (World)
+```
+
+Exit `0` if a path is found, `1` if no path exists between the two assets.
+
+---
+
 ## JSON Output (`--format json`)
 
 ```json

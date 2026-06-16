@@ -43,7 +43,7 @@ impl WatchSession {
     /// Snapshot current DB state so the first batch is diffed against existing problems.
     pub fn init(&mut self) -> Result<(), WatchSessionError> {
         let graph = build_graph(&self.db, &self.external_roots)?;
-        self.last_dead = uasset_lens_dead_asset_detector::detect(&graph, &[])
+        self.last_dead = uasset_lens_dependency_graph::dead_assets::detect(&graph, &[])
             .into_iter()
             .collect();
         self.last_cycles = graph.find_cycles();
@@ -115,9 +115,10 @@ impl WatchSession {
         }
 
         let graph = build_graph(&self.db, &self.external_roots)?;
-        let new_dead: HashSet<AssetPath> = uasset_lens_dead_asset_detector::detect(&graph, &[])
-            .into_iter()
-            .collect();
+        let new_dead: HashSet<AssetPath> =
+            uasset_lens_dependency_graph::dead_assets::detect(&graph, &[])
+                .into_iter()
+                .collect();
         let new_cycles = graph.find_cycles();
 
         for path in new_dead.difference(&self.last_dead) {

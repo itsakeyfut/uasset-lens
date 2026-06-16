@@ -18,7 +18,7 @@ pub fn handle_redirectors(
 ) -> anyhow::Result<i32> {
     let db = crate::open_db(db_path)?;
     let graph = crate::load_graph(&db, &cfg.scan.external_roots)?;
-    let paths = uasset_lens_redirector_analyzer::detect(&graph);
+    let paths = uasset_lens_dependency_graph::redirectors::detect(&graph);
 
     let redirector_paths: Vec<String> = paths
         .iter()

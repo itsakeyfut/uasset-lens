@@ -59,7 +59,7 @@ pub fn handle_find(
 
     if unreferenced && let Some(g) = &graph {
         let dead: HashSet<uasset_lens_shared::AssetPath> =
-            uasset_lens_dead_asset_detector::detect(g, &[])
+            uasset_lens_dependency_graph::dead_assets::detect(g, &[])
                 .into_iter()
                 .collect();
         results.retain(|r| dead.contains(&r.asset_path));
@@ -399,7 +399,7 @@ mod tests {
         let db = uasset_lens_asset_db::AssetDb::open(&db_path).unwrap();
         let graph = crate::load_graph(&db, &[]).unwrap();
         let dead: std::collections::HashSet<AssetPath> =
-            uasset_lens_dead_asset_detector::detect(&graph, &[])
+            uasset_lens_dependency_graph::dead_assets::detect(&graph, &[])
                 .into_iter()
                 .collect();
 

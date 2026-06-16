@@ -121,9 +121,9 @@ pub fn handle_check(
                 let g = graph.as_ref().ok_or_else(|| {
                     anyhow::anyhow!("internal: graph not loaded for dead-assets check")
                 })?;
-                let dead = uasset_lens_dead_asset_detector::detect(
+                let dead = uasset_lens_dependency_graph::dead_assets::detect(
                     g,
-                    uasset_lens_dead_asset_detector::DEFAULT_EXCLUDED_TYPES,
+                    uasset_lens_dependency_graph::dead_assets::DEFAULT_EXCLUDED_TYPES,
                 );
                 let count = dead.len();
                 let findings = dead.iter().map(|p| p.as_str().to_owned()).collect();
@@ -162,7 +162,7 @@ pub fn handle_check(
                 let g = graph.as_ref().ok_or_else(|| {
                     anyhow::anyhow!("internal: graph not loaded for redirectors check")
                 })?;
-                let paths = uasset_lens_redirector_analyzer::detect(g);
+                let paths = uasset_lens_dependency_graph::redirectors::detect(g);
                 let count = paths.len();
                 let findings = paths.iter().map(|p| p.as_str().to_owned()).collect();
                 CheckResult {

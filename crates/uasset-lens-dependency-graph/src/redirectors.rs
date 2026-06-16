@@ -1,5 +1,6 @@
-﻿use uasset_lens_dependency_graph::DependencyGraph;
-use uasset_lens_shared::{AssetPath, AssetType};
+﻿use uasset_lens_shared::{AssetPath, AssetType};
+
+use crate::DependencyGraph;
 
 pub fn detect(graph: &DependencyGraph) -> Vec<AssetPath> {
     graph
@@ -12,7 +13,8 @@ pub fn detect(graph: &DependencyGraph) -> Vec<AssetPath> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use uasset_lens_dependency_graph::AssetNode;
+
+    use crate::AssetNode;
 
     fn node(path: &str, asset_type: AssetType) -> AssetNode {
         AssetNode {
