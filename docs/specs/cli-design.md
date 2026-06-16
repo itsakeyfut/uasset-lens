@@ -53,7 +53,7 @@ uasset-lens dead-assets ./Project                     # exit 1 on detection (war
 
 | Flag | Description |
 |------|-------------|
-| `--format <text\|json>` | Output format (default: `text`) |
+| `--format <text\|json\|github-actions>` | Output format (default: `text`) |
 | `--db <path>` | Override the DB path |
 | `-y` / `--yes` | Skip confirmation prompts (for CI) |
 
@@ -176,6 +176,67 @@ Output (text):
 
 ---
 
+### `check <project_dir>`
+
+Single CI entry point. Runs all enabled checks from `.uasset-lens.toml` and exits with
+a code that CI pipelines can gate on. Always runs `scan` first (mtime delta) unless
+`--skip-scan` is given.
+
+See `docs/specs/check-command.md` for the full spec.
+
+```
+Options:
+  --format <text|json|github-actions>  Output format (default: text)
+  --save-baseline [path]               Save results as baseline JSON
+  --diff-from <path>                   Compare to baseline; fail only on regressions
+  --skip-scan                          Use existing DB, skip re-scan
+  -y / --yes                           Non-interactive
+
+Exit codes: 0 = pass, 1 = error violations, 2 = execution error
+
+Output (text):
+  Scanning... (1,024 assets, 0.8s)
+  Running checks...
+
+  ERRORS (3):
+    [blueprint] /Game/Characters/BP_Player.uasset
+      EventTick node count (8) exceeds limit (5)
+    [budget] /Game/Characters/T_PlayerArmor_D.uasset
+      File size (6.1 MB) exceeds Texture2D limit (4 MB)
+    [lint] /Game/Meshes/Rock.uasset
+      StaticMesh missing required prefix 'SM_'
+
+  WARNINGS (12):
+    [dead-assets] /Game/Unused/T_OldRock.uasset (Texture2D, 2.1 MB)
+    ... (11 more)
+
+  check failed: 3 errors, 12 warnings
+```
+
+---
+
+### `report <project_dir>`
+
+Generates a human-readable report. Does not fail on violations (exit code is always 0
+unless there is an execution error). Intended for review artifacts, not CI gating.
+
+```
+Options:
+  --format <html|markdown>   Output format (default: html)
+  -o <path>                  Output file path (default: stdout)
+
+Output includes:
+  - Summary: total assets, violations by severity and rule
+  - Violations table: rule / asset / message
+  - Trend section: comparison to previous baseline if available
+
+Examples:
+  uasset-lens report ./Project --format html -o report.html
+  uasset-lens report ./Project --format markdown > ASSET_REPORT.md
+```
+
+---
+
 ### `find <project_dir> [options]`
 
 Searches and filters assets using the DB.
@@ -268,17 +329,18 @@ On error, exit code `2` and write the error message to stderr (no JSON error env
 
 ---
 
-## `.uasset-lens.toml` Config File (Phase 1 minimum spec)
+## `.uasset-lens.toml` Config File
 
 Placed in the project root and checked into git for team sharing. If absent, defaults apply.
 
-### Phase 1 supported fields
+For the full schema and examples, see `docs/specs/config.md`.
+
+### Minimum viable config
 
 ```toml
 # .uasset-lens.toml
 
 [scan]
-# Paths to exclude from scanning (relative to content_root, prefix match)
 exclude_paths = [
     "Content/Dev/",
     "Content/Test/",
@@ -286,4 +348,4 @@ exclude_paths = [
 ]
 ```
 
-Naming conventions, size budgets, and other fields will be added in Phase 3+.
+All other fields fall back to strict defaults designed for large projects.

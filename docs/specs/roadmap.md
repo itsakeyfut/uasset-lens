@@ -28,8 +28,8 @@ Enable the following:
 | 2 | Core Analysis | `graph` / `dead-assets` / `impact` | **MVP** |
 | 3 | CLI Completion | `redirectors` / `find` + config file | — |
 | 4 | Static Analysis | `blueprint` / `lint` / `budget` / `duplicates` | — |
-| 5 | Dev Workflow Integration | `watch` + CI documentation | — |
-| 6 | Visualization and Reports | `report` + GUI dashboard | — |
+| 5 | Dev Workflow Integration | `watch` + `check` + CI integration | — |
+| 6 | Report Generation | `report` (HTML / Markdown) | — |
 
 For detailed tasks and completion criteria per phase, see `docs/roadmap/phase{N}/ROADMAP.md`.
 
@@ -74,10 +74,8 @@ Do not implement all features at once. Release after Phase 2 and iterate with fe
 4. CI integration documentation
 
 #### Phase 6
-1. `level-analyzer` crate
-2. `report-generator` crate
-3. `cli` extension (`report` command)
-4. `apps/uasset-lens-desktop` (egui GUI)
+1. `report-generator` crate
+2. `cli` extension (`report` command, HTML + Markdown output)
 
 ---
 
@@ -102,6 +100,5 @@ In the future, make Analyzers and Rules pluggable so projects can add their own 
 **uasset-lens**
 
 - CLI binary name: `uasset-lens`
-- GUI binary name: `uasset-lens-desktop`
 - Cargo package name: `uasset-lens`
 - Repository name: `uasset-lens`
