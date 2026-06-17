@@ -26,7 +26,7 @@ jobs:
             archive: uasset-lens-windows-x86_64.zip
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
@@ -34,7 +34,7 @@ jobs:
           targets: ${{ matrix.target }}
 
       - name: Cache Cargo registry
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: |
             ~/.cargo/registry
@@ -63,7 +63,7 @@ jobs:
           Remove-Item "uasset-lens.exe"
 
       - name: Upload release asset
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           files: ${{ matrix.archive }}
           generate_release_notes: true
