@@ -543,10 +543,22 @@ pub fn handle_check_with_baseline(
         .count();
     let warning_total = all_violations.len() - error_total;
 
+    // CLI `--diff-from` (CWD-relative) takes priority. A relative `[check] baseline_path`
+    // from config is resolved against the project dir (where .uasset-lens.toml lives) so a
+    // committed, shared baseline path is portable regardless of the working directory.
+    let config_baseline = cfg.check.baseline_path.as_ref().map(|p| {
+        if p.is_relative() {
+            project_dir.join(p)
+        } else {
+            p.clone()
+        }
+    });
+    let diff_from = diff_from.map(Path::to_path_buf).or(config_baseline);
+
     // Load baseline and compute regressions up front so a missing/invalid baseline
     // fails fast (exit 2) before any check output is written. `--diff-from` replaces
     // the normal gate with regression-only gating.
-    let regressions: Option<Vec<Violation>> = match diff_from {
+    let regressions: Option<Vec<Violation>> = match &diff_from {
         Some(path) => {
             let baseline = load_baseline(path)?;
             Some(compute_regressions(&baseline.violations, &all_violations))
@@ -1479,6 +1491,168 @@ mod tests {
         )
         .unwrap();
         assert_eq!(result, 0, "JSON mode regression gate matches text mode");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    // --- #281: [check] baseline_path config default for --diff-from ---
+
+    fn cfg_naming_error_with_baseline(path: &std::path::Path) -> crate::config::ConfigFile {
+        crate::config::ConfigFile {
+            lint: crate::config::LintConfig {
+                naming: crate::config::LintNamingConfig {
+                    severity: Some(CheckSeverity::Error),
+                    ..Default::default()
+                },
+                ..Default::default()
+            },
+            check: crate::config::CheckSectionConfig {
+                baseline_path: Some(path.to_path_buf()),
+            },
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn handle_check_should_auto_diff_when_config_baseline_path_set() {
+        let (dir, db_path) = test_db_in_tempdir("check281_auto_diff");
+        upsert_misnamed_referenced_texture(&dir, &db_path);
+        let baseline = dir.join("baseline.json");
+        // Baseline already contains the current error → no regression → exit 0, even though
+        // the normal gate (naming severity = error) would exit 1. Discriminating.
+        write_baseline(
+            &baseline,
+            vec![err_violation("naming/prefix", "/Game/Rock")],
+        );
+
+        let cfg = cfg_naming_error_with_baseline(&baseline);
+        let result = handle_check_with_baseline(
+            &dir,
+            &[],
+            &[],
+            false,
+            &db_path,
+            &cfg,
+            &FormatKind::Text,
+            None,
+            None, // no CLI --diff-from → config baseline_path is used
+        )
+        .unwrap();
+        assert_eq!(
+            result, 0,
+            "config baseline_path triggers auto-diff and replaces the normal gate"
+        );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn handle_check_cli_diff_from_should_override_config_baseline_path() {
+        let (dir, db_path) = test_db_in_tempdir("check281_cli_override");
+        upsert_misnamed_referenced_texture(&dir, &db_path);
+        let config_baseline = dir.join("config_baseline.json");
+        write_baseline(
+            &config_baseline,
+            vec![err_violation("naming/prefix", "/Game/Rock")], // would exit 0 if used
+        );
+        let cli_baseline = dir.join("cli_baseline.json");
+        write_baseline(&cli_baseline, vec![]); // empty → error is a new regression → exit 1
+
+        let cfg = cfg_naming_error_with_baseline(&config_baseline);
+        let result = handle_check_with_baseline(
+            &dir,
+            &[],
+            &[],
+            false,
+            &db_path,
+            &cfg,
+            &FormatKind::Text,
+            None,
+            Some(&cli_baseline),
+        )
+        .unwrap();
+        assert_eq!(result, 1, "CLI --diff-from overrides config baseline_path");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn handle_check_should_err_when_config_baseline_path_missing() {
+        let (dir, db_path) = test_db_in_tempdir("check281_config_missing");
+        upsert_one_orphan(&dir, &db_path);
+        let missing = dir.join("does-not-exist.json");
+
+        // Config-sourced missing baseline behaves like an explicit --diff-from: exit 2.
+        let cfg = cfg_naming_error_with_baseline(&missing);
+        let result = handle_check_with_baseline(
+            &dir,
+            &[],
+            &[],
+            false,
+            &db_path,
+            &cfg,
+            &FormatKind::Text,
+            None,
+            None,
+        );
+        assert!(
+            result.is_err(),
+            "missing config baseline → error (exit 2), same as --diff-from"
+        );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn handle_check_should_not_auto_diff_when_check_section_absent() {
+        let (dir, db_path) = test_db_in_tempdir("check281_no_section");
+        upsert_misnamed_referenced_texture(&dir, &db_path);
+
+        // Default config has no [check] baseline_path → no auto-diff. The naming error then
+        // falls through to the normal gate (exit 1) — not exit 2 from a phantom default path.
+        let cfg = cfg_with_naming_severity(CheckSeverity::Error);
+        let result = handle_check_with_baseline(
+            &dir,
+            &[],
+            &[],
+            false,
+            &db_path,
+            &cfg,
+            &FormatKind::Text,
+            None,
+            None,
+        )
+        .unwrap();
+        assert_eq!(result, 1, "no baseline_path → normal gate, no auto-diff");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn handle_check_should_resolve_relative_config_baseline_against_project_dir() {
+        let (dir, db_path) = test_db_in_tempdir("check281_relative_resolve");
+        upsert_misnamed_referenced_texture(&dir, &db_path);
+        // Baseline lives under <project_dir>/sub/, referenced by a *relative* config path.
+        // The test CWD is the crate dir, so CWD-relative resolution would NOT find it.
+        let sub = dir.join("sub");
+        std::fs::create_dir_all(&sub).unwrap();
+        write_baseline(
+            &sub.join("baseline.json"),
+            vec![err_violation("naming/prefix", "/Game/Rock")],
+        );
+
+        let cfg = cfg_naming_error_with_baseline(std::path::Path::new("sub/baseline.json"));
+        let result = handle_check_with_baseline(
+            &dir,
+            &[],
+            &[],
+            false,
+            &db_path,
+            &cfg,
+            &FormatKind::Text,
+            None,
+            None,
+        )
+        .unwrap(); // would Err (not found) if resolved against CWD instead of project_dir
+        assert_eq!(
+            result, 0,
+            "relative config baseline_path resolves against project_dir, not CWD"
+        );
         let _ = std::fs::remove_dir_all(&dir);
     }
 }

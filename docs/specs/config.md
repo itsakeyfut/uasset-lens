@@ -102,8 +102,13 @@ SkeletalMesh.severity      = "warn"
 # [check] — check command settings
 # ---------------------------------------------------------------------------
 [check]
-# Default path for --save-baseline / --diff-from.
-baseline_path = ".uasset-lens/baseline.json"
+# Optional. When set, `check` automatically diffs against this baseline on every run
+# (equivalent to passing `--diff-from <path>`). Unset by default → no auto-diff.
+# An explicit `--diff-from` on the command line overrides this value.
+# A relative path is resolved against the project directory (where .uasset-lens.toml lives),
+# so a committed baseline_path is portable regardless of the current working directory.
+# Note: `--save-baseline` has its own separate default path and is NOT driven by this key.
+# baseline_path = ".uasset-lens/baseline.json"   # uncomment to enable auto-diff
 ```
 
 ---
@@ -130,7 +135,7 @@ When `.uasset-lens.toml` is absent, these defaults apply:
 | `budget.enabled` | `true` |
 | `budget.Texture2D.max_file_size` | `"4MB"` |
 | `budget.Texture2D.severity` | `"error"` |
-| `check.baseline_path` | `".uasset-lens/baseline.json"` |
+| `check.baseline_path` | _(unset — no auto-diff)_ |
 
 ---
 
