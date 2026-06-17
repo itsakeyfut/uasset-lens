@@ -661,11 +661,11 @@ mod tests {
         let dir = std::env::temp_dir().join(format!("uasset_lens_dispatch_{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         let cfg_path = dir.join("custom.toml");
-        std::fs::write(&cfg_path, "[lint]\nblueprint_max_dependency_depth = 99\n").unwrap();
+        std::fs::write(&cfg_path, "[lint.blueprint]\ndependency_depth_limit = 99\n").unwrap();
 
         let cfg =
             crate::config::resolve_config(std::path::Path::new("."), Some(&cfg_path)).unwrap();
-        assert_eq!(cfg.lint.blueprint_max_dependency_depth, Some(99));
+        assert_eq!(cfg.lint.blueprint.dependency_depth_limit, Some(99));
         let _ = std::fs::remove_dir_all(&dir);
     }
 

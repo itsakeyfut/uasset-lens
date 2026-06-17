@@ -75,6 +75,11 @@ blueprint.cast_limit             = 10     # max Cast nodes per Blueprint
 blueprint.node_limit             = 200    # max total nodes per Blueprint
 blueprint.dependency_depth_limit = 5     # max transitive dependency depth
 
+# Per-asset-type override of dependency_depth_limit. Keys are asset type names
+# (e.g. Blueprint, AnimBlueprint). Types not listed fall back to the global limit.
+[lint.blueprint.depth_by_type]
+AnimBlueprint = 20
+
 # ---------------------------------------------------------------------------
 # [budget] — per-type file size limits
 # ---------------------------------------------------------------------------

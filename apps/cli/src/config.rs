@@ -64,13 +64,78 @@ pub(crate) fn default_external_roots() -> Vec<String> {
 #[derive(Default, serde::Deserialize)]
 pub struct LintConfig {
     #[serde(default)]
-    pub naming_prefix: HashMap<String, String>,
-    pub blueprint_max_nodes: Option<u32>,
-    pub blueprint_max_event_tick: Option<u32>,
-    pub blueprint_max_cast_count: Option<u32>,
-    pub blueprint_max_dependency_depth: Option<u32>,
+    pub naming: LintNamingConfig,
     #[serde(default)]
-    pub blueprint_depth_by_type: HashMap<String, u32>,
+    pub blueprint: LintBlueprintConfig,
+}
+
+fn default_true() -> bool {
+    true
+}
+
+/// `[lint.naming]` — naming-prefix conventions. Each `*_prefix` overrides the
+/// built-in default prefix for that asset type.
+#[derive(serde::Deserialize)]
+pub struct LintNamingConfig {
+    #[serde(default = "default_true")]
+    pub enabled: bool,
+    pub severity: Option<CheckSeverity>,
+    pub texture_prefix: Option<String>,
+    pub material_prefix: Option<String>,
+    pub material_function_prefix: Option<String>,
+    pub static_mesh_prefix: Option<String>,
+    pub skeletal_mesh_prefix: Option<String>,
+    pub blueprint_prefix: Option<String>,
+    pub widget_prefix: Option<String>,
+    pub anim_bp_prefix: Option<String>,
+    pub sound_prefix: Option<String>,
+}
+
+impl Default for LintNamingConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            severity: None,
+            texture_prefix: None,
+            material_prefix: None,
+            material_function_prefix: None,
+            static_mesh_prefix: None,
+            skeletal_mesh_prefix: None,
+            blueprint_prefix: None,
+            widget_prefix: None,
+            anim_bp_prefix: None,
+            sound_prefix: None,
+        }
+    }
+}
+
+/// `[lint.blueprint]` — Blueprint complexity thresholds. `depth_by_type` overrides
+/// the dependency-depth limit per asset type (extension beyond the documented limits).
+#[derive(serde::Deserialize)]
+pub struct LintBlueprintConfig {
+    #[serde(default = "default_true")]
+    pub enabled: bool,
+    pub severity: Option<CheckSeverity>,
+    pub event_tick_limit: Option<u32>,
+    pub cast_limit: Option<u32>,
+    pub node_limit: Option<u32>,
+    pub dependency_depth_limit: Option<u32>,
+    #[serde(default)]
+    pub depth_by_type: HashMap<String, u32>,
+}
+
+impl Default for LintBlueprintConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            severity: None,
+            event_tick_limit: None,
+            cast_limit: None,
+            node_limit: None,
+            dependency_depth_limit: None,
+            depth_by_type: HashMap::new(),
+        }
+    }
 }
 
 #[derive(serde::Deserialize)]
@@ -247,9 +312,9 @@ mod tests {
         let dir = std::env::temp_dir().join(format!("uasset_lens_at_{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         let path = dir.join("test.toml");
-        std::fs::write(&path, "[lint]\nblueprint_max_dependency_depth = 5\n").unwrap();
+        std::fs::write(&path, "[lint.blueprint]\ndependency_depth_limit =5\n").unwrap();
         let cfg = load_config_at(&path);
-        assert_eq!(cfg.lint.blueprint_max_dependency_depth, Some(5));
+        assert_eq!(cfg.lint.blueprint.dependency_depth_limit, Some(5));
         let _ = std::fs::remove_dir_all(&dir);
     }
 
@@ -259,8 +324,8 @@ mod tests {
             std::env::temp_dir().join(format!("uasset_lens_absent_{}.toml", std::process::id()));
         // don't create it — we want it to be missing
         let cfg = load_config_at(&path);
-        assert!(cfg.lint.blueprint_max_dependency_depth.is_none());
-        assert!(cfg.lint.blueprint_depth_by_type.is_empty());
+        assert!(cfg.lint.blueprint.dependency_depth_limit.is_none());
+        assert!(cfg.lint.blueprint.depth_by_type.is_empty());
     }
 
     #[test]
@@ -268,9 +333,9 @@ mod tests {
         let dir = std::env::temp_dir().join(format!("uasset_lens_res_{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         let path = dir.join("custom.toml");
-        std::fs::write(&path, "[lint]\nblueprint_max_dependency_depth = 7\n").unwrap();
+        std::fs::write(&path, "[lint.blueprint]\ndependency_depth_limit =7\n").unwrap();
         let cfg = resolve_config(std::path::Path::new("."), Some(&path)).unwrap();
-        assert_eq!(cfg.lint.blueprint_max_dependency_depth, Some(7));
+        assert_eq!(cfg.lint.blueprint.dependency_depth_limit, Some(7));
         let _ = std::fs::remove_dir_all(&dir);
     }
 
@@ -290,11 +355,11 @@ mod tests {
         std::fs::create_dir_all(&dir).unwrap();
         std::fs::write(
             dir.join(".uasset-lens.toml"),
-            "[lint]\nblueprint_max_dependency_depth = 3\n",
+            "[lint.blueprint]\ndependency_depth_limit =3\n",
         )
         .unwrap();
         let cfg = resolve_config(&dir, None).unwrap();
-        assert_eq!(cfg.lint.blueprint_max_dependency_depth, Some(3));
+        assert_eq!(cfg.lint.blueprint.dependency_depth_limit, Some(3));
         let _ = std::fs::remove_dir_all(&dir);
     }
 
@@ -304,11 +369,11 @@ mod tests {
         std::fs::create_dir_all(&dir).unwrap();
         std::fs::write(
             dir.join(".uasset-lens.toml"),
-            "[lint]\nblueprint_max_dependency_depth = 12\n",
+            "[lint.blueprint]\ndependency_depth_limit =12\n",
         )
         .unwrap();
         let cfg = load_config(&dir);
-        assert_eq!(cfg.lint.blueprint_max_dependency_depth, Some(12));
+        assert_eq!(cfg.lint.blueprint.dependency_depth_limit, Some(12));
         let _ = std::fs::remove_dir_all(&dir);
     }
 
@@ -318,16 +383,16 @@ mod tests {
         std::fs::create_dir_all(&dir).unwrap();
         std::fs::write(
             dir.join(".uasset-lens.toml"),
-            "[lint.blueprint_depth_by_type]\nBlueprint = 10\nAnimBlueprint = 20\n",
+            "[lint.blueprint.depth_by_type]\nBlueprint = 10\nAnimBlueprint = 20\n",
         )
         .unwrap();
         let cfg = load_config(&dir);
         assert_eq!(
-            cfg.lint.blueprint_depth_by_type.get("Blueprint"),
+            cfg.lint.blueprint.depth_by_type.get("Blueprint"),
             Some(&10u32)
         );
         assert_eq!(
-            cfg.lint.blueprint_depth_by_type.get("AnimBlueprint"),
+            cfg.lint.blueprint.depth_by_type.get("AnimBlueprint"),
             Some(&20u32)
         );
         let _ = std::fs::remove_dir_all(&dir);
@@ -360,5 +425,48 @@ mod tests {
         assert_eq!(cfg.rules.circular_deps, None);
         assert_eq!(cfg.rules.duplicate_assets, None);
         assert_eq!(cfg.rules.redirectors, None);
+    }
+
+    #[test]
+    fn load_config_should_parse_nested_lint_naming_fields() {
+        let dir = std::env::temp_dir().join(format!("uasset_lens_lnaming_{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(
+            dir.join(".uasset-lens.toml"),
+            "[lint.naming]\nenabled = false\nseverity = \"warn\"\ntexture_prefix = \"TX_\"\n",
+        )
+        .unwrap();
+        let cfg = load_config(&dir);
+        assert!(!cfg.lint.naming.enabled);
+        assert_eq!(cfg.lint.naming.severity, Some(CheckSeverity::Warn));
+        assert_eq!(cfg.lint.naming.texture_prefix.as_deref(), Some("TX_"));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn load_config_should_parse_nested_lint_blueprint_fields() {
+        let dir = std::env::temp_dir().join(format!("uasset_lens_lbp_{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(
+            dir.join(".uasset-lens.toml"),
+            "[lint.blueprint]\nenabled = false\nseverity = \"error\"\nevent_tick_limit = 2\n",
+        )
+        .unwrap();
+        let cfg = load_config(&dir);
+        assert!(!cfg.lint.blueprint.enabled);
+        assert_eq!(cfg.lint.blueprint.severity, Some(CheckSeverity::Error));
+        assert_eq!(cfg.lint.blueprint.event_tick_limit, Some(2));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn load_config_should_default_lint_sub_rules_enabled_when_absent() {
+        let dir = std::env::temp_dir().join(format!("uasset_lens_ldef_{}", std::process::id()));
+
+        let cfg = load_config(&dir);
+
+        assert!(cfg.lint.naming.enabled, "naming defaults to enabled");
+        assert!(cfg.lint.blueprint.enabled, "blueprint defaults to enabled");
+        assert_eq!(cfg.lint.naming.severity, None);
     }
 }

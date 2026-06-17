@@ -233,9 +233,18 @@ pub fn handle_check(
                         format!("{sev}  {}  {}", v.rule_id, v.asset_path.as_str())
                     })
                     .collect();
+                // The lint check blocks only when a per-rule-severity Error violation
+                // exists; all-Warning lint output is non-blocking ([lint] severity).
+                let has_error = violations
+                    .iter()
+                    .any(|v| v.severity == uasset_lens_analysis::Severity::Error);
                 CheckResult {
                     name,
-                    severity,
+                    severity: if has_error {
+                        CheckSeverity::Error
+                    } else {
+                        CheckSeverity::Warn
+                    },
                     passed: count == 0,
                     summary: format!("{count} violations"),
                     findings,
@@ -422,6 +431,77 @@ mod tests {
             rules,
             ..Default::default()
         }
+    }
+
+    fn cfg_with_naming_severity(severity: CheckSeverity) -> crate::config::ConfigFile {
+        crate::config::ConfigFile {
+            lint: crate::config::LintConfig {
+                naming: crate::config::LintNamingConfig {
+                    severity: Some(severity),
+                    ..Default::default()
+                },
+                ..Default::default()
+            },
+            ..Default::default()
+        }
+    }
+
+    // A referenced, mis-named texture: triggers a naming lint violation but is not a
+    // dead asset (BP_Owner references it). Lets the lint check be exercised in isolation.
+    fn upsert_misnamed_referenced_texture(dir: &std::path::Path, db_path: &std::path::Path) {
+        let mut db = uasset_lens_asset_db::AssetDb::open(db_path).unwrap();
+        db.upsert_all(&[
+            make_meta(
+                "/Game/BP_Owner",
+                dir.join("BP_Owner.uasset"),
+                AssetType::Blueprint,
+                1024,
+                vec![AssetPath::new("/Game/Rock").unwrap()],
+            ),
+            make_meta(
+                "/Game/Rock", // mis-named Texture2D (should start with T_)
+                dir.join("Rock.uasset"),
+                AssetType::Texture2D,
+                512,
+                vec![],
+            ),
+        ])
+        .unwrap();
+    }
+
+    #[test]
+    fn handle_check_should_not_block_on_naming_warning_by_default() {
+        let (dir, db_path) = test_db_in_tempdir("check280_naming_warn");
+        upsert_misnamed_referenced_texture(&dir, &db_path);
+
+        // Naming defaults to "warn"; BP_Owner is a dead asset (also "warn" by default).
+        let result = handle_check(
+            &dir,
+            &[],
+            &[],
+            false,
+            &db_path,
+            &Default::default(),
+            &FormatKind::Text,
+        )
+        .unwrap();
+        assert_eq!(result, 0, "default naming warnings must not block CI");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn handle_check_should_block_when_naming_severity_is_error() {
+        let (dir, db_path) = test_db_in_tempdir("check280_naming_error");
+        upsert_misnamed_referenced_texture(&dir, &db_path);
+
+        let cfg = cfg_with_naming_severity(CheckSeverity::Error);
+        let result =
+            handle_check(&dir, &[], &[], false, &db_path, &cfg, &FormatKind::Text).unwrap();
+        assert_eq!(
+            result, 1,
+            "naming.severity = error makes the lint check block"
+        );
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
