@@ -4,7 +4,6 @@ use std::path::Path;
 use anyhow::Context;
 
 use crate::FormatKind;
-use uasset_lens_shared::AssetType;
 
 #[derive(serde::Serialize)]
 struct LintEntry {
@@ -61,7 +60,7 @@ pub fn handle_lint(
         let max_mb = bv.max_size as f64 / (1024.0 * 1024.0);
         violations.push(uasset_lens_analysis::LintViolation {
             severity: uasset_lens_analysis::Severity::Warning,
-            rule_id: budget_rule_id(&bv.asset_type),
+            rule_id: crate::budget_rule_id(&bv.asset_type),
             message: format!(
                 "{} {name} exceeds size limit: {actual_mb:.1} MB > {max_mb:.1} MB",
                 bv.asset_type,
@@ -84,6 +83,10 @@ pub fn handle_lint(
         .collect();
 
     match format {
+        FormatKind::Sarif => {
+            let findings = build_lint_findings(&violations, &assets, project_dir);
+            println!("{}", crate::sarif::to_sarif_json(&findings)?);
+        }
         FormatKind::GithubActions => {
             let path_lookup: HashMap<&str, &std::path::Path> = assets
                 .iter()
@@ -147,8 +150,31 @@ pub fn handle_lint(
     if entries.is_empty() { Ok(0) } else { Ok(1) }
 }
 
-fn budget_rule_id(asset_type: &AssetType) -> String {
-    format!("budget/{}", asset_type.to_string().to_lowercase())
+/// Converts lint violations (naming + folded budget) into SARIF findings, resolving each
+/// `asset_path` to a project-relative file uri via the asset table.
+fn build_lint_findings(
+    violations: &[uasset_lens_analysis::LintViolation],
+    assets: &[uasset_lens_asset_db::AssetRecord],
+    project_dir: &Path,
+) -> Vec<crate::sarif::SarifFinding> {
+    let path_lookup: HashMap<&str, &std::path::Path> = assets
+        .iter()
+        .map(|r| (r.asset_path.as_str(), r.file_path.as_path()))
+        .collect();
+    violations
+        .iter()
+        .map(|v| crate::sarif::SarifFinding {
+            rule_id: v.rule_id.clone(),
+            level: match v.severity {
+                uasset_lens_analysis::Severity::Error => crate::sarif::SarifLevel::Error,
+                uasset_lens_analysis::Severity::Warning => crate::sarif::SarifLevel::Warning,
+            },
+            message: v.message.clone(),
+            uri: path_lookup
+                .get(v.asset_path.as_str())
+                .map(|p| crate::rel_path_for_annotation(p, project_dir)),
+        })
+        .collect()
 }
 
 fn truncate_path(path: &str, max_len: usize) -> String {
@@ -411,5 +437,50 @@ mod tests {
         let result = handle_lint(&dir, &db_path, &cfg, &FormatKind::Text).unwrap();
         assert_eq!(result, 0);
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn handle_lint_sarif_should_return_1_when_violation_found() {
+        let (dir, db_path) = test_db_in_tempdir("lint_sarif");
+        {
+            let mut db = uasset_lens_asset_db::AssetDb::open(&db_path).unwrap();
+            db.upsert_all(&[make_bp_asset("/Game/Blueprints/Rock_BP", &dir)])
+                .unwrap();
+        }
+        let result = handle_lint(&dir, &db_path, &Default::default(), &FormatKind::Sarif).unwrap();
+        assert_eq!(result, 1, "sarif mode keeps the format-agnostic exit code");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn build_lint_findings_should_map_severity_and_resolve_uri() {
+        let assets = vec![uasset_lens_asset_db::AssetRecord {
+            id: 0,
+            asset_path: AssetPath::new("/Game/Rock").unwrap(),
+            file_path: PathBuf::from("/proj/Content/Rock.uasset"),
+            asset_type: AssetType::Texture2D,
+            file_size: 0,
+            last_modified: 0,
+        }];
+        let violations = vec![
+            uasset_lens_analysis::LintViolation {
+                severity: uasset_lens_analysis::Severity::Error,
+                rule_id: "naming/prefix".to_owned(),
+                message: "m".to_owned(),
+                asset_path: AssetPath::new("/Game/Rock").unwrap(),
+            },
+            uasset_lens_analysis::LintViolation {
+                severity: uasset_lens_analysis::Severity::Warning,
+                rule_id: "budget/texture2d".to_owned(),
+                message: "m".to_owned(),
+                asset_path: AssetPath::new("/Game/Missing").unwrap(),
+            },
+        ];
+        let f = build_lint_findings(&violations, &assets, std::path::Path::new("/proj"));
+        assert!(matches!(f[0].level, crate::sarif::SarifLevel::Error));
+        assert_eq!(f[0].uri.as_deref(), Some("Content/Rock.uasset"));
+        // Folded budget violation is Warning, and an unresolved path → no location.
+        assert!(matches!(f[1].level, crate::sarif::SarifLevel::Warning));
+        assert!(f[1].uri.is_none());
     }
 }

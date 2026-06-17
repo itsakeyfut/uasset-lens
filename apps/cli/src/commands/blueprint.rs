@@ -40,6 +40,7 @@ pub fn handle_blueprint(
         .collect();
 
     match format {
+        FormatKind::Sarif => return Err(crate::sarif_not_supported()),
         FormatKind::GithubActions => {
             let assets = db
                 .all_assets()

@@ -28,6 +28,7 @@ pub fn handle_path_conv(
     };
 
     match format {
+        FormatKind::Sarif => return Err(crate::sarif_not_supported()),
         FormatKind::Json => {
             let out = PathConvOutput {
                 input: input.to_owned(),

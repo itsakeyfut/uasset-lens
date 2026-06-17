@@ -295,6 +295,7 @@ pub fn handle_scan(
     }
 
     match format {
+        FormatKind::Sarif => return Err(crate::sarif_not_supported()),
         FormatKind::Json => {
             if !opts.quiet {
                 let skipped_entries: Vec<SkippedEntry> = result

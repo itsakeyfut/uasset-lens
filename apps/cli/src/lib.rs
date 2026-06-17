@@ -1,7 +1,8 @@
-﻿mod commands;
+mod commands;
 pub mod config;
 pub(crate) mod lint_builder;
 mod paths;
+mod sarif;
 
 use std::path::{Path, PathBuf};
 
@@ -18,6 +19,9 @@ pub enum FormatKind {
     Json,
     #[value(name = "github-actions")]
     GithubActions,
+    /// SARIF 2.1.0 — supported by check / lint / budget only.
+    #[value(name = "sarif")]
+    Sarif,
 }
 
 #[derive(Debug, Clone, PartialEq, ValueEnum)]
@@ -278,6 +282,17 @@ pub fn run_with(cli: Cli) -> i32 {
 }
 
 fn dispatch(cli: &Cli) -> anyhow::Result<i32> {
+    // SARIF is only meaningful for the violation-producing commands; reject it elsewhere
+    // up front so the command does no work before failing.
+    if matches!(cli.format, FormatKind::Sarif)
+        && !matches!(
+            cli.command,
+            Commands::Check { .. } | Commands::Lint { .. } | Commands::Budget { .. }
+        )
+    {
+        return Err(sarif_not_supported());
+    }
+
     let project_dir_for_cfg = match &cli.command {
         Commands::Scan { project_dir, .. }
         | Commands::Graph { project_dir, .. }
@@ -458,7 +473,7 @@ fn dispatch(cli: &Cli) -> anyhow::Result<i32> {
             skip_scan,
         } => {
             let db_path = resolve_db_path(project_dir, cli.db.as_deref());
-            commands::check::auto_scan(*skip_scan, project_dir, &db_path, &cli.format, &cfg)?;
+            commands::check::auto_scan(*skip_scan, project_dir, &db_path, &cfg)?;
             commands::check::handle_check_with_baseline(
                 project_dir,
                 only,
@@ -524,6 +539,11 @@ pub(crate) fn maybe_hint_github_actions(format: &FormatKind) {
     }
 }
 
+/// Error returned when `--format sarif` is used on a command that does not produce violations.
+pub(crate) fn sarif_not_supported() -> anyhow::Error {
+    anyhow::anyhow!("--format sarif is only supported by the check, lint, and budget commands")
+}
+
 pub(crate) fn rel_path_for_annotation(file_path: &Path, project_dir: &Path) -> String {
     file_path
         .strip_prefix(project_dir)
@@ -546,6 +566,12 @@ pub(crate) fn format_size(bytes: u64) -> String {
     } else {
         format!("{} B", bytes)
     }
+}
+
+/// The canonical budget rule id, uniform across all asset types and commands
+/// (lint / budget / check / SARIF). Keeping a single generator avoids divergence.
+pub(crate) fn budget_rule_id(asset_type: &uasset_lens_shared::AssetType) -> String {
+    format!("budget/{}", asset_type.to_string().to_lowercase())
 }
 
 pub(crate) fn path_depth_prefix(path: &str) -> &str {
@@ -709,5 +735,27 @@ mod tests {
         ]);
         let err = result.expect_err("--only and --skip together must be a clap error");
         assert_eq!(err.kind(), clap::error::ErrorKind::ArgumentConflict);
+    }
+
+    #[test]
+    fn dispatch_should_reject_sarif_for_unsupported_command() {
+        let cli = Cli {
+            format: FormatKind::Sarif,
+            db: None,
+            yes: false,
+            config: None,
+            command: Commands::Scan {
+                project_dir: std::path::PathBuf::from("."),
+                full_scan: false,
+                diff: false,
+                save_baseline: None,
+                diff_from: None,
+            },
+        };
+        let result = dispatch(&cli);
+        assert!(
+            result.is_err(),
+            "--format sarif on scan must fail fast with an error"
+        );
     }
 }

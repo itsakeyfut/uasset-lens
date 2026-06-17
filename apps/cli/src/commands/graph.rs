@@ -44,6 +44,7 @@ pub fn handle_graph(
         .collect();
 
     match format {
+        FormatKind::Sarif => return Err(crate::sarif_not_supported()),
         FormatKind::Json => {
             let output = GraphOutput {
                 total_assets,
