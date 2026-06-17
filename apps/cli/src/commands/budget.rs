@@ -51,6 +51,10 @@ pub fn handle_budget(
     let has_violations = !entries.is_empty();
 
     match format {
+        FormatKind::Sarif => {
+            let findings = build_budget_findings(&report.violations, &assets, project_dir);
+            println!("{}", crate::sarif::to_sarif_json(&findings)?);
+        }
         FormatKind::GithubActions => {
             let path_lookup: HashMap<&str, &std::path::Path> = assets
                 .iter()
@@ -134,6 +138,35 @@ pub fn handle_budget(
     }
 
     if has_violations { Ok(1) } else { Ok(0) }
+}
+
+/// Converts budget violations into SARIF findings (always error level), resolving each
+/// `asset_path` to a project-relative file uri via the asset table.
+fn build_budget_findings(
+    violations: &[uasset_lens_analysis::budget::BudgetViolation],
+    assets: &[uasset_lens_asset_db::AssetRecord],
+    project_dir: &std::path::Path,
+) -> Vec<crate::sarif::SarifFinding> {
+    let path_lookup: HashMap<&str, &std::path::Path> = assets
+        .iter()
+        .map(|r| (r.asset_path.as_str(), r.file_path.as_path()))
+        .collect();
+    violations
+        .iter()
+        .map(|v| crate::sarif::SarifFinding {
+            rule_id: crate::budget_rule_id(&v.asset_type),
+            level: crate::sarif::SarifLevel::Error,
+            message: format!(
+                "{} {} exceeds limit {}",
+                v.asset_type,
+                crate::format_size(v.file_size),
+                crate::format_size(v.max_size),
+            ),
+            uri: path_lookup
+                .get(v.asset_path.as_str())
+                .map(|p| crate::rel_path_for_annotation(p, project_dir)),
+        })
+        .collect()
 }
 
 #[cfg(test)]
@@ -324,5 +357,54 @@ mod tests {
 
         assert_eq!(result, 1);
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn handle_budget_sarif_should_return_1_when_violation_found() {
+        let (dir, db_path) = test_db_in_tempdir("budget_sarif");
+        std::fs::write(
+            dir.join(".uasset-lens.toml"),
+            "[budget]\nTexture2D.max_size = 1\n",
+        )
+        .unwrap();
+        {
+            let mut db = uasset_lens_asset_db::AssetDb::open(&db_path).unwrap();
+            db.upsert_all(&[crate::commands::make_meta(
+                "/Game/T_Large",
+                dir.join("T_Large.uasset"),
+                AssetType::Texture2D,
+                1024,
+                vec![],
+            )])
+            .unwrap();
+        }
+        let cfg = crate::config::load_config(&dir);
+        let result = handle_budget(&dir, &db_path, &cfg, &FormatKind::Sarif).unwrap();
+        assert_eq!(result, 1, "sarif mode keeps the format-agnostic exit code");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn build_budget_findings_should_use_error_level_and_canonical_rule_id() {
+        use std::path::PathBuf;
+        use uasset_lens_shared::AssetPath;
+        let assets = vec![uasset_lens_asset_db::AssetRecord {
+            id: 0,
+            asset_path: AssetPath::new("/Game/T_Big").unwrap(),
+            file_path: PathBuf::from("/proj/Content/T_Big.uasset"),
+            asset_type: AssetType::Texture2D,
+            file_size: 5_000_000,
+            last_modified: 0,
+        }];
+        let violations = vec![uasset_lens_analysis::budget::BudgetViolation {
+            asset_path: AssetPath::new("/Game/T_Big").unwrap(),
+            asset_type: AssetType::Texture2D,
+            file_size: 5_000_000,
+            max_size: 4_000_000,
+        }];
+        let f = build_budget_findings(&violations, &assets, std::path::Path::new("/proj"));
+        assert_eq!(f[0].rule_id, "budget/texture2d");
+        assert!(matches!(f[0].level, crate::sarif::SarifLevel::Error));
+        assert_eq!(f[0].uri.as_deref(), Some("Content/T_Big.uasset"));
     }
 }

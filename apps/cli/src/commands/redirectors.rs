@@ -27,6 +27,7 @@ pub fn handle_redirectors(
     let found = !redirector_paths.is_empty();
 
     match format {
+        FormatKind::Sarif => return Err(crate::sarif_not_supported()),
         FormatKind::Json => {
             let count = redirector_paths.len();
             let output = RedirectorsOutput {

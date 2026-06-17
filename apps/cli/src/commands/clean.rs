@@ -108,6 +108,7 @@ pub fn handle_clean(
         let total_size_bytes: u64 = entries.iter().map(|e| e.file_size).sum();
         let count = entries.len();
         match format {
+            FormatKind::Sarif => return Err(crate::sarif_not_supported()),
             FormatKind::Json => {
                 let targets = entries
                     .iter()
@@ -260,6 +261,7 @@ pub fn handle_clean(
 
     eprintln!();
     match format {
+        FormatKind::Sarif => return Err(crate::sarif_not_supported()),
         FormatKind::Json => {
             let summary = CleanSummaryJson {
                 deleted,

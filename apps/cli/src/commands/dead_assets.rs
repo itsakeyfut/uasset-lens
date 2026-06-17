@@ -118,6 +118,7 @@ pub fn handle_dead_assets(
         groups.sort_unstable_by_key(|g| std::cmp::Reverse(g.total_size_bytes));
 
         match format {
+            FormatKind::Sarif => return Err(crate::sarif_not_supported()),
             FormatKind::Json => {
                 println!(
                     "{}",
@@ -152,6 +153,7 @@ pub fn handle_dead_assets(
     }
 
     match format {
+        FormatKind::Sarif => return Err(crate::sarif_not_supported()),
         FormatKind::Json => {
             let output = DeadAssetsOutput {
                 assets: entries,

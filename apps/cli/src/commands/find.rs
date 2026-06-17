@@ -105,6 +105,7 @@ pub fn handle_find(
     let total_bytes: u64 = entries.iter().map(|e| e.file_size).sum();
 
     match format {
+        FormatKind::Sarif => return Err(crate::sarif_not_supported()),
         FormatKind::Json => {
             let out = FindOutput {
                 total_count: entries.len(),

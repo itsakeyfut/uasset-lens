@@ -64,6 +64,7 @@ pub fn handle_impact(
             .collect();
 
         match format {
+            FormatKind::Sarif => return Err(crate::sarif_not_supported()),
             FormatKind::Json => {
                 let out = ImpactTreeOutput {
                     target: target.as_str().to_owned(),
@@ -94,6 +95,7 @@ pub fn handle_impact(
     }
 
     match format {
+        FormatKind::Sarif => return Err(crate::sarif_not_supported()),
         FormatKind::Json => {
             let output = ImpactOutput {
                 target: target.as_str().to_owned(),

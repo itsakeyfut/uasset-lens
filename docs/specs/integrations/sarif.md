@@ -61,26 +61,32 @@ Commands that do not support SARIF exit with code `2` and print an error to stde
 
 ## Rule ID Format
 
-Rule IDs use a slash-separated hierarchy:
+The `ruleId` is the tool's canonical rule identifier — the same value shown in the
+`text`, `json`, and `github-actions` output (no SARIF-specific transformation):
 
-| Pattern | Example |
+| Finding | `ruleId` |
 |---|---|
-| `lint/<category>/<rule-name>` | `lint/naming/blueprint-prefix` |
-| `budget/<asset-type>` | `budget/texture2d` |
-| `dead-asset` | `dead-asset` |
-| `duplicate/<criterion>` | `duplicate/same-name` |
+| Naming lint | `naming/prefix` |
+| Blueprint complexity lint | `blueprint/node-count`, `blueprint/event-tick`, `blueprint/cast-count`, `blueprint/dependency-depth` |
+| Budget | `budget/<asset-type>` (e.g. `budget/texture2d`) |
+| Dead asset (`check`) | `dead-assets` |
+| Circular dependency (`check`) | `circular-deps` |
+| Redirector (`check`) | `redirectors` |
+| Duplicate asset (`check`) | `duplicate-assets` |
 
 ---
 
 ## Level Mapping
 
-| Finding type | SARIF level |
+`level` is derived from each finding's own severity: `Error` → `"error"`, `Warn` →
+`"warning"`. The default severities are:
+
+| Finding type | Severity → SARIF level |
 |---|---|
-| Lint error | `"error"` |
-| Lint warning | `"warning"` |
-| Budget violation | `"error"` |
-| Dead asset | `"warning"` |
-| Duplicate asset | `"warning"` |
+| Lint (per-rule severity) | `error` or `warning` |
+| Budget (`check` / `budget` command) | `"error"` |
+| Circular dependency | `"error"` |
+| Dead asset / redirector / duplicate | `"warning"` |
 
 ---
 
@@ -98,26 +104,14 @@ Rule IDs use a slash-separated hierarchy:
           "version": "0.2.0",
           "informationUri": "https://github.com/itsakeyfut/uasset-lens",
           "rules": [
-            {
-              "id": "lint/naming/blueprint-prefix",
-              "name": "BlueprintPrefixRule",
-              "shortDescription": {
-                "text": "Blueprint assets must use BP_ prefix"
-              }
-            },
-            {
-              "id": "budget/texture2d",
-              "name": "Texture2DBudgetRule",
-              "shortDescription": {
-                "text": "Texture2D asset exceeds configured size budget"
-              }
-            }
+            { "id": "budget/texture2d" },
+            { "id": "naming/prefix" }
           ]
         }
       },
       "results": [
         {
-          "ruleId": "lint/naming/blueprint-prefix",
+          "ruleId": "naming/prefix",
           "level": "error",
           "message": {
             "text": "Asset 'Character' is missing required prefix 'BP_'"

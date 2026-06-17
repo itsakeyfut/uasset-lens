@@ -44,6 +44,7 @@ pub fn handle_deps(
     let (direct_count, transitive_count, total_size) = compute_stats(&graph, &asset_map, &target);
 
     match format {
+        FormatKind::Sarif => return Err(crate::sarif_not_supported()),
         FormatKind::Json => {
             if size_only {
                 let stats = serde_json::json!({

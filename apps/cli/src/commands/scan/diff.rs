@@ -75,6 +75,7 @@ pub(super) fn print_diff(
     let has_size_increases = !size_increases.is_empty();
 
     match format {
+        FormatKind::Sarif => return Err(crate::sarif_not_supported()),
         FormatKind::GithubActions => {
             let path_lookup: HashMap<&str, &std::path::Path> = input
                 .assets

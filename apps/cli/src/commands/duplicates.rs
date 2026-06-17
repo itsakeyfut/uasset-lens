@@ -56,6 +56,7 @@ pub fn handle_duplicates(
     let has_duplicates = !entries.is_empty();
 
     match format {
+        FormatKind::Sarif => return Err(crate::sarif_not_supported()),
         FormatKind::Json => {
             println!(
                 "{}",

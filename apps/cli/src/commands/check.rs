@@ -182,18 +182,18 @@ pub(crate) fn auto_scan(
     skip_scan: bool,
     project_dir: &Path,
     db_path: &Path,
-    format: &FormatKind,
     cfg: &crate::config::ConfigFile,
 ) -> anyhow::Result<()> {
     if skip_scan {
         return Ok(());
     }
-    // Scan's exit code (e.g. stale-removed → 1) is intentionally discarded; `check`
-    // computes its own exit code from the check results.
+    // The pre-check scan is quiet (no stdout), so its format is irrelevant — pass Text to avoid
+    // the SARIF guard in `handle_scan`. Scan's exit code (e.g. stale-removed → 1) is discarded;
+    // `check` computes its own exit code from the check results.
     crate::commands::scan::handle_scan(
         project_dir,
         db_path,
-        format,
+        &FormatKind::Text,
         cfg,
         &crate::commands::scan::ScanOptions {
             full_scan: false,
@@ -279,7 +279,9 @@ pub fn handle_check_with_baseline(
         None
     };
 
-    let assets = if needs_assets {
+    // SARIF resolves a file path for every finding (including graph-only checks), so it needs the
+    // asset table even when no asset-based check runs.
+    let assets = if needs_assets || matches!(format, FormatKind::Sarif) {
         Some(
             db.all_assets()
                 .context("Failed to read assets from database")?,
@@ -498,8 +500,7 @@ pub fn handle_check_with_baseline(
                     .iter()
                     .map(|v| Violation {
                         severity: to_violation_severity(severity),
-                        // RK-004: budget rule_id is uniform across all asset types.
-                        rule: format!("budget/{}", v.asset_type.to_string().to_lowercase()),
+                        rule: crate::budget_rule_id(&v.asset_type),
                         asset_path: v.asset_path.as_str().to_owned(),
                         message: format!(
                             "{} > {}",
@@ -608,13 +609,21 @@ pub fn handle_check_with_baseline(
     let total = results.len();
     let gate_passed = blocking_count == 0;
     // `--diff-from` re-bases the gate onto regressions; the serialized `passed` and the
-    // process exit code must derive from the same effective gate (RK-013).
+    // process exit code must derive from the same effective gate.
     let effective_passed = match &regressions {
         Some(regs) => regs.is_empty(),
         None => gate_passed,
     };
 
     match format {
+        FormatKind::Sarif => {
+            let findings = build_check_findings(
+                &all_violations,
+                assets.as_deref().unwrap_or(&[]),
+                project_dir,
+            );
+            println!("{}", crate::sarif::to_sarif_json(&findings)?);
+        }
         FormatKind::Json => {
             let output = CheckOutput {
                 passed: effective_passed,
@@ -747,6 +756,34 @@ fn check_full_command(name: &str) -> &str {
         "duplicates" => "duplicates",
         _ => name,
     }
+}
+
+/// Converts the aggregated check violations into SARIF findings: severity → level, and each
+/// `asset_path` resolved to a project-relative file uri via the asset table (None when the
+/// violation has no backing file, e.g. a duplicate group name).
+fn build_check_findings(
+    violations: &[Violation],
+    assets: &[uasset_lens_asset_db::AssetRecord],
+    project_dir: &Path,
+) -> Vec<crate::sarif::SarifFinding> {
+    let path_lookup: HashMap<&str, &Path> = assets
+        .iter()
+        .map(|r| (r.asset_path.as_str(), r.file_path.as_path()))
+        .collect();
+    violations
+        .iter()
+        .map(|v| crate::sarif::SarifFinding {
+            rule_id: v.rule.clone(),
+            level: match v.severity {
+                ViolationSeverity::Error => crate::sarif::SarifLevel::Error,
+                ViolationSeverity::Warn => crate::sarif::SarifLevel::Warning,
+            },
+            message: v.message.clone(),
+            uri: path_lookup
+                .get(v.asset_path.as_str())
+                .map(|p| crate::rel_path_for_annotation(p, project_dir)),
+        })
+        .collect()
 }
 
 // The text output caps each check at `CHECK_SAMPLE_LIMIT` items; `--verbose` and the
@@ -1724,14 +1761,7 @@ mod tests {
         // Empty content dir, no DB yet: the auto-scan must create it (scan ran).
         assert!(!db_path.exists());
 
-        auto_scan(
-            false,
-            &dir,
-            &db_path,
-            &FormatKind::Text,
-            &Default::default(),
-        )
-        .unwrap();
+        auto_scan(false, &dir, &db_path, &Default::default()).unwrap();
 
         assert!(
             db_path.exists(),
@@ -1745,7 +1775,7 @@ mod tests {
         let (dir, db_path) = test_db_in_tempdir("check276_skipscan");
         assert!(!db_path.exists());
 
-        auto_scan(true, &dir, &db_path, &FormatKind::Text, &Default::default()).unwrap();
+        auto_scan(true, &dir, &db_path, &Default::default()).unwrap();
 
         assert!(
             !db_path.exists(),
@@ -1790,5 +1820,59 @@ mod tests {
         assert!(is_full_output(true, &FormatKind::GithubActions));
         assert!(!is_full_output(false, &FormatKind::Text));
         assert!(is_full_output(true, &FormatKind::Text));
+    }
+
+    #[test]
+    fn handle_check_sarif_should_emit_and_keep_blocking_exit_code() {
+        let (dir, db_path) = test_db_in_tempdir("check292_sarif");
+        upsert_misnamed_referenced_texture(&dir, &db_path);
+        // naming severity = error → the lint check blocks → exit 1, same as other formats.
+        let cfg = cfg_with_naming_severity(CheckSeverity::Error);
+        let result =
+            handle_check(&dir, &[], &[], false, &db_path, &cfg, &FormatKind::Sarif).unwrap();
+        assert_eq!(result, 1, "sarif mode keeps the format-agnostic exit code");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn build_check_findings_should_map_severity_and_resolve_uri() {
+        use std::path::PathBuf;
+        use uasset_lens_shared::{AssetPath, AssetType};
+        let assets = vec![uasset_lens_asset_db::AssetRecord {
+            id: 0,
+            asset_path: AssetPath::new("/Game/Rock").unwrap(),
+            file_path: PathBuf::from("/proj/Content/Rock.uasset"),
+            asset_type: AssetType::Texture2D,
+            file_size: 0,
+            last_modified: 0,
+        }];
+        let violations = vec![
+            Violation {
+                severity: ViolationSeverity::Error,
+                rule: "naming/prefix".to_owned(),
+                asset_path: "/Game/Rock".to_owned(),
+                message: "m".to_owned(),
+            },
+            Violation {
+                severity: ViolationSeverity::Warn,
+                rule: "dead-assets".to_owned(),
+                asset_path: "/Game/Rock".to_owned(),
+                message: "m".to_owned(),
+            },
+            Violation {
+                severity: ViolationSeverity::Warn,
+                rule: "duplicate-assets".to_owned(),
+                asset_path: "Rock".to_owned(), // group name, not a real asset path
+                message: "m".to_owned(),
+            },
+        ];
+        let f = build_check_findings(&violations, &assets, std::path::Path::new("/proj"));
+        assert!(matches!(f[0].level, crate::sarif::SarifLevel::Error));
+        assert_eq!(f[0].uri.as_deref(), Some("Content/Rock.uasset"));
+        // A graph-only finding (dead-assets) still resolves its project-relative file uri.
+        assert!(matches!(f[1].level, crate::sarif::SarifLevel::Warning));
+        assert_eq!(f[1].uri.as_deref(), Some("Content/Rock.uasset"));
+        // A duplicate group name has no backing file → no location.
+        assert!(f[2].uri.is_none());
     }
 }
