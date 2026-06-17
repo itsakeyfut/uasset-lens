@@ -3,7 +3,7 @@
 **Enforce asset quality gates in CI — without opening the Unreal Editor.**
 
 [![CI](https://github.com/itsakeyfut/uasset-lens/actions/workflows/ci.yml/badge.svg)](https://github.com/itsakeyfut/uasset-lens/actions/workflows/ci.yml)
-[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![License: MIT OR Apache-2.0](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue.svg)](#license)
 
 uasset-lens is a fast, CLI-first static analyzer for Unreal Engine 5 `.uasset` / `.umap`
 files. It reads the binary format directly, so it runs in seconds on any CI server with no
