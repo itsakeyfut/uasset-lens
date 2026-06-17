@@ -1,6 +1,6 @@
 use anyhow::Context;
 use std::collections::HashMap;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 #[derive(Default, serde::Deserialize)]
 pub struct ConfigFile {
@@ -14,6 +14,8 @@ pub struct ConfigFile {
     pub budget: uasset_lens_analysis::BudgetConfig,
     #[serde(default)]
     pub diff: DiffConfig,
+    #[serde(default)]
+    pub check: CheckSectionConfig,
 }
 
 /// Per-check severity. `Off` disables the check; `Warn` reports findings without
@@ -154,6 +156,14 @@ impl Default for DiffConfig {
 
 fn default_size_increase_threshold_pct() -> u64 {
     10
+}
+
+/// `[check]` — check command settings. `baseline_path`, when set, is the default
+/// baseline that `check` auto-diffs against (equivalent to `--diff-from <path>`).
+/// Unset means no auto-diff; an explicit `--diff-from` always overrides it.
+#[derive(Default, serde::Deserialize)]
+pub struct CheckSectionConfig {
+    pub baseline_path: Option<PathBuf>,
 }
 
 pub fn load_config(project_dir: &Path) -> ConfigFile {
@@ -468,5 +478,33 @@ mod tests {
         assert!(cfg.lint.naming.enabled, "naming defaults to enabled");
         assert!(cfg.lint.blueprint.enabled, "blueprint defaults to enabled");
         assert_eq!(cfg.lint.naming.severity, None);
+    }
+
+    #[test]
+    fn load_config_should_parse_check_baseline_path_from_valid_toml() {
+        let dir = std::env::temp_dir().join(format!("uasset_lens_check_bp_{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(
+            dir.join(".uasset-lens.toml"),
+            "[check]\nbaseline_path = \".uasset-lens/baseline.json\"\n",
+        )
+        .unwrap();
+        let cfg = load_config(&dir);
+        let _ = std::fs::remove_dir_all(&dir);
+
+        assert_eq!(
+            cfg.check.baseline_path,
+            Some(PathBuf::from(".uasset-lens/baseline.json"))
+        );
+    }
+
+    #[test]
+    fn load_config_should_leave_check_baseline_path_none_when_section_absent() {
+        let dir =
+            std::env::temp_dir().join(format!("uasset_lens_check_none_{}", std::process::id()));
+
+        let cfg = load_config(&dir);
+
+        assert_eq!(cfg.check.baseline_path, None);
     }
 }
