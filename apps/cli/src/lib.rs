@@ -184,6 +184,9 @@ pub enum Commands {
         /// Compare against a baseline; exit 1 only on new error regressions
         #[arg(long)]
         diff_from: Option<PathBuf>,
+        /// Skip the pre-check mtime delta scan (use the existing DB as-is)
+        #[arg(long)]
+        skip_scan: bool,
     },
     /// Delete confirmed dead assets from disk
     #[command(name = "clean")]
@@ -320,6 +323,7 @@ fn dispatch(cli: &Cli) -> anyhow::Result<i32> {
                     yes: cli.yes,
                     save_baseline: save_baseline.as_deref(),
                     diff_from: diff_from.as_deref(),
+                    quiet: false,
                 },
             )
         }
@@ -451,8 +455,10 @@ fn dispatch(cli: &Cli) -> anyhow::Result<i32> {
             verbose,
             save_baseline,
             diff_from,
+            skip_scan,
         } => {
             let db_path = resolve_db_path(project_dir, cli.db.as_deref());
+            commands::check::auto_scan(*skip_scan, project_dir, &db_path, &cli.format, &cfg)?;
             commands::check::handle_check_with_baseline(
                 project_dir,
                 only,

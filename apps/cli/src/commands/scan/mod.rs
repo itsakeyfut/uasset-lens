@@ -32,6 +32,9 @@ pub struct ScanOptions<'a> {
     pub yes: bool,
     pub save_baseline: Option<&'a str>,
     pub diff_from: Option<&'a str>,
+    /// Suppress the stdout scan report (per-category counts and summary). Progress on
+    /// stderr is unaffected. Used by `check`'s auto-scan to keep its own stdout clean.
+    pub quiet: bool,
 }
 
 pub fn handle_scan(
@@ -178,26 +181,28 @@ pub fn handle_scan(
         .context("Failed to write assets to database")?;
 
     // Print per-category scan results before prompting for stale removal.
-    if new_count > 0 {
-        println!(
-            "  {} {} new asset(s) indexed",
-            sym("+", "\x1b[32m+\x1b[0m", use_color),
-            new_count
-        );
-    }
-    if updated_count > 0 {
-        println!(
-            "  {} {} asset(s) updated (mtime changed)",
-            sym("~", "\x1b[33m~\x1b[0m", use_color),
-            updated_count
-        );
-    }
-    if !stale.is_empty() {
-        println!(
-            "  {} {} asset(s) removed from disk",
-            sym("?", "\x1b[31m?\x1b[0m", use_color),
-            stale.len()
-        );
+    if !opts.quiet {
+        if new_count > 0 {
+            println!(
+                "  {} {} new asset(s) indexed",
+                sym("+", "\x1b[32m+\x1b[0m", use_color),
+                new_count
+            );
+        }
+        if updated_count > 0 {
+            println!(
+                "  {} {} asset(s) updated (mtime changed)",
+                sym("~", "\x1b[33m~\x1b[0m", use_color),
+                updated_count
+            );
+        }
+        if !stale.is_empty() {
+            println!(
+                "  {} {} asset(s) removed from disk",
+                sym("?", "\x1b[31m?\x1b[0m", use_color),
+                stale.len()
+            );
+        }
     }
 
     let removed_count = if stale.is_empty() {
@@ -244,6 +249,12 @@ pub fn handle_scan(
         }
     };
 
+    // In quiet mode the stdout report is suppressed, but stale removals still mutate the DB.
+    // Surface them on stderr so an unexpected mass deletion (e.g. wrong project dir) is not silent.
+    if opts.quiet && removed_count > 0 {
+        eprintln!("  {removed_count} stale record(s) removed during scan");
+    }
+
     let snapshot_id = db
         .record_scan_snapshot()
         .context("Failed to record scan snapshot")?;
@@ -285,36 +296,40 @@ pub fn handle_scan(
 
     match format {
         FormatKind::Json => {
-            let skipped_entries: Vec<SkippedEntry> = result
-                .skipped
-                .iter()
-                .map(|sf| SkippedEntry {
-                    path: sf.file_path.to_string_lossy().into_owned(),
-                    reason: sf.reason.to_string(),
-                })
-                .collect();
-            let output = ScanOutput {
-                assets_total,
-                new: new_count,
-                updated: updated_count,
-                removed: removed_count,
-                skipped: skipped_entries,
-            };
-            println!(
-                "{}",
-                serde_json::to_string_pretty(&output)
-                    .context("Failed to serialize scan output to JSON")?
-            );
+            if !opts.quiet {
+                let skipped_entries: Vec<SkippedEntry> = result
+                    .skipped
+                    .iter()
+                    .map(|sf| SkippedEntry {
+                        path: sf.file_path.to_string_lossy().into_owned(),
+                        reason: sf.reason.to_string(),
+                    })
+                    .collect();
+                let output = ScanOutput {
+                    assets_total,
+                    new: new_count,
+                    updated: updated_count,
+                    removed: removed_count,
+                    skipped: skipped_entries,
+                };
+                println!(
+                    "{}",
+                    serde_json::to_string_pretty(&output)
+                        .context("Failed to serialize scan output to JSON")?
+                );
+            }
         }
         FormatKind::Text | FormatKind::GithubActions => {
-            println!();
-            println!(
-                "  {} {} assets total, {} record(s) cleaned, {} skipped (parse error)",
-                sym("✓", "\x1b[32m✓\x1b[0m", use_color),
-                assets_total,
-                removed_count,
-                result.skipped.len()
-            );
+            if !opts.quiet {
+                println!();
+                println!(
+                    "  {} {} assets total, {} record(s) cleaned, {} skipped (parse error)",
+                    sym("✓", "\x1b[32m✓\x1b[0m", use_color),
+                    assets_total,
+                    removed_count,
+                    result.skipped.len()
+                );
+            }
 
             if !result.skipped.is_empty() {
                 eprintln!();
@@ -411,6 +426,7 @@ mod tests {
                 yes: false,
                 save_baseline: None,
                 diff_from: None,
+                quiet: false,
             },
         )
         .unwrap();
@@ -447,6 +463,7 @@ mod tests {
                 yes: false,
                 save_baseline: None,
                 diff_from: None,
+                quiet: false,
             },
         )
         .unwrap();
@@ -475,6 +492,7 @@ mod tests {
                 yes: false,
                 save_baseline: None,
                 diff_from: None,
+                quiet: false,
             },
         )
         .unwrap();
@@ -505,6 +523,7 @@ mod tests {
                 yes: true,
                 save_baseline: None,
                 diff_from: None,
+                quiet: false,
             },
         )
         .unwrap();
@@ -546,6 +565,7 @@ mod tests {
                 yes: false,
                 save_baseline: None,
                 diff_from: None,
+                quiet: false,
             },
         )
         .unwrap();
@@ -580,6 +600,7 @@ mod tests {
                 yes: false,
                 save_baseline: None,
                 diff_from: None,
+                quiet: false,
             },
         )
         .unwrap();
@@ -608,6 +629,7 @@ mod tests {
                 yes: false,
                 save_baseline: None,
                 diff_from: None,
+                quiet: false,
             },
         )
         .unwrap();
@@ -624,6 +646,7 @@ mod tests {
                 yes: false,
                 save_baseline: None,
                 diff_from: None,
+                quiet: false,
             },
         )
         .unwrap();
@@ -648,6 +671,7 @@ mod tests {
                 yes: false,
                 save_baseline: None,
                 diff_from: None,
+                quiet: false,
             },
         )
         .unwrap();
@@ -663,6 +687,7 @@ mod tests {
                 yes: false,
                 save_baseline: None,
                 diff_from: None,
+                quiet: false,
             },
         )
         .unwrap();
@@ -694,6 +719,7 @@ mod tests {
                 yes: false,
                 save_baseline: None,
                 diff_from: None,
+                quiet: false,
             },
         )
         .unwrap();
@@ -710,6 +736,7 @@ mod tests {
                 yes: false,
                 save_baseline: None,
                 diff_from: None,
+                quiet: false,
             },
         )
         .unwrap();
@@ -737,6 +764,7 @@ mod tests {
                 yes: false,
                 save_baseline: None,
                 diff_from: None,
+                quiet: false,
             },
         )
         .unwrap();
@@ -752,6 +780,7 @@ mod tests {
                 yes: false,
                 save_baseline: None,
                 diff_from: None,
+                quiet: false,
             },
         )
         .unwrap();
@@ -776,6 +805,7 @@ mod tests {
                 yes: false,
                 save_baseline: Some("main"),
                 diff_from: None,
+                quiet: false,
             },
         )
         .unwrap();
@@ -803,6 +833,7 @@ mod tests {
                 yes: false,
                 save_baseline: Some("main"),
                 diff_from: None,
+                quiet: false,
             },
         )
         .unwrap();
@@ -818,6 +849,7 @@ mod tests {
                 yes: false,
                 save_baseline: None,
                 diff_from: Some("main"),
+                quiet: false,
             },
         )
         .unwrap();
@@ -841,6 +873,7 @@ mod tests {
                 yes: false,
                 save_baseline: None,
                 diff_from: None,
+                quiet: false,
             },
         )
         .unwrap();
@@ -856,6 +889,7 @@ mod tests {
                 yes: false,
                 save_baseline: None,
                 diff_from: Some("ghost"),
+                quiet: false,
             },
         );
         assert!(
