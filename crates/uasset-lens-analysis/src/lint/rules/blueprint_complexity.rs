@@ -7,10 +7,22 @@ use crate::lint::{LintRule, LintViolation, Severity};
 
 pub use crate::blueprint::ComplexityThresholds;
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone)]
 pub struct BlueprintComplexityRule {
     pub thresholds: ComplexityThresholds,
     pub depth_by_type: HashMap<AssetType, u32>,
+    /// Reporting severity for Blueprint complexity violations. Defaults to `Error`.
+    pub severity: Severity,
+}
+
+impl Default for BlueprintComplexityRule {
+    fn default() -> Self {
+        Self {
+            thresholds: ComplexityThresholds::default(),
+            depth_by_type: HashMap::new(),
+            severity: Severity::Error,
+        }
+    }
 }
 
 impl LintRule for BlueprintComplexityRule {
@@ -34,7 +46,7 @@ impl LintRule for BlueprintComplexityRule {
         crate::blueprint::is_complex(metrics, &effective_thresholds)
             .into_iter()
             .map(|w| LintViolation {
-                severity: Severity::Error,
+                severity: self.severity,
                 rule_id: w.rule.to_owned(),
                 message: w.message,
                 asset_path: asset.asset_path.clone(), // clone required: cannot move out of shared reference
@@ -139,6 +151,7 @@ mod tests {
                 ..ComplexityThresholds::default()
             },
             depth_by_type: HashMap::from([(AssetType::Blueprint, 5u32)]),
+            severity: Severity::Error,
         };
         // depth 6 exceeds per-type limit of 5, but not the global limit of 20
         let asset = make_record_typed("/Game/BP_Deep", AssetType::Blueprint);
@@ -165,6 +178,7 @@ mod tests {
             },
             // Blueprint not in map → falls back to global threshold of 5
             depth_by_type: HashMap::from([(AssetType::AnimBlueprint, 20u32)]),
+            severity: Severity::Error,
         };
         let asset = make_record_typed("/Game/BP_Deep", AssetType::Blueprint);
         let metrics = BlueprintMetrics {
@@ -185,6 +199,7 @@ mod tests {
         let rule = BlueprintComplexityRule {
             thresholds: ComplexityThresholds::default(),
             depth_by_type: HashMap::from([(AssetType::Blueprint, 10u32)]),
+            severity: Severity::Error,
         };
         let asset = make_record_typed("/Game/BP_Exact", AssetType::Blueprint);
         let metrics = BlueprintMetrics {

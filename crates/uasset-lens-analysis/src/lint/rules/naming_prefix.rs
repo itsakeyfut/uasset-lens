@@ -12,6 +12,8 @@ use crate::lint::{LintRule, LintViolation, Severity};
 #[derive(Debug, Clone)]
 pub struct NamingPrefixRule {
     pub prefixes: HashMap<AssetType, Vec<String>>,
+    /// Reporting severity for naming violations. Defaults to `Warning`.
+    pub severity: Severity,
 }
 
 impl Default for NamingPrefixRule {
@@ -42,7 +44,10 @@ impl Default for NamingPrefixRule {
         // IKRigDefinition (IKR_), IKRetargeter (RETG_), DialogueWave (DW_) have no default
         // prefix rule: naming conventions vary widely across UE5 projects and Epic's own samples
         // are inconsistent. Users can configure these via .uasset-lens.toml if desired.
-        Self { prefixes }
+        Self {
+            prefixes,
+            severity: Severity::Warning,
+        }
     }
 }
 
@@ -79,7 +84,7 @@ impl LintRule for NamingPrefixRule {
             format!("one of: {joined}")
         };
         vec![LintViolation {
-            severity: Severity::Warning,
+            severity: self.severity,
             rule_id: "naming/prefix".to_owned(),
             message: format!("asset `{name}` should start with {expected}"),
             asset_path: asset.asset_path.clone(), // clone required: cannot move out of shared reference
