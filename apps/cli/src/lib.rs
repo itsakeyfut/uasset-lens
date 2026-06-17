@@ -178,6 +178,12 @@ pub enum Commands {
         /// Show all findings instead of the first 5 per category
         #[arg(long)]
         verbose: bool,
+        /// Save current violations as a baseline JSON (default: .uasset-lens/baselines/check-baseline.json)
+        #[arg(long, num_args(0..=1), default_missing_value = ".uasset-lens/baselines/check-baseline.json")]
+        save_baseline: Option<PathBuf>,
+        /// Compare against a baseline; exit 1 only on new error regressions
+        #[arg(long)]
+        diff_from: Option<PathBuf>,
     },
     /// Delete confirmed dead assets from disk
     #[command(name = "clean")]
@@ -443,9 +449,11 @@ fn dispatch(cli: &Cli) -> anyhow::Result<i32> {
             only,
             skip,
             verbose,
+            save_baseline,
+            diff_from,
         } => {
             let db_path = resolve_db_path(project_dir, cli.db.as_deref());
-            commands::check::handle_check(
+            commands::check::handle_check_with_baseline(
                 project_dir,
                 only,
                 skip,
@@ -453,6 +461,8 @@ fn dispatch(cli: &Cli) -> anyhow::Result<i32> {
                 &db_path,
                 &cfg,
                 &cli.format,
+                save_baseline.as_deref(),
+                diff_from.as_deref(),
             )
         }
         Commands::Clean {

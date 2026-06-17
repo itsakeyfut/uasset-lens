@@ -6,6 +6,112 @@ use anyhow::Context;
 use crate::FormatKind;
 use crate::config::{CheckSeverity, RulesConfig};
 
+/// Severity as serialized in the violation baseline. Only `Error` participates in
+/// regression detection; `Warn` is recorded but never gates.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "lowercase")]
+enum ViolationSeverity {
+    Error,
+    Warn,
+}
+
+/// A single check finding in structured form, used for the baseline JSON.
+/// `file` is intentionally omitted to keep comparisons path-stable across machines.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+struct Violation {
+    severity: ViolationSeverity,
+    rule: String,
+    asset_path: String,
+    message: String,
+}
+
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
+struct BaselineSummary {
+    errors: usize,
+    warnings: usize,
+}
+
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
+struct BaselineDoc {
+    version: u32,
+    git_commit: String,
+    summary: BaselineSummary,
+    violations: Vec<Violation>,
+}
+
+fn to_violation_severity(s: CheckSeverity) -> ViolationSeverity {
+    match s {
+        CheckSeverity::Error => ViolationSeverity::Error,
+        _ => ViolationSeverity::Warn,
+    }
+}
+
+fn violation_key(v: &Violation) -> (String, String) {
+    (v.rule.clone(), v.asset_path.clone())
+}
+
+/// New error-severity violations present in `current` but not in `baseline`,
+/// matched by (rule, asset_path). Warnings are excluded on both sides.
+fn compute_regressions(baseline: &[Violation], current: &[Violation]) -> Vec<Violation> {
+    let baseline_errors: HashSet<(String, String)> = baseline
+        .iter()
+        .filter(|v| v.severity == ViolationSeverity::Error)
+        .map(violation_key)
+        .collect();
+    current
+        .iter()
+        .filter(|v| v.severity == ViolationSeverity::Error)
+        .filter(|v| !baseline_errors.contains(&violation_key(v)))
+        .cloned()
+        .collect()
+}
+
+fn load_baseline(path: &Path) -> anyhow::Result<BaselineDoc> {
+    let s = std::fs::read_to_string(path)
+        .with_context(|| format!("failed to read baseline file: {}", path.display()))?;
+    serde_json::from_str(&s).with_context(|| format!("invalid baseline JSON: {}", path.display()))
+}
+
+fn save_baseline_file(
+    path: &Path,
+    project_dir: &Path,
+    violations: Vec<Violation>,
+    errors: usize,
+    warnings: usize,
+) -> anyhow::Result<()> {
+    if let Some(parent) = path.parent()
+        && !parent.as_os_str().is_empty()
+    {
+        std::fs::create_dir_all(parent).with_context(|| {
+            format!("failed to create baseline directory: {}", parent.display())
+        })?;
+    }
+    let doc = BaselineDoc {
+        version: 1,
+        git_commit: git_commit(project_dir),
+        summary: BaselineSummary { errors, warnings },
+        violations,
+    };
+    let json = serde_json::to_string_pretty(&doc).context("failed to serialize baseline JSON")?;
+    std::fs::write(path, json)
+        .with_context(|| format!("failed to write baseline file: {}", path.display()))?;
+    eprintln!("Saved baseline to {}", path.display());
+    Ok(())
+}
+
+/// `git rev-parse HEAD` in `project_dir`; empty string if git is unavailable or fails.
+fn git_commit(project_dir: &Path) -> String {
+    std::process::Command::new("git")
+        .args(["rev-parse", "HEAD"])
+        .current_dir(project_dir)
+        .output()
+        .ok()
+        .filter(|o| o.status.success())
+        .and_then(|o| String::from_utf8(o.stdout).ok())
+        .map(|s| s.trim().to_owned())
+        .unwrap_or_default()
+}
+
 const ALL_CHECKS: &[&str] = &[
     "dead-assets",
     "cycles",
@@ -23,6 +129,7 @@ struct CheckResult {
     passed: bool,
     summary: String,
     findings: Vec<String>,
+    violations: Vec<Violation>,
 }
 
 impl CheckResult {
@@ -68,6 +175,9 @@ struct CheckOutput {
     checks: Vec<CheckResultJson>,
 }
 
+// Thin 7-arg shim retained for the existing test suite; production dispatch calls
+// `handle_check_with_baseline` directly.
+#[cfg(test)]
 pub fn handle_check(
     project_dir: &Path,
     only: &[String],
@@ -76,6 +186,31 @@ pub fn handle_check(
     db_path: &Path,
     cfg: &crate::config::ConfigFile,
     format: &FormatKind,
+) -> anyhow::Result<i32> {
+    handle_check_with_baseline(
+        project_dir,
+        only,
+        skip,
+        verbose,
+        db_path,
+        cfg,
+        format,
+        None,
+        None,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+pub fn handle_check_with_baseline(
+    project_dir: &Path,
+    only: &[String],
+    skip: &[String],
+    verbose: bool,
+    db_path: &Path,
+    cfg: &crate::config::ConfigFile,
+    format: &FormatKind,
+    save_baseline: Option<&Path>,
+    diff_from: Option<&Path>,
 ) -> anyhow::Result<i32> {
     for name in only.iter().chain(skip.iter()) {
         if !ALL_CHECKS.contains(&name.as_str()) {
@@ -161,12 +296,22 @@ pub fn handle_check(
                 );
                 let count = dead.len();
                 let findings = dead.iter().map(|p| p.as_str().to_owned()).collect();
+                let violations = dead
+                    .iter()
+                    .map(|p| Violation {
+                        severity: to_violation_severity(severity),
+                        rule: "dead-assets".to_owned(),
+                        asset_path: p.as_str().to_owned(),
+                        message: "unreferenced asset".to_owned(),
+                    })
+                    .collect();
                 CheckResult {
                     name,
                     severity,
                     passed: count == 0,
                     summary: format!("{count} dead assets"),
                     findings,
+                    violations,
                 }
             }
             "cycles" => {
@@ -186,12 +331,34 @@ pub fn handle_check(
                         parts.join(" \u{2192} ")
                     })
                     .collect();
+                // One violation per cycle member so a newly-cyclic asset is detected
+                // as a (rule, asset_path) regression.
+                let violations = cycles
+                    .iter()
+                    .flat_map(|scc| {
+                        let mut parts: Vec<String> =
+                            scc.iter().map(|p| p.as_str().to_owned()).collect();
+                        if let Some(first) = parts.first().cloned() {
+                            parts.push(first);
+                        }
+                        let cycle_str = parts.join(" \u{2192} ");
+                        scc.iter()
+                            .map(|node| Violation {
+                                severity: to_violation_severity(severity),
+                                rule: "circular-deps".to_owned(),
+                                asset_path: node.as_str().to_owned(),
+                                message: cycle_str.clone(),
+                            })
+                            .collect::<Vec<_>>()
+                    })
+                    .collect();
                 CheckResult {
                     name,
                     severity,
                     passed: count == 0,
                     summary: format!("{count} cycles"),
                     findings,
+                    violations,
                 }
             }
             "redirectors" => {
@@ -201,12 +368,22 @@ pub fn handle_check(
                 let paths = uasset_lens_dependency_graph::redirectors::detect(g);
                 let count = paths.len();
                 let findings = paths.iter().map(|p| p.as_str().to_owned()).collect();
+                let violations = paths
+                    .iter()
+                    .map(|p| Violation {
+                        severity: to_violation_severity(severity),
+                        rule: "redirectors".to_owned(),
+                        asset_path: p.as_str().to_owned(),
+                        message: "unresolved redirector".to_owned(),
+                    })
+                    .collect();
                 CheckResult {
                     name,
                     severity,
                     passed: count == 0,
                     summary: format!("{count} redirectors"),
                     findings,
+                    violations,
                 }
             }
             "lint" => {
@@ -216,14 +393,14 @@ pub fn handle_check(
                 let metrics = bp_metrics_map
                     .as_ref()
                     .ok_or_else(|| anyhow::anyhow!("internal: blueprint metrics not loaded"))?;
-                let violations = engine.run(
+                let lint_violations = engine.run(
                     assets.as_deref().ok_or_else(|| {
                         anyhow::anyhow!("internal: assets not loaded for lint check")
                     })?,
                     metrics,
                 );
-                let count = violations.len();
-                let findings = violations
+                let count = lint_violations.len();
+                let findings = lint_violations
                     .iter()
                     .map(|v| {
                         let sev = match v.severity {
@@ -233,9 +410,21 @@ pub fn handle_check(
                         format!("{sev}  {}  {}", v.rule_id, v.asset_path.as_str())
                     })
                     .collect();
+                let violations = lint_violations
+                    .iter()
+                    .map(|v| Violation {
+                        severity: match v.severity {
+                            uasset_lens_analysis::Severity::Error => ViolationSeverity::Error,
+                            uasset_lens_analysis::Severity::Warning => ViolationSeverity::Warn,
+                        },
+                        rule: v.rule_id.clone(),
+                        asset_path: v.asset_path.as_str().to_owned(),
+                        message: v.message.clone(),
+                    })
+                    .collect();
                 // The lint check blocks only when a per-rule-severity Error violation
                 // exists; all-Warning lint output is non-blocking ([lint] severity).
-                let has_error = violations
+                let has_error = lint_violations
                     .iter()
                     .any(|v| v.severity == uasset_lens_analysis::Severity::Error);
                 CheckResult {
@@ -248,6 +437,7 @@ pub fn handle_check(
                     passed: count == 0,
                     summary: format!("{count} violations"),
                     findings,
+                    violations,
                 }
             }
             "budget" => {
@@ -271,12 +461,28 @@ pub fn handle_check(
                         )
                     })
                     .collect();
+                let violations = report
+                    .violations
+                    .iter()
+                    .map(|v| Violation {
+                        severity: to_violation_severity(severity),
+                        // RK-004: budget rule_id is uniform across all asset types.
+                        rule: format!("budget/{}", v.asset_type.to_string().to_lowercase()),
+                        asset_path: v.asset_path.as_str().to_owned(),
+                        message: format!(
+                            "{} > {}",
+                            crate::format_size(v.file_size),
+                            crate::format_size(v.max_size),
+                        ),
+                    })
+                    .collect();
                 CheckResult {
                     name,
                     severity,
                     passed: count == 0,
                     summary: format!("{count} over budget"),
                     findings,
+                    violations,
                 }
             }
             "duplicates" => {
@@ -291,11 +497,26 @@ pub fn handle_check(
                     .iter()
                     .map(|g| format!("[texture-dup] {}", g.name))
                     .collect();
+                let mut violations: Vec<Violation> = tex_dup
+                    .iter()
+                    .map(|g| Violation {
+                        severity: to_violation_severity(severity),
+                        rule: "duplicate-assets".to_owned(),
+                        asset_path: g.name.clone(),
+                        message: format!("[texture-dup] {}", g.name),
+                    })
+                    .collect();
                 for g in by_name
                     .iter()
                     .filter(|g| !tex_names.contains(g.name.as_str()))
                 {
                     findings.push(format!("[same-name] {}", g.name));
+                    violations.push(Violation {
+                        severity: to_violation_severity(severity),
+                        rule: "duplicate-assets".to_owned(),
+                        asset_path: g.name.clone(),
+                        message: format!("[same-name] {}", g.name),
+                    });
                 }
                 let count = findings.len();
                 CheckResult {
@@ -304,12 +525,34 @@ pub fn handle_check(
                     passed: count == 0,
                     summary: format!("{count} groups"),
                     findings,
+                    violations,
                 }
             }
             _ => unreachable!(),
         };
         results.push(result);
     }
+
+    let all_violations: Vec<Violation> = results
+        .iter()
+        .flat_map(|r| r.violations.iter().cloned())
+        .collect();
+    let error_total = all_violations
+        .iter()
+        .filter(|v| v.severity == ViolationSeverity::Error)
+        .count();
+    let warning_total = all_violations.len() - error_total;
+
+    // Load baseline and compute regressions up front so a missing/invalid baseline
+    // fails fast (exit 2) before any check output is written. `--diff-from` replaces
+    // the normal gate with regression-only gating.
+    let regressions: Option<Vec<Violation>> = match diff_from {
+        Some(path) => {
+            let baseline = load_baseline(path)?;
+            Some(compute_regressions(&baseline.violations, &all_violations))
+        }
+        None => None,
+    };
 
     // Only `Error`-severity checks with findings fail the gate; `Warn` findings are
     // reported but non-blocking. The process exit code follows `gate_passed`.
@@ -320,11 +563,17 @@ pub fn handle_check(
         .count();
     let total = results.len();
     let gate_passed = blocking_count == 0;
+    // `--diff-from` re-bases the gate onto regressions; the serialized `passed` and the
+    // process exit code must derive from the same effective gate (RK-013).
+    let effective_passed = match &regressions {
+        Some(regs) => regs.is_empty(),
+        None => gate_passed,
+    };
 
     match format {
         FormatKind::Json => {
             let output = CheckOutput {
-                passed: gate_passed,
+                passed: effective_passed,
                 checks: results
                     .iter()
                     .map(|r| CheckResultJson {
@@ -340,6 +589,13 @@ pub fn handle_check(
                 serde_json::to_string_pretty(&output)
                     .context("Failed to serialize check output to JSON")?
             );
+            // Keep stdout a single JSON value; report the regression verdict on stderr.
+            if let Some(regs) = &regressions {
+                eprintln!(
+                    "Regression check vs baseline: {} new error violation(s)",
+                    regs.len()
+                );
+            }
         }
         FormatKind::GithubActions | FormatKind::Text => {
             let name_width = active
@@ -390,10 +646,44 @@ pub fn handle_check(
             } else {
                 println!("Overall: FAILED ({blocking_count} blocking, {warning_count} warning(s))");
             }
+            if let Some(regs) = &regressions {
+                println!();
+                if regs.is_empty() {
+                    println!("Regression check: PASSED (no new error violations vs baseline)");
+                } else {
+                    println!(
+                        "Regression check: FAILED ({} new error violation(s) vs baseline)",
+                        regs.len()
+                    );
+                    let end = if verbose {
+                        regs.len()
+                    } else {
+                        regs.len().min(CHECK_SAMPLE_LIMIT)
+                    };
+                    for v in &regs[..end] {
+                        println!("      {}  {}", v.rule, v.asset_path);
+                    }
+                    if !verbose && regs.len() > CHECK_SAMPLE_LIMIT {
+                        println!("      ... and {} more.", regs.len() - CHECK_SAMPLE_LIMIT);
+                    }
+                }
+            }
         }
     }
 
-    if gate_passed { Ok(0) } else { Ok(1) }
+    let exit = if effective_passed { 0 } else { 1 };
+
+    if let Some(path) = save_baseline {
+        save_baseline_file(
+            path,
+            project_dir,
+            all_violations,
+            error_total,
+            warning_total,
+        )?;
+    }
+
+    Ok(exit)
 }
 
 fn check_display_name(name: &str) -> &str {
@@ -914,6 +1204,281 @@ mod tests {
         });
         let result = handle_check(&dir, &[], &[], true, &db_path, &cfg, &FormatKind::Text).unwrap();
         assert_eq!(result, 1, "verbose=true, 6 dead assets → check fails");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    // --- #277: violation baseline / regression detection ---
+
+    fn err_violation(rule: &str, asset_path: &str) -> Violation {
+        Violation {
+            severity: ViolationSeverity::Error,
+            rule: rule.to_owned(),
+            asset_path: asset_path.to_owned(),
+            message: String::new(),
+        }
+    }
+
+    fn write_baseline(path: &std::path::Path, violations: Vec<Violation>) {
+        let errors = violations
+            .iter()
+            .filter(|v| v.severity == ViolationSeverity::Error)
+            .count();
+        let doc = BaselineDoc {
+            version: 1,
+            git_commit: String::new(),
+            summary: BaselineSummary {
+                errors,
+                warnings: violations.len() - errors,
+            },
+            violations,
+        };
+        std::fs::write(path, serde_json::to_string_pretty(&doc).unwrap()).unwrap();
+    }
+
+    #[test]
+    fn handle_check_diff_from_should_exit_0_when_no_new_regressions() {
+        let (dir, db_path) = test_db_in_tempdir("check277_no_regress");
+        upsert_misnamed_referenced_texture(&dir, &db_path);
+        let baseline = dir.join("baseline.json");
+        // The pre-existing naming error is in the baseline → not a regression.
+        write_baseline(
+            &baseline,
+            vec![err_violation("naming/prefix", "/Game/Rock")],
+        );
+
+        let cfg = cfg_with_naming_severity(CheckSeverity::Error);
+        let result = handle_check_with_baseline(
+            &dir,
+            &[],
+            &[],
+            false,
+            &db_path,
+            &cfg,
+            &FormatKind::Text,
+            None,
+            Some(&baseline),
+        )
+        .unwrap();
+        // Normal gate would exit 1 (error violation); --diff-from gates only on regressions.
+        assert_eq!(result, 0, "pre-existing baseline violation must not fail");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn handle_check_diff_from_should_exit_1_when_new_error_violation_not_in_baseline() {
+        let (dir, db_path) = test_db_in_tempdir("check277_new_error");
+        upsert_misnamed_referenced_texture(&dir, &db_path);
+        let baseline = dir.join("baseline.json");
+        write_baseline(&baseline, vec![]); // empty baseline → the naming error is new
+
+        let cfg = cfg_with_naming_severity(CheckSeverity::Error);
+        let result = handle_check_with_baseline(
+            &dir,
+            &[],
+            &[],
+            false,
+            &db_path,
+            &cfg,
+            &FormatKind::Text,
+            None,
+            Some(&baseline),
+        )
+        .unwrap();
+        assert_eq!(result, 1, "a new error violation is a regression");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn handle_check_diff_from_should_exit_0_when_new_warning_violation() {
+        let (dir, db_path) = test_db_in_tempdir("check277_new_warn");
+        upsert_misnamed_referenced_texture(&dir, &db_path);
+        let baseline = dir.join("baseline.json");
+        write_baseline(&baseline, vec![]);
+
+        // Default config: naming is "warn"; warnings never trigger a regression.
+        let result = handle_check_with_baseline(
+            &dir,
+            &[],
+            &[],
+            false,
+            &db_path,
+            &Default::default(),
+            &FormatKind::Text,
+            None,
+            Some(&baseline),
+        )
+        .unwrap();
+        assert_eq!(result, 0, "new warning violations never gate");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn handle_check_diff_from_should_exit_0_when_baseline_violation_resolved() {
+        let (dir, db_path) = test_db_in_tempdir("check277_resolved");
+        // Correctly-named orphan: no naming/budget/cycle errors at all.
+        upsert_one_orphan(&dir, &db_path);
+        let baseline = dir.join("baseline.json");
+        // Baseline had an error that no longer exists in the current run.
+        write_baseline(
+            &baseline,
+            vec![err_violation("naming/prefix", "/Game/Gone")],
+        );
+
+        let result = handle_check_with_baseline(
+            &dir,
+            &[],
+            &[],
+            false,
+            &db_path,
+            &Default::default(),
+            &FormatKind::Text,
+            None,
+            Some(&baseline),
+        )
+        .unwrap();
+        assert_eq!(
+            result, 0,
+            "a resolved baseline violation is not a regression"
+        );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn handle_check_diff_from_should_err_when_baseline_file_missing() {
+        let (dir, db_path) = test_db_in_tempdir("check277_missing_baseline");
+        upsert_one_orphan(&dir, &db_path);
+        let missing = dir.join("does-not-exist.json");
+
+        let result = handle_check_with_baseline(
+            &dir,
+            &[],
+            &[],
+            false,
+            &db_path,
+            &Default::default(),
+            &FormatKind::Text,
+            None,
+            Some(&missing),
+        );
+        assert!(result.is_err(), "missing baseline → error (exit 2)");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn handle_check_save_baseline_should_write_valid_json_with_violations() {
+        let (dir, db_path) = test_db_in_tempdir("check277_save");
+        upsert_misnamed_referenced_texture(&dir, &db_path);
+        let out = dir.join("nested").join("baseline.json");
+
+        let cfg = cfg_with_naming_severity(CheckSeverity::Error);
+        let _ = handle_check_with_baseline(
+            &dir,
+            &[],
+            &[],
+            false,
+            &db_path,
+            &cfg,
+            &FormatKind::Text,
+            Some(&out),
+            None,
+        )
+        .unwrap();
+
+        let doc: BaselineDoc =
+            serde_json::from_str(&std::fs::read_to_string(&out).unwrap()).unwrap();
+        assert_eq!(doc.version, 1);
+        assert!(doc.summary.errors >= 1);
+        assert!(
+            doc.violations.iter().any(|v| v.rule == "naming/prefix"
+                && v.asset_path == "/Game/Rock"
+                && v.severity == ViolationSeverity::Error),
+            "saved baseline must contain the naming error for /Game/Rock"
+        );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn handle_check_should_save_and_diff_when_both_flags_given() {
+        let (dir, db_path) = test_db_in_tempdir("check277_save_and_diff");
+        upsert_misnamed_referenced_texture(&dir, &db_path);
+        let baseline = dir.join("baseline.json");
+        write_baseline(&baseline, vec![]); // empty → current error is a regression
+        let saved = dir.join("saved.json");
+
+        let cfg = cfg_with_naming_severity(CheckSeverity::Error);
+        let result = handle_check_with_baseline(
+            &dir,
+            &[],
+            &[],
+            false,
+            &db_path,
+            &cfg,
+            &FormatKind::Text,
+            Some(&saved),
+            Some(&baseline),
+        )
+        .unwrap();
+        assert_eq!(result, 1, "regression exits 1 even when also saving");
+        let doc: BaselineDoc =
+            serde_json::from_str(&std::fs::read_to_string(&saved).unwrap()).unwrap();
+        assert!(
+            doc.violations.iter().any(|v| v.rule == "naming/prefix"),
+            "the new baseline is written alongside the diff"
+        );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn handle_check_diff_from_should_exit_1_when_new_cycle_introduced() {
+        let (dir, db_path) = test_db_in_tempdir("check277_new_cycle");
+        upsert_cycle(&dir, &db_path); // BP_A↔BP_B; circular-deps defaults to error
+        let baseline = dir.join("baseline.json");
+        write_baseline(&baseline, vec![]); // empty → the new cycle is a regression
+
+        // Exercises the non-lint (cycles) violation path that the "all 6 checks"
+        // baseline scope exists to catch.
+        let result = handle_check_with_baseline(
+            &dir,
+            &[],
+            &[],
+            false,
+            &db_path,
+            &Default::default(),
+            &FormatKind::Text,
+            None,
+            Some(&baseline),
+        )
+        .unwrap();
+        assert_eq!(result, 1, "a newly-introduced cycle is an error regression");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn handle_check_diff_from_json_should_exit_0_when_no_new_regressions() {
+        let (dir, db_path) = test_db_in_tempdir("check277_json_no_regress");
+        upsert_misnamed_referenced_texture(&dir, &db_path);
+        let baseline = dir.join("baseline.json");
+        write_baseline(
+            &baseline,
+            vec![err_violation("naming/prefix", "/Game/Rock")],
+        );
+
+        // JSON path: the serialized `passed` and the exit code share one effective gate,
+        // so a pre-existing (non-regressing) error must still exit 0.
+        let cfg = cfg_with_naming_severity(CheckSeverity::Error);
+        let result = handle_check_with_baseline(
+            &dir,
+            &[],
+            &[],
+            false,
+            &db_path,
+            &cfg,
+            &FormatKind::Json,
+            None,
+            Some(&baseline),
+        )
+        .unwrap();
+        assert_eq!(result, 0, "JSON mode regression gate matches text mode");
         let _ = std::fs::remove_dir_all(&dir);
     }
 }
