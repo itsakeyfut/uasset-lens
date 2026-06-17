@@ -1,5 +1,5 @@
-﻿[package]
-name                 = "uasset-lens-material-analyzer"
+[package]
+name                 = "uasset-lens-analysis"
 publish             = false
 version.workspace    = true
 edition.workspace    = true
@@ -12,6 +12,12 @@ categories.workspace = true
 authors.workspace    = true
 
 [dependencies]
+uasset-lens-asset-db         = { workspace = true }
 uasset-lens-dependency-graph = { workspace = true }
 uasset-lens-scanner          = { workspace = true }
 uasset-lens-shared           = { workspace = true }
+serde                        = { workspace = true }
+
+[dev-dependencies]
+uasset-lens-asset-db = { workspace = true, features = ["test-support"] }
+uasset-lens-scanner  = { workspace = true, features = ["test-support"] }

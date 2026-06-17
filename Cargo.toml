@@ -5,10 +5,7 @@ members = [
     "crates/uasset-lens-scanner",
     "crates/uasset-lens-asset-db",
     "crates/uasset-lens-dependency-graph",
-    "crates/uasset-lens-bp-analyzer",
-    "crates/uasset-lens-lint-engine",
-    "crates/uasset-lens-material-analyzer",
-    "crates/uasset-lens-budget-tracker",
+    "crates/uasset-lens-analysis",
     "crates/uasset-lens-watcher",
     "crates/uasset-lens-git-diff",
     "crates/uasset-lens-cli",
@@ -33,10 +30,7 @@ uasset-lens-shared              = { path = "crates/uasset-lens-shared",         
 uasset-lens-scanner             = { path = "crates/uasset-lens-scanner",             version = "0.1.0" }
 uasset-lens-asset-db            = { path = "crates/uasset-lens-asset-db",            version = "0.1.0" }
 uasset-lens-dependency-graph    = { path = "crates/uasset-lens-dependency-graph",    version = "0.1.0" }
-uasset-lens-bp-analyzer         = { path = "crates/uasset-lens-bp-analyzer",         version = "0.1.0" }
-uasset-lens-lint-engine         = { path = "crates/uasset-lens-lint-engine",         version = "0.1.0" }
-uasset-lens-material-analyzer   = { path = "crates/uasset-lens-material-analyzer",   version = "0.1.0" }
-uasset-lens-budget-tracker      = { path = "crates/uasset-lens-budget-tracker",      version = "0.1.0" }
+uasset-lens-analysis            = { path = "crates/uasset-lens-analysis",            version = "0.1.0" }
 uasset-lens-watcher             = { path = "crates/uasset-lens-watcher",             version = "0.1.0" }
 uasset-lens-git-diff            = { path = "crates/uasset-lens-git-diff",            version = "0.1.0" }
 uasset-lens-cli                 = { path = "crates/uasset-lens-cli",                 version = "0.1.0" }

@@ -7,7 +7,7 @@ use uasset_lens_shared::AssetPath;
 mod rules;
 pub use rules::*;
 
-pub use uasset_lens_bp_analyzer::ComplexityThresholds;
+pub use crate::blueprint::ComplexityThresholds;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Severity {

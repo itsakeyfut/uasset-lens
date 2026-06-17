@@ -4,7 +4,7 @@ use uasset_lens_asset_db::AssetRecord;
 use uasset_lens_scanner::BlueprintMetrics;
 use uasset_lens_shared::AssetType;
 
-use crate::{LintRule, LintViolation, Severity};
+use crate::lint::{LintRule, LintViolation, Severity};
 
 /// Maps each asset type to one or more valid name prefixes.
 /// A name is accepted if it starts with ANY entry in the Vec.

@@ -105,9 +105,8 @@ pub fn handle_check(
                     )
                 })
                 .collect();
-        let engine = uasset_lens_lint_engine::LintEngine::new(
-            crate::lint_builder::build_lint_rules(&cfg.lint),
-        );
+        let engine =
+            uasset_lens_analysis::LintEngine::new(crate::lint_builder::build_lint_rules(&cfg.lint));
         (Some(map), Some(engine))
     } else {
         (None, None)
@@ -190,8 +189,8 @@ pub fn handle_check(
                     .iter()
                     .map(|v| {
                         let sev = match v.severity {
-                            uasset_lens_lint_engine::Severity::Error => "ERROR",
-                            uasset_lens_lint_engine::Severity::Warning => "WARN",
+                            uasset_lens_analysis::Severity::Error => "ERROR",
+                            uasset_lens_analysis::Severity::Warning => "WARN",
                         };
                         format!("{sev}  {}  {}", v.rule_id, v.asset_path.as_str())
                     })
@@ -204,7 +203,7 @@ pub fn handle_check(
                 }
             }
             "budget" => {
-                let report = uasset_lens_budget_tracker::check_budget(
+                let report = uasset_lens_analysis::check_budget(
                     assets.as_deref().ok_or_else(|| {
                         anyhow::anyhow!("internal: assets not loaded for budget check")
                     })?,

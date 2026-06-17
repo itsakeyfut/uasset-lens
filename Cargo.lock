@@ -944,6 +944,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "uasset-lens-analysis"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "uasset-lens-asset-db",
+ "uasset-lens-dependency-graph",
+ "uasset-lens-scanner",
+ "uasset-lens-shared",
+]
+
+[[package]]
 name = "uasset-lens-asset-db"
 version = "0.1.0"
 dependencies = [
@@ -952,23 +963,6 @@ dependencies = [
  "serde_json",
  "thiserror",
  "uasset-lens-scanner",
- "uasset-lens-shared",
-]
-
-[[package]]
-name = "uasset-lens-bp-analyzer"
-version = "0.1.0"
-dependencies = [
- "uasset-lens-scanner",
- "uasset-lens-shared",
-]
-
-[[package]]
-name = "uasset-lens-budget-tracker"
-version = "0.1.0"
-dependencies = [
- "serde",
- "uasset-lens-asset-db",
  "uasset-lens-shared",
 ]
 
@@ -984,10 +978,9 @@ dependencies = [
  "serde_json",
  "toml",
  "tracing",
+ "uasset-lens-analysis",
  "uasset-lens-asset-db",
- "uasset-lens-budget-tracker",
  "uasset-lens-dependency-graph",
- "uasset-lens-lint-engine",
  "uasset-lens-scanner",
  "uasset-lens-shared",
  "uasset-lens-watcher",
@@ -1009,25 +1002,6 @@ dependencies = [
  "tempfile",
  "thiserror",
  "tracing",
- "uasset-lens-scanner",
- "uasset-lens-shared",
-]
-
-[[package]]
-name = "uasset-lens-lint-engine"
-version = "0.1.0"
-dependencies = [
- "uasset-lens-asset-db",
- "uasset-lens-bp-analyzer",
- "uasset-lens-scanner",
- "uasset-lens-shared",
-]
-
-[[package]]
-name = "uasset-lens-material-analyzer"
-version = "0.1.0"
-dependencies = [
- "uasset-lens-dependency-graph",
  "uasset-lens-scanner",
  "uasset-lens-shared",
 ]

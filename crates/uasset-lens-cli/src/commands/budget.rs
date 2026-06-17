@@ -32,9 +32,9 @@ pub fn handle_budget(
         .all_assets()
         .context("Failed to read assets from database")?;
 
-    let report = uasset_lens_budget_tracker::check_budget(
+    let report = uasset_lens_analysis::check_budget(
         &assets,
-        &uasset_lens_budget_tracker::BudgetConfig::effective(&cfg.budget),
+        &uasset_lens_analysis::BudgetConfig::effective(&cfg.budget),
     );
 
     let entries: Vec<BudgetViolationEntry> = report
