@@ -1,4 +1,4 @@
-﻿use anyhow::Context;
+use anyhow::Context;
 use std::collections::HashMap;
 use std::path::Path;
 
@@ -7,11 +7,37 @@ pub struct ConfigFile {
     #[serde(default)]
     pub scan: ScanConfig,
     #[serde(default)]
+    pub rules: RulesConfig,
+    #[serde(default)]
     pub lint: LintConfig,
     #[serde(default)]
     pub budget: uasset_lens_analysis::BudgetConfig,
     #[serde(default)]
     pub diff: DiffConfig,
+}
+
+/// Per-check severity. `Off` disables the check; `Warn` reports findings without
+/// failing CI; `Error` fails CI (exit 1) when findings exist.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum CheckSeverity {
+    Error,
+    Warn,
+    Off,
+}
+
+/// `[rules]` — severity of each `check` health check. A `None` field (key absent)
+/// means "use the built-in default for that check" (see `check::effective_severity`).
+#[derive(Default, serde::Deserialize)]
+pub struct RulesConfig {
+    #[serde(rename = "dead-assets", default)]
+    pub dead_assets: Option<CheckSeverity>,
+    #[serde(rename = "circular-deps", default)]
+    pub circular_deps: Option<CheckSeverity>,
+    #[serde(rename = "duplicate-assets", default)]
+    pub duplicate_assets: Option<CheckSeverity>,
+    #[serde(default)]
+    pub redirectors: Option<CheckSeverity>,
 }
 
 #[derive(serde::Deserialize)]
@@ -305,5 +331,34 @@ mod tests {
             Some(&20u32)
         );
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn load_config_should_parse_rules_severity_from_valid_toml() {
+        let dir = std::env::temp_dir().join(format!("uasset_lens_rules_{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(
+            dir.join(".uasset-lens.toml"),
+            "[rules]\ndead-assets = \"off\"\ncircular-deps = \"error\"\nduplicate-assets = \"warn\"\n",
+        )
+        .unwrap();
+        let cfg = load_config(&dir);
+        assert_eq!(cfg.rules.dead_assets, Some(CheckSeverity::Off));
+        assert_eq!(cfg.rules.circular_deps, Some(CheckSeverity::Error));
+        assert_eq!(cfg.rules.duplicate_assets, Some(CheckSeverity::Warn));
+        assert_eq!(cfg.rules.redirectors, None, "absent key stays None");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn load_config_should_leave_rules_none_when_section_absent() {
+        let dir = std::env::temp_dir().join(format!("uasset_lens_norules_{}", std::process::id()));
+
+        let cfg = load_config(&dir);
+
+        assert_eq!(cfg.rules.dead_assets, None);
+        assert_eq!(cfg.rules.circular_deps, None);
+        assert_eq!(cfg.rules.duplicate_assets, None);
+        assert_eq!(cfg.rules.redirectors, None);
     }
 }

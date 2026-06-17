@@ -4,6 +4,7 @@ use std::path::Path;
 use anyhow::Context;
 
 use crate::FormatKind;
+use crate::config::{CheckSeverity, RulesConfig};
 
 const ALL_CHECKS: &[&str] = &[
     "dead-assets",
@@ -18,16 +19,47 @@ const CHECK_SAMPLE_LIMIT: usize = 5;
 
 struct CheckResult {
     name: &'static str,
+    severity: CheckSeverity,
     passed: bool,
     summary: String,
     findings: Vec<String>,
 }
 
+impl CheckResult {
+    // A check blocks CI (exit 1) only when it is `Error` severity and has findings.
+    // `Warn` findings are reported but do not fail the gate; `Off` checks never run.
+    fn blocks(&self) -> bool {
+        !self.passed && self.severity == CheckSeverity::Error
+    }
+}
+
 #[derive(serde::Serialize)]
 struct CheckResultJson {
     name: String,
+    severity: &'static str,
     passed: bool,
     findings: Vec<String>,
+}
+
+// Built-in default severity for each check when no `[rules]` override is set, plus
+// the mapping from check name to `[rules]` key. `lint` / `budget` are not gated by
+// `[rules]` (they have their own severity model) and always block on findings.
+fn effective_severity(name: &str, rules: &RulesConfig) -> CheckSeverity {
+    match name {
+        "dead-assets" => rules.dead_assets.unwrap_or(CheckSeverity::Warn),
+        "cycles" => rules.circular_deps.unwrap_or(CheckSeverity::Error),
+        "duplicates" => rules.duplicate_assets.unwrap_or(CheckSeverity::Warn),
+        "redirectors" => rules.redirectors.unwrap_or(CheckSeverity::Warn),
+        _ => CheckSeverity::Error,
+    }
+}
+
+fn severity_label(severity: CheckSeverity) -> &'static str {
+    match severity {
+        CheckSeverity::Error => "error",
+        CheckSeverity::Warn => "warn",
+        CheckSeverity::Off => "off",
+    }
 }
 
 #[derive(serde::Serialize)]
@@ -61,6 +93,8 @@ pub fn handle_check(
         .filter(|&n| {
             (only.is_empty() || only.iter().any(|o| o == n)) && !skip.iter().any(|s| s == n)
         })
+        // `[rules] <check> = "off"` disables the check entirely (not run, not counted).
+        .filter(|&n| effective_severity(n, &cfg.rules) != CheckSeverity::Off)
         .collect();
 
     let db = crate::open_db(db_path)?;
@@ -115,6 +149,7 @@ pub fn handle_check(
     let mut results: Vec<CheckResult> = Vec::new();
 
     for &name in &active {
+        let severity = effective_severity(name, &cfg.rules);
         let result = match name {
             "dead-assets" => {
                 let g = graph.as_ref().ok_or_else(|| {
@@ -128,6 +163,7 @@ pub fn handle_check(
                 let findings = dead.iter().map(|p| p.as_str().to_owned()).collect();
                 CheckResult {
                     name,
+                    severity,
                     passed: count == 0,
                     summary: format!("{count} dead assets"),
                     findings,
@@ -152,6 +188,7 @@ pub fn handle_check(
                     .collect();
                 CheckResult {
                     name,
+                    severity,
                     passed: count == 0,
                     summary: format!("{count} cycles"),
                     findings,
@@ -166,6 +203,7 @@ pub fn handle_check(
                 let findings = paths.iter().map(|p| p.as_str().to_owned()).collect();
                 CheckResult {
                     name,
+                    severity,
                     passed: count == 0,
                     summary: format!("{count} redirectors"),
                     findings,
@@ -197,6 +235,7 @@ pub fn handle_check(
                     .collect();
                 CheckResult {
                     name,
+                    severity,
                     passed: count == 0,
                     summary: format!("{count} violations"),
                     findings,
@@ -225,6 +264,7 @@ pub fn handle_check(
                     .collect();
                 CheckResult {
                     name,
+                    severity,
                     passed: count == 0,
                     summary: format!("{count} over budget"),
                     findings,
@@ -251,6 +291,7 @@ pub fn handle_check(
                 let count = findings.len();
                 CheckResult {
                     name,
+                    severity,
                     passed: count == 0,
                     summary: format!("{count} groups"),
                     findings,
@@ -261,18 +302,25 @@ pub fn handle_check(
         results.push(result);
     }
 
-    let failed_count = results.iter().filter(|r| !r.passed).count();
+    // Only `Error`-severity checks with findings fail the gate; `Warn` findings are
+    // reported but non-blocking. The process exit code follows `gate_passed`.
+    let blocking_count = results.iter().filter(|r| r.blocks()).count();
+    let warning_count = results
+        .iter()
+        .filter(|r| !r.passed && r.severity == CheckSeverity::Warn)
+        .count();
     let total = results.len();
-    let all_passed = failed_count == 0;
+    let gate_passed = blocking_count == 0;
 
     match format {
         FormatKind::Json => {
             let output = CheckOutput {
-                passed: all_passed,
+                passed: gate_passed,
                 checks: results
                     .iter()
                     .map(|r| CheckResultJson {
                         name: r.name.to_owned(),
+                        severity: severity_label(r.severity),
                         passed: r.passed,
                         findings: r.findings.clone(), // clone required: CheckResultJson owns the findings
                     })
@@ -294,7 +342,13 @@ pub fn handle_check(
             println!("Running project health checks...");
             println!();
             for r in &results {
-                let icon = if r.passed { "\u{2713}" } else { "\u{2717}" };
+                let icon = if r.passed {
+                    "\u{2713}" // ✓ no findings
+                } else if r.severity == CheckSeverity::Error {
+                    "\u{2717}" // ✗ blocking failure
+                } else {
+                    "\u{26a0}" // ⚠ warning (non-blocking)
+                };
                 println!(
                     "  {} {:<width$}  \u{2014} {}",
                     icon,
@@ -320,15 +374,17 @@ pub fn handle_check(
                 }
             }
             println!();
-            if all_passed {
+            if gate_passed && warning_count == 0 {
                 println!("Overall: PASSED ({total} of {total} checks passed)");
+            } else if gate_passed {
+                println!("Overall: PASSED ({warning_count} warning(s), 0 blocking)");
             } else {
-                println!("Overall: FAILED ({failed_count} of {total} checks failed)");
+                println!("Overall: FAILED ({blocking_count} blocking, {warning_count} warning(s))");
             }
         }
     }
 
-    if all_passed { Ok(0) } else { Ok(1) }
+    if gate_passed { Ok(0) } else { Ok(1) }
 }
 
 fn check_display_name(name: &str) -> &str {
@@ -360,6 +416,13 @@ mod tests {
     use super::*;
     use crate::commands::{make_meta, test_db_in_tempdir};
     use uasset_lens_shared::{AssetPath, AssetType};
+
+    fn cfg_with_rules(rules: crate::config::RulesConfig) -> crate::config::ConfigFile {
+        crate::config::ConfigFile {
+            rules,
+            ..Default::default()
+        }
+    }
 
     #[test]
     fn handle_check_should_return_err_when_db_does_not_exist() {
@@ -397,23 +460,26 @@ mod tests {
         let _ = std::fs::remove_dir_all(&dir);
     }
 
+    // Texture2D with T_ prefix avoids naming-prefix lint violation; an unreferenced
+    // orphan only triggers the dead-assets check.
+    fn upsert_one_orphan(dir: &std::path::Path, db_path: &std::path::Path) {
+        let mut db = uasset_lens_asset_db::AssetDb::open(db_path).unwrap();
+        db.upsert_all(&[make_meta(
+            "/Game/T_Orphan",
+            dir.join("T_Orphan.uasset"),
+            AssetType::Texture2D,
+            4096,
+            vec![],
+        )])
+        .unwrap();
+    }
+
     #[test]
-    fn handle_check_should_return_1_when_dead_asset_exists() {
-        let (dir, db_path) = test_db_in_tempdir("check159_dead");
+    fn handle_check_should_return_0_when_dead_assets_is_warn_by_default() {
+        let (dir, db_path) = test_db_in_tempdir("check279_dead_warn");
+        upsert_one_orphan(&dir, &db_path);
 
-        {
-            let mut db = uasset_lens_asset_db::AssetDb::open(&db_path).unwrap();
-            // Texture2D with T_ prefix avoids naming-prefix lint violation.
-            db.upsert_all(&[make_meta(
-                "/Game/T_Orphan",
-                dir.join("T_Orphan.uasset"),
-                AssetType::Texture2D,
-                4096,
-                vec![],
-            )])
-            .unwrap();
-        }
-
+        // Default severity of dead-assets is "warn" → reported but non-blocking.
         let result = handle_check(
             &dir,
             &[],
@@ -424,35 +490,69 @@ mod tests {
             &FormatKind::Text,
         )
         .unwrap();
-        assert_eq!(result, 1, "orphan asset triggers dead-assets check");
+        assert_eq!(result, 0, "warn-severity dead assets must not block CI");
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn handle_check_should_return_1_when_dead_assets_severity_is_error() {
+        let (dir, db_path) = test_db_in_tempdir("check279_dead_error");
+        upsert_one_orphan(&dir, &db_path);
+
+        let cfg = cfg_with_rules(RulesConfig {
+            dead_assets: Some(CheckSeverity::Error),
+            ..Default::default()
+        });
+        let result =
+            handle_check(&dir, &[], &[], false, &db_path, &cfg, &FormatKind::Text).unwrap();
+        assert_eq!(result, 1, "error-severity dead assets block CI");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn handle_check_should_skip_dead_assets_when_severity_is_off() {
+        let (dir, db_path) = test_db_in_tempdir("check279_dead_off");
+        upsert_one_orphan(&dir, &db_path);
+
+        // "off" disables the check entirely; even error-equivalent assets are ignored.
+        let cfg = cfg_with_rules(RulesConfig {
+            dead_assets: Some(CheckSeverity::Off),
+            ..Default::default()
+        });
+        let result =
+            handle_check(&dir, &[], &[], false, &db_path, &cfg, &FormatKind::Text).unwrap();
+        assert_eq!(result, 0, "off-severity dead-assets check is skipped");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    // BP_A→BP_B→BP_A: a referencing cycle. Neither node is dead (both referenced).
+    fn upsert_cycle(dir: &std::path::Path, db_path: &std::path::Path) {
+        let mut db = uasset_lens_asset_db::AssetDb::open(db_path).unwrap();
+        db.upsert_all(&[
+            make_meta(
+                "/Game/BP_A",
+                dir.join("BP_A.uasset"),
+                AssetType::Blueprint,
+                1024,
+                vec![AssetPath::new("/Game/BP_B").unwrap()],
+            ),
+            make_meta(
+                "/Game/BP_B",
+                dir.join("BP_B.uasset"),
+                AssetType::Blueprint,
+                1024,
+                vec![AssetPath::new("/Game/BP_A").unwrap()],
+            ),
+        ])
+        .unwrap();
     }
 
     #[test]
     fn handle_check_should_return_1_when_cycle_exists() {
         let (dir, db_path) = test_db_in_tempdir("check159_cycle");
+        upsert_cycle(&dir, &db_path);
 
-        {
-            let mut db = uasset_lens_asset_db::AssetDb::open(&db_path).unwrap();
-            db.upsert_all(&[
-                make_meta(
-                    "/Game/BP_A",
-                    dir.join("BP_A.uasset"),
-                    AssetType::Blueprint,
-                    1024,
-                    vec![AssetPath::new("/Game/BP_B").unwrap()],
-                ),
-                make_meta(
-                    "/Game/BP_B",
-                    dir.join("BP_B.uasset"),
-                    AssetType::Blueprint,
-                    1024,
-                    vec![AssetPath::new("/Game/BP_A").unwrap()],
-                ),
-            ])
-            .unwrap();
-        }
-
+        // circular-deps defaults to "error" → blocks CI.
         let result = handle_check(
             &dir,
             &[],
@@ -464,6 +564,22 @@ mod tests {
         )
         .unwrap();
         assert_eq!(result, 1, "A→B→A cycle triggers cycles check");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn handle_check_should_return_0_when_circular_deps_is_warn() {
+        let (dir, db_path) = test_db_in_tempdir("check279_cycle_warn");
+        upsert_cycle(&dir, &db_path);
+
+        // circular-deps = "warn" → cycle reported as a warning, does not block CI.
+        let cfg = cfg_with_rules(RulesConfig {
+            circular_deps: Some(CheckSeverity::Warn),
+            ..Default::default()
+        });
+        let result =
+            handle_check(&dir, &[], &[], false, &db_path, &cfg, &FormatKind::Text).unwrap();
+        assert_eq!(result, 0, "warn-severity cycle findings must not block CI");
         let _ = std::fs::remove_dir_all(&dir);
     }
 
@@ -650,16 +766,13 @@ mod tests {
             ])
             .unwrap();
         }
-        let result = handle_check(
-            &dir,
-            &[],
-            &[],
-            false,
-            &db_path,
-            &Default::default(),
-            &FormatKind::Text,
-        )
-        .unwrap();
+        // dead-assets = "error" so the 6 findings block CI (exercises the failing path).
+        let cfg = cfg_with_rules(RulesConfig {
+            dead_assets: Some(CheckSeverity::Error),
+            ..Default::default()
+        });
+        let result =
+            handle_check(&dir, &[], &[], false, &db_path, &cfg, &FormatKind::Text).unwrap();
         assert_eq!(result, 1, "6 dead assets → check fails");
         let _ = std::fs::remove_dir_all(&dir);
     }
@@ -715,16 +828,11 @@ mod tests {
             ])
             .unwrap();
         }
-        let result = handle_check(
-            &dir,
-            &[],
-            &[],
-            true,
-            &db_path,
-            &Default::default(),
-            &FormatKind::Text,
-        )
-        .unwrap();
+        let cfg = cfg_with_rules(RulesConfig {
+            dead_assets: Some(CheckSeverity::Error),
+            ..Default::default()
+        });
+        let result = handle_check(&dir, &[], &[], true, &db_path, &cfg, &FormatKind::Text).unwrap();
         assert_eq!(result, 1, "verbose=true, 6 dead assets → check fails");
         let _ = std::fs::remove_dir_all(&dir);
     }
