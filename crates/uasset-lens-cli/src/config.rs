@@ -9,7 +9,7 @@ pub struct ConfigFile {
     #[serde(default)]
     pub lint: LintConfig,
     #[serde(default)]
-    pub budget: uasset_lens_budget_tracker::BudgetConfig,
+    pub budget: uasset_lens_analysis::BudgetConfig,
     #[serde(default)]
     pub diff: DiffConfig,
 }

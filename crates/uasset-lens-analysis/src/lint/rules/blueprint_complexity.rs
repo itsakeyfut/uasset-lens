@@ -3,9 +3,9 @@ use uasset_lens_asset_db::AssetRecord;
 use uasset_lens_scanner::BlueprintMetrics;
 use uasset_lens_shared::AssetType;
 
-use crate::{LintRule, LintViolation, Severity};
+use crate::lint::{LintRule, LintViolation, Severity};
 
-pub use uasset_lens_bp_analyzer::ComplexityThresholds;
+pub use crate::blueprint::ComplexityThresholds;
 
 #[derive(Debug, Clone, Default)]
 pub struct BlueprintComplexityRule {
@@ -31,7 +31,7 @@ impl LintRule for BlueprintComplexityRule {
             max_dependency_depth: effective_depth,
             ..self.thresholds.clone()
         };
-        uasset_lens_bp_analyzer::is_complex(metrics, &effective_thresholds)
+        crate::blueprint::is_complex(metrics, &effective_thresholds)
             .into_iter()
             .map(|w| LintViolation {
                 severity: Severity::Error,

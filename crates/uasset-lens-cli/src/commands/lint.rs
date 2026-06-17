@@ -24,7 +24,7 @@ pub fn handle_lint(
     let db = crate::open_db(db_path)?;
 
     let engine =
-        uasset_lens_lint_engine::LintEngine::new(crate::lint_builder::build_lint_rules(&cfg.lint));
+        uasset_lens_analysis::LintEngine::new(crate::lint_builder::build_lint_rules(&cfg.lint));
 
     let assets = db
         .all_assets()
@@ -51,16 +51,16 @@ pub fn handle_lint(
             .collect();
 
     let mut violations = engine.run(&assets, &metrics_map);
-    let effective_budget = uasset_lens_budget_tracker::BudgetConfig::effective(&cfg.budget);
-    let budget_report = uasset_lens_budget_tracker::check_budget(&assets, &effective_budget);
+    let effective_budget = uasset_lens_analysis::BudgetConfig::effective(&cfg.budget);
+    let budget_report = uasset_lens_analysis::check_budget(&assets, &effective_budget);
     for bv in budget_report.violations {
         let path = bv.asset_path.as_str();
         // AssetPath always starts with '/', so rsplit always yields at least one element
         let name = path.rsplit('/').next().unwrap_or(path);
         let actual_mb = bv.file_size as f64 / (1024.0 * 1024.0);
         let max_mb = bv.max_size as f64 / (1024.0 * 1024.0);
-        violations.push(uasset_lens_lint_engine::LintViolation {
-            severity: uasset_lens_lint_engine::Severity::Warning,
+        violations.push(uasset_lens_analysis::LintViolation {
+            severity: uasset_lens_analysis::Severity::Warning,
             rule_id: budget_rule_id(&bv.asset_type),
             message: format!(
                 "{} {name} exceeds size limit: {actual_mb:.1} MB > {max_mb:.1} MB",
@@ -74,8 +74,8 @@ pub fn handle_lint(
         .iter()
         .map(|v| LintEntry {
             severity: match v.severity {
-                uasset_lens_lint_engine::Severity::Error => "error".to_owned(),
-                uasset_lens_lint_engine::Severity::Warning => "warning".to_owned(),
+                uasset_lens_analysis::Severity::Error => "error".to_owned(),
+                uasset_lens_analysis::Severity::Warning => "warning".to_owned(),
             },
             rule_id: v.rule_id.to_owned(),
             asset_path: v.asset_path.as_str().to_owned(),
@@ -91,7 +91,7 @@ pub fn handle_lint(
                 .collect();
             let has_error = violations
                 .iter()
-                .any(|v| v.severity == uasset_lens_lint_engine::Severity::Error);
+                .any(|v| v.severity == uasset_lens_analysis::Severity::Error);
             for v in &violations {
                 let rel = crate::rel_path_for_annotation(
                     path_lookup
@@ -101,8 +101,8 @@ pub fn handle_lint(
                     project_dir,
                 );
                 let level = match v.severity {
-                    uasset_lens_lint_engine::Severity::Error => "error",
-                    uasset_lens_lint_engine::Severity::Warning => "warning",
+                    uasset_lens_analysis::Severity::Error => "error",
+                    uasset_lens_analysis::Severity::Warning => "warning",
                 };
                 println!(
                     "{}",

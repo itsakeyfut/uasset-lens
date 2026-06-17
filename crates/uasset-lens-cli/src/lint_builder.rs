@@ -1,5 +1,5 @@
 use crate::config::LintConfig;
-use uasset_lens_lint_engine::LintRule;
+use uasset_lens_analysis::LintRule;
 
 fn parse_asset_type(s: &str) -> Option<uasset_lens_shared::AssetType> {
     use uasset_lens_shared::AssetType;
@@ -22,7 +22,7 @@ fn parse_asset_type(s: &str) -> Option<uasset_lens_shared::AssetType> {
 }
 
 pub fn build_lint_rules(cfg: &LintConfig) -> Vec<Box<dyn LintRule>> {
-    let mut naming = uasset_lens_lint_engine::NamingPrefixRule::default();
+    let mut naming = uasset_lens_analysis::NamingPrefixRule::default();
     for (type_str, prefix) in &cfg.naming_prefix {
         if let Some(asset_type) = parse_asset_type(type_str) {
             // Config override replaces the entire default Vec; clone required: HashMap insert takes owned value
@@ -30,14 +30,14 @@ pub fn build_lint_rules(cfg: &LintConfig) -> Vec<Box<dyn LintRule>> {
         }
     }
 
-    let defaults = uasset_lens_lint_engine::ComplexityThresholds::default();
+    let defaults = uasset_lens_analysis::ComplexityThresholds::default();
     let depth_by_type: std::collections::HashMap<uasset_lens_shared::AssetType, u32> = cfg
         .blueprint_depth_by_type
         .iter()
         .filter_map(|(k, &v)| parse_asset_type(k).map(|t| (t, v)))
         .collect();
-    let complexity = uasset_lens_lint_engine::BlueprintComplexityRule {
-        thresholds: uasset_lens_lint_engine::ComplexityThresholds {
+    let complexity = uasset_lens_analysis::BlueprintComplexityRule {
+        thresholds: uasset_lens_analysis::ComplexityThresholds {
             max_node_count: cfg.blueprint_max_nodes.unwrap_or(defaults.max_node_count),
             max_event_tick_count: cfg
                 .blueprint_max_event_tick
