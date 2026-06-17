@@ -173,7 +173,7 @@ pub enum Commands {
         #[arg(long, value_delimiter = ',')]
         only: Vec<String>,
         /// Skip these checks (comma-separated: dead-assets,cycles,redirectors,lint,budget,duplicates)
-        #[arg(long, value_delimiter = ',')]
+        #[arg(long, value_delimiter = ',', conflicts_with = "only")]
         skip: Vec<String>,
         /// Show all findings instead of the first 5 per category
         #[arg(long)]
@@ -693,5 +693,21 @@ mod tests {
         ));
         let result = crate::config::resolve_config(std::path::Path::new("."), Some(&absent));
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn check_should_reject_only_and_skip_used_together() {
+        use clap::Parser;
+        let result = Cli::try_parse_from([
+            "uasset-lens",
+            "check",
+            "./Project",
+            "--only",
+            "cycles",
+            "--skip",
+            "lint",
+        ]);
+        let err = result.expect_err("--only and --skip together must be a clap error");
+        assert_eq!(err.kind(), clap::error::ErrorKind::ArgumentConflict);
     }
 }
