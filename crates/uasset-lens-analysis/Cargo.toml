@@ -1,10 +1,9 @@
 [package]
 name                 = "uasset-lens-analysis"
-publish             = false
 version.workspace    = true
 edition.workspace    = true
 license.workspace    = true
-description.workspace = true
+description          = "Static-analysis checks for Unreal Engine 5 assets — lint rules, size budgets, Blueprint and material metrics"
 repository.workspace = true
 homepage.workspace   = true
 keywords.workspace   = true
