@@ -1,10 +1,9 @@
 ﻿[package]
 name                 = "uasset-lens-shared"
-publish             = false
 version.workspace    = true
 edition.workspace    = true
 license.workspace    = true
-description.workspace = true
+description          = "Core domain types (AssetPath, AssetType, package version) for Unreal Engine 5 asset analysis"
 repository.workspace = true
 homepage.workspace   = true
 keywords.workspace   = true

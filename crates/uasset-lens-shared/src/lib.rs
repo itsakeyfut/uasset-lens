@@ -1,3 +1,5 @@
+#![doc = include_str!("../README.md")]
+
 pub mod asset_path;
 pub mod asset_type;
 pub mod version;
