@@ -70,10 +70,10 @@ naming.sound_prefix         = "SFX_"
 # Blueprint complexity thresholds (strict defaults — large project values)
 blueprint.enabled                = true
 blueprint.severity               = "error"
-blueprint.event_tick_limit       = 5      # max EventTick nodes per Blueprint
+blueprint.event_tick_limit       = 1      # max EventTick nodes per Blueprint
 blueprint.cast_limit             = 10     # max Cast nodes per Blueprint
 blueprint.node_limit             = 200    # max total nodes per Blueprint
-blueprint.dependency_depth_limit = 5     # max transitive dependency depth
+blueprint.dependency_depth_limit = 20     # max transitive dependency depth (UE5 PostProcess ABPs reach ~16)
 
 # Per-asset-type override of dependency_depth_limit. Keys are asset type names
 # (e.g. Blueprint, AnimBlueprint). Types not listed fall back to the global limit.
@@ -123,9 +123,10 @@ When `.uasset-lens.toml` is absent, these defaults apply:
 | `lint.naming.severity` | `"warn"` |
 | `lint.blueprint.enabled` | `true` |
 | `lint.blueprint.severity` | `"error"` |
-| `lint.blueprint.event_tick_limit` | `5` |
+| `lint.blueprint.event_tick_limit` | `1` |
 | `lint.blueprint.cast_limit` | `10` |
 | `lint.blueprint.node_limit` | `200` |
+| `lint.blueprint.dependency_depth_limit` | `20` |
 | `budget.enabled` | `true` |
 | `budget.Texture2D.max_file_size` | `"4MB"` |
 | `budget.Texture2D.severity` | `"error"` |
@@ -190,7 +191,7 @@ Texture2D.max_file_size    = "8MB"   # Larger budget than default
 dead-assets    = "error"
 
 [lint]
-blueprint.event_tick_limit = 2     # Very strict
+blueprint.event_tick_limit = 0     # Forbid EventTick entirely (default already allows only 1)
 blueprint.cast_limit       = 5
 blueprint.node_limit       = 100
 
