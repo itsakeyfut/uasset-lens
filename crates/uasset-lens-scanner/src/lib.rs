@@ -1,4 +1,6 @@
-﻿mod anim_montage;
+﻿#![doc = include_str!("../README.md")]
+
+mod anim_montage;
 mod blueprint;
 mod data_table;
 pub mod error;

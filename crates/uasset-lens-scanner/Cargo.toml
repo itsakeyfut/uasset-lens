@@ -1,10 +1,9 @@
 ﻿[package]
 name                 = "uasset-lens-scanner"
-publish             = false
 version.workspace    = true
 edition.workspace    = true
 license.workspace    = true
-description.workspace = true
+description          = "Hand-written parser for Unreal Engine 5 .uasset / .umap binary files — no editor required"
 repository.workspace = true
 homepage.workspace   = true
 keywords.workspace   = true
