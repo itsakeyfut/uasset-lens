@@ -8,8 +8,7 @@ members = [
     "crates/uasset-lens-analysis",
     "crates/uasset-lens-watcher",
     "crates/uasset-lens-git-diff",
-    "crates/uasset-lens-cli",
-    "apps/uasset-lens",
+    "apps/cli",
 ]
 
 [workspace.package]
@@ -33,7 +32,6 @@ uasset-lens-dependency-graph    = { path = "crates/uasset-lens-dependency-graph"
 uasset-lens-analysis            = { path = "crates/uasset-lens-analysis",            version = "0.1.0" }
 uasset-lens-watcher             = { path = "crates/uasset-lens-watcher",             version = "0.1.0" }
 uasset-lens-git-diff            = { path = "crates/uasset-lens-git-diff",            version = "0.1.0" }
-uasset-lens-cli                 = { path = "crates/uasset-lens-cli",                 version = "0.1.0" }
 
 thiserror  = "2.0.18"
 serde      = { version = "1.0.228", features = ["derive"] }

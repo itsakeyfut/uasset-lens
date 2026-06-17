@@ -3,16 +3,18 @@
 use clap::{CommandFactory, Parser};
 use clap_complete::{Shell, generate};
 
+use cli::{Cli, Commands, run_with};
+
 fn main() {
-    let cli = uasset_lens_cli::Cli::parse();
-    if let uasset_lens_cli::Commands::Completions { shell } = &cli.command {
+    let parsed = Cli::parse();
+    if let Commands::Completions { shell } = &parsed.command {
         if let Err(msg) = generate_completions(shell, &mut std::io::stdout()) {
             eprintln!("{msg}");
             std::process::exit(2);
         }
         return;
     }
-    std::process::exit(uasset_lens_cli::run_with(cli));
+    std::process::exit(run_with(parsed));
 }
 
 fn generate_completions(shell_str: &str, out: &mut impl Write) -> Result<(), String> {
@@ -22,7 +24,7 @@ fn generate_completions(shell_str: &str, out: &mut impl Write) -> Result<(), Str
             shell_str
         )
     })?;
-    let mut cmd = uasset_lens_cli::Cli::command();
+    let mut cmd = Cli::command();
     generate(shell, &mut cmd, "uasset-lens", out);
     Ok(())
 }

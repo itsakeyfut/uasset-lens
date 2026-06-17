@@ -45,7 +45,7 @@ jobs:
             ${{ runner.os }}-cargo-
 
       - name: Build release binary
-        run: cargo build --release --target ${{ matrix.target }} -p uasset-lens
+        run: cargo build --release --target ${{ matrix.target }} --bin uasset-lens
 
       - name: Create archive (Linux / macOS)
         if: matrix.os != 'windows-latest'
