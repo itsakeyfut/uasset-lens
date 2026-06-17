@@ -648,6 +648,9 @@ pub fn handle_check_with_baseline(
                 .max()
                 .unwrap_or(0);
 
+            // Text caps each check at 5 items; verbose and github-actions show everything.
+            let full_output = is_full_output(verbose, format);
+
             println!("Running project health checks...");
             println!();
             for r in &results {
@@ -665,21 +668,13 @@ pub fn handle_check_with_baseline(
                     r.summary,
                     width = name_width,
                 );
-                let sample_end = if verbose {
-                    r.findings.len()
-                } else {
-                    r.findings.len().min(CHECK_SAMPLE_LIMIT)
-                };
-                for finding in &r.findings[..sample_end] {
-                    println!("      {finding}");
-                }
-                if !verbose && r.findings.len() > CHECK_SAMPLE_LIMIT {
-                    let remaining = r.findings.len() - CHECK_SAMPLE_LIMIT;
-                    println!(
-                        "      ... and {remaining} more. Run `uasset-lens {} {}` for the full list.",
-                        check_full_command(r.name),
-                        project_dir.display(),
-                    );
+                for line in finding_lines(
+                    &r.findings,
+                    full_output,
+                    check_full_command(r.name),
+                    project_dir,
+                ) {
+                    println!("{line}");
                 }
             }
             println!();
@@ -699,7 +694,7 @@ pub fn handle_check_with_baseline(
                         "Regression check: FAILED ({} new error violation(s) vs baseline)",
                         regs.len()
                     );
-                    let end = if verbose {
+                    let end = if full_output {
                         regs.len()
                     } else {
                         regs.len().min(CHECK_SAMPLE_LIMIT)
@@ -707,7 +702,7 @@ pub fn handle_check_with_baseline(
                     for v in &regs[..end] {
                         println!("      {}  {}", v.rule, v.asset_path);
                     }
-                    if !verbose && regs.len() > CHECK_SAMPLE_LIMIT {
+                    if !full_output && regs.len() > CHECK_SAMPLE_LIMIT {
                         println!("      ... and {} more.", regs.len() - CHECK_SAMPLE_LIMIT);
                     }
                 }
@@ -752,6 +747,39 @@ fn check_full_command(name: &str) -> &str {
         "duplicates" => "duplicates",
         _ => name,
     }
+}
+
+// The text output caps each check at `CHECK_SAMPLE_LIMIT` items; `--verbose` and the
+// github-actions format always print everything (CI annotation streams must not truncate).
+fn is_full_output(verbose: bool, format: &FormatKind) -> bool {
+    verbose || matches!(format, FormatKind::GithubActions)
+}
+
+/// Renders one check's finding lines: up to `CHECK_SAMPLE_LIMIT` items, then a
+/// "... and N more" line, unless `full_output` shows all items with no truncation line.
+fn finding_lines(
+    findings: &[String],
+    full_output: bool,
+    full_command: &str,
+    project_dir: &Path,
+) -> Vec<String> {
+    let end = if full_output {
+        findings.len()
+    } else {
+        findings.len().min(CHECK_SAMPLE_LIMIT)
+    };
+    let mut lines: Vec<String> = findings[..end]
+        .iter()
+        .map(|f| format!("      {f}"))
+        .collect();
+    if !full_output && findings.len() > CHECK_SAMPLE_LIMIT {
+        let remaining = findings.len() - CHECK_SAMPLE_LIMIT;
+        lines.push(format!(
+            "      ... and {remaining} more. Run `uasset-lens {full_command} {}` for the full list.",
+            project_dir.display(),
+        ));
+    }
+    lines
 }
 
 #[cfg(test)]
@@ -1724,5 +1752,43 @@ mod tests {
             "with --skip-scan, the scan is not invoked (no DB created)"
         );
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    // --- #278: verbose / github-actions full output ---
+
+    #[test]
+    fn finding_lines_should_truncate_to_sample_limit_with_more_line_when_not_full() {
+        let findings: Vec<String> = (0..10).map(|i| format!("/Game/A{i}")).collect();
+        let lines = finding_lines(&findings, false, "dead-assets", std::path::Path::new("./P"));
+        // 5 sample items + 1 truncation line
+        assert_eq!(lines.len(), 6);
+        assert!(
+            lines.last().unwrap().contains("... and 5 more"),
+            "non-full output must end with a truncation line"
+        );
+        assert_eq!(
+            lines.iter().filter(|l| l.contains("/Game/A")).count(),
+            5,
+            "only CHECK_SAMPLE_LIMIT items are shown"
+        );
+    }
+
+    #[test]
+    fn finding_lines_should_show_all_items_without_more_line_when_full() {
+        let findings: Vec<String> = (0..10).map(|i| format!("/Game/A{i}")).collect();
+        let lines = finding_lines(&findings, true, "dead-assets", std::path::Path::new("./P"));
+        assert_eq!(lines.len(), 10);
+        assert!(
+            lines.iter().all(|l| !l.contains("...")),
+            "full output must not contain a truncation line"
+        );
+    }
+
+    #[test]
+    fn is_full_output_should_be_true_for_github_actions_regardless_of_verbose() {
+        assert!(is_full_output(false, &FormatKind::GithubActions));
+        assert!(is_full_output(true, &FormatKind::GithubActions));
+        assert!(!is_full_output(false, &FormatKind::Text));
+        assert!(is_full_output(true, &FormatKind::Text));
     }
 }

@@ -55,6 +55,9 @@ Show all findings for each check instead of the first 5.
 By default, each check shows at most 5 items followed by a `... (N more)` summary line.
 With `--verbose`, all items are printed.
 
+The 5-item cap applies to the default `text` format only. `--format json` and
+`--format github-actions` always include the full results regardless of `--verbose`.
+
 ```bash
 uasset-lens check ./Project --verbose
 ```
