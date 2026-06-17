@@ -1,10 +1,9 @@
 ﻿[package]
 name                 = "uasset-lens-git-diff"
-publish             = false
 version.workspace    = true
 edition.workspace    = true
 license.workspace    = true
-description.workspace = true
+description          = "Diff Unreal Engine 5 assets between Git HEAD and the working tree"
 repository.workspace = true
 homepage.workspace   = true
 keywords.workspace   = true
