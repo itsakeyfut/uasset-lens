@@ -1,3 +1,5 @@
+#![doc = include_str!("../README.md")]
+
 mod db;
 pub mod duplicates;
 pub mod error;

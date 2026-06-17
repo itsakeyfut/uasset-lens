@@ -3,7 +3,7 @@
 **Enforce asset quality gates in CI — without opening the Unreal Editor.**
 
 [![CI](https://github.com/itsakeyfut/uasset-lens/actions/workflows/ci.yml/badge.svg)](https://github.com/itsakeyfut/uasset-lens/actions/workflows/ci.yml)
-[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![License: MIT OR Apache-2.0](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue.svg)](#license)
 
 uasset-lens is a fast, CLI-first static analyzer for Unreal Engine 5 `.uasset` / `.umap`
 files. It reads the binary format directly, so it runs in seconds on any CI server with no
@@ -620,6 +620,33 @@ Pass `--format github-actions` to emit inline PR annotations for lint and budget
 
 ---
 
+## Library crates (SDK)
+
+uasset-lens is built as a workspace of small, reusable libraries — not just a CLI. If you
+are writing your own UE5 tooling in Rust, you can depend on these crates directly instead of
+shelling out to the binary. Each is published to crates.io under the `uasset-lens-` prefix.
+
+| Crate | What it does |
+|---|---|
+| [`uasset-lens-shared`](https://crates.io/crates/uasset-lens-shared) | Core domain types (`AssetPath`, `AssetType`, package version). |
+| [`uasset-lens-scanner`](https://crates.io/crates/uasset-lens-scanner) | Hand-written `.uasset` / `.umap` binary parser — no editor required. |
+| [`uasset-lens-asset-db`](https://crates.io/crates/uasset-lens-asset-db) | SQLite-backed asset index with duplicate detection. |
+| [`uasset-lens-dependency-graph`](https://crates.io/crates/uasset-lens-dependency-graph) | Dependency graph: impact, dead-asset, and redirector analysis. |
+| [`uasset-lens-analysis`](https://crates.io/crates/uasset-lens-analysis) | Lint rules, size budgets, Blueprint & material metrics. |
+| [`uasset-lens-watcher`](https://crates.io/crates/uasset-lens-watcher) | Debounced filesystem watch sessions. |
+| [`uasset-lens-git-diff`](https://crates.io/crates/uasset-lens-git-diff) | Diff assets between Git HEAD and the working tree. |
+
+They layer strictly — `shared` → `scanner` / `asset-db` → `dependency-graph` → `analysis` —
+so you can pull in only what you need. For example, to parse `.uasset` files in your own tool:
+
+```bash
+cargo add uasset-lens-scanner
+```
+
+Per-crate API documentation lives on [docs.rs](https://docs.rs/uasset-lens-scanner).
+
+---
+
 ## Contributing
 
 Bug reports, feature requests, and questions are welcome — please
@@ -632,4 +659,4 @@ command that failed.
 
 ## License
 
-MIT — see [LICENSE](LICENSE).
+Licensed under either of [MIT](LICENSE-MIT) or [Apache-2.0](LICENSE-APACHE) at your option.

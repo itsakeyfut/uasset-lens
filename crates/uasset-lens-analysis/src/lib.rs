@@ -1,3 +1,5 @@
+#![doc = include_str!("../README.md")]
+
 pub mod blueprint;
 pub mod budget;
 pub mod lint;

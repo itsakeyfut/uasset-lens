@@ -1,4 +1,6 @@
-﻿use std::collections::HashSet;
+﻿#![doc = include_str!("../README.md")]
+
+use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 

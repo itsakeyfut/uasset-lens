@@ -1,10 +1,9 @@
 ﻿[package]
 name                 = "uasset-lens-asset-db"
-publish             = false
 version.workspace    = true
 edition.workspace    = true
 license.workspace    = true
-description.workspace = true
+description          = "SQLite-backed index of Unreal Engine 5 assets with duplicate detection"
 repository.workspace = true
 homepage.workspace   = true
 keywords.workspace   = true

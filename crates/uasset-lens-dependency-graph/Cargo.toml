@@ -1,10 +1,9 @@
 ﻿[package]
 name                 = "uasset-lens-dependency-graph"
-publish             = false
 version.workspace    = true
 edition.workspace    = true
 license.workspace    = true
-description.workspace = true
+description          = "In-memory dependency graph for Unreal Engine 5 assets — impact, dead-asset and redirector analysis"
 repository.workspace = true
 homepage.workspace   = true
 keywords.workspace   = true

@@ -1,10 +1,9 @@
 ﻿[package]
 name                 = "uasset-lens-watcher"
-publish             = false
 version.workspace    = true
 edition.workspace    = true
 license.workspace    = true
-description.workspace = true
+description          = "Debounced filesystem watch sessions for Unreal Engine 5 asset directories"
 repository.workspace = true
 homepage.workspace   = true
 keywords.workspace   = true
