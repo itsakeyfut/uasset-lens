@@ -175,6 +175,38 @@ struct CheckOutput {
     checks: Vec<CheckResultJson>,
 }
 
+/// Runs an mtime delta scan before checks unless `skip_scan` is set, so `check` works
+/// without a separate `scan`. Output is quiet (stderr progress only, no stdout report) to
+/// keep `check`'s own stdout clean; stale records are auto-removed (equivalent to `scan -y`).
+pub(crate) fn auto_scan(
+    skip_scan: bool,
+    project_dir: &Path,
+    db_path: &Path,
+    format: &FormatKind,
+    cfg: &crate::config::ConfigFile,
+) -> anyhow::Result<()> {
+    if skip_scan {
+        return Ok(());
+    }
+    // Scan's exit code (e.g. stale-removed → 1) is intentionally discarded; `check`
+    // computes its own exit code from the check results.
+    crate::commands::scan::handle_scan(
+        project_dir,
+        db_path,
+        format,
+        cfg,
+        &crate::commands::scan::ScanOptions {
+            full_scan: false,
+            diff: false,
+            yes: true,
+            save_baseline: None,
+            diff_from: None,
+            quiet: true,
+        },
+    )?;
+    Ok(())
+}
+
 // Thin 7-arg shim retained for the existing test suite; production dispatch calls
 // `handle_check_with_baseline` directly.
 #[cfg(test)]
@@ -1652,6 +1684,44 @@ mod tests {
         assert_eq!(
             result, 0,
             "relative config baseline_path resolves against project_dir, not CWD"
+        );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    // --- #276: auto-scan before checks ---
+
+    #[test]
+    fn auto_scan_should_create_db_when_skip_scan_is_false() {
+        let (dir, db_path) = test_db_in_tempdir("check276_autoscan");
+        // Empty content dir, no DB yet: the auto-scan must create it (scan ran).
+        assert!(!db_path.exists());
+
+        auto_scan(
+            false,
+            &dir,
+            &db_path,
+            &FormatKind::Text,
+            &Default::default(),
+        )
+        .unwrap();
+
+        assert!(
+            db_path.exists(),
+            "without --skip-scan, the pre-check scan runs and creates the DB"
+        );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn auto_scan_should_be_noop_when_skip_scan_is_true() {
+        let (dir, db_path) = test_db_in_tempdir("check276_skipscan");
+        assert!(!db_path.exists());
+
+        auto_scan(true, &dir, &db_path, &FormatKind::Text, &Default::default()).unwrap();
+
+        assert!(
+            !db_path.exists(),
+            "with --skip-scan, the scan is not invoked (no DB created)"
         );
         let _ = std::fs::remove_dir_all(&dir);
     }

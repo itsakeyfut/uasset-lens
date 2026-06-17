@@ -26,6 +26,7 @@ pub fn handle_watch(
             yes: true, // non-interactive startup, auto-remove stale records
             save_baseline: None,
             diff_from: None,
+            quiet: false,
         },
     )?;
 
