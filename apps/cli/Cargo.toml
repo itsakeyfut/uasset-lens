@@ -1,5 +1,5 @@
 ﻿[package]
-name                 = "uasset-lens-cli"
+name                 = "cli"
 publish             = false
 version.workspace    = true
 edition.workspace    = true
@@ -10,6 +10,10 @@ homepage.workspace   = true
 keywords.workspace   = true
 categories.workspace = true
 authors.workspace    = true
+
+[[bin]]
+name = "uasset-lens"
+path = "src/main.rs"
 
 [dependencies]
 uasset-lens-shared              = { workspace = true }
@@ -27,6 +31,7 @@ serde      = { workspace = true }
 serde_json = { workspace = true }
 toml       = { workspace = true }
 globset    = { workspace = true }
+clap_complete = "4.6.5"
 
 [dev-dependencies]
 uasset-lens-scanner  = { workspace = true, features = ["test-support"] }
