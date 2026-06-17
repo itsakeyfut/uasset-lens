@@ -90,6 +90,18 @@ mod tests {
         }
     }
 
+    // Pins the built-in defaults so they cannot silently drift from the documented
+    // values in docs/specs/config.md ([lint.blueprint] Defaults Table). Update both
+    // together if a default changes.
+    #[test]
+    fn complexity_thresholds_default_should_match_documented_values() {
+        let d = ComplexityThresholds::default();
+        assert_eq!(d.max_node_count, 200);
+        assert_eq!(d.max_event_tick_count, 1);
+        assert_eq!(d.max_cast_count, 10);
+        assert_eq!(d.max_dependency_depth, 20);
+    }
+
     #[test]
     fn analyze_should_return_some_for_blueprint_asset() {
         let metrics = below_threshold_metrics();
