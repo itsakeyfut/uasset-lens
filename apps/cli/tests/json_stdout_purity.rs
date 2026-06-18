@@ -89,6 +89,7 @@ fn query_commands_format_json_should_emit_only_json_to_stdout() {
         "blueprint",
         "find",
         "check",
+        "doctor",
     ] {
         assert_json_stdout(&dir, &[cmd]);
     }

@@ -5,6 +5,7 @@ pub mod clean;
 pub mod config_validate;
 pub mod dead_assets;
 pub mod deps;
+pub mod doctor;
 pub mod duplicates;
 pub mod find;
 pub mod graph;

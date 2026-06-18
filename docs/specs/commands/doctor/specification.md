@@ -39,49 +39,53 @@ Checks that cannot run because a prerequisite failed are shown with `—` (not a
 
 ## Text Output
 
-All-pass example:
+All five checks are always printed, each with `✓` (pass), `✗` (fail), or `—` (skipped because a
+prerequisite failed). All-pass example:
 
 ```
 uasset-lens v0.2.0
 
-[DB]     ✓  .uasset-lens/uasset-lens.db (schema v4, 1,024 assets)
+[DB]     ✓  .uasset-lens/uasset-lens.db (1,024 assets)
+[Schema] ✓  v4 (current)
 [Config] ✓  .uasset-lens.toml (valid)
-[Scan]   ✓  Last scan: 2026-06-16 14:23 (0 days ago)
-[Compat] ✓  Scanner version matches DB schema
+[Scan]   ✓  Last scan: 2026-06-16 14:23:00 UTC (0 days ago)
+[Compat] ✓  Scanner version v0.2.0 matches binary
 
 All checks passed.
 ```
 
-With issues:
+With issues — when the DB is missing, the schema/scan/compat checks depend on it and are skipped
+(`—`), so only the `[DB]` failure counts:
 
 ```
 uasset-lens v0.2.0
 
 [DB]     ✗  .uasset-lens/uasset-lens.db not found
-             Run 'uasset-lens scan ./Project' to create it.
+             Run 'uasset-lens scan <project_dir>' to create it.
+[Schema] —  Cannot check (DB missing)
 [Config] ✓  .uasset-lens.toml (valid)
-[Scan]   ✗  No scan data available.
+[Scan]   —  Cannot check (DB missing)
 [Compat] —  Cannot check (DB missing)
 
 1 issue found.
 ```
 
-Schema mismatch:
+Schema mismatch (DB opens, but its version and scanner version differ from the binary):
 
 ```
 uasset-lens v0.2.0
 
-[DB]     ✓  .uasset-lens/uasset-lens.db (schema v3, 512 assets)
-[Schema] ✗  Schema v3 is outdated (expected v4).
-             Run 'uasset-lens scan --full-scan ./Project' to migrate.
+[DB]     ✓  .uasset-lens/uasset-lens.db (512 assets)
+[Schema] ✗  v3 is outdated (expected v4)
+             Run 'uasset-lens scan --full-scan <project_dir>' to migrate.
 [Config] ✓  .uasset-lens.toml (valid)
-[Scan]   ✓  Last scan: 2026-06-14 09:10 (2 days ago)
-[Compat] ✗  Scanner version mismatch: DB built with v0.1.3, current binary is v0.2.0.
+[Scan]   ✓  Last scan: 2026-06-14 09:10:00 UTC (2 days ago)
+[Compat] ✗  Scanner version mismatch: DB built with v0.1.3, current binary is v0.2.0
 
 2 issues found.
 ```
 
-Config absent (not an error):
+Config absent (not an error — defaults are used):
 
 ```
 [Config] —  .uasset-lens.toml not found (defaults will be used)
@@ -100,17 +104,25 @@ Config absent (not an error):
       "schema_version": 4,
       "asset_count": 1024
     },
+    "schema": {
+      "passed": true,
+      "skipped": false,
+      "version": 4,
+      "expected": 4
+    },
     "config": {
       "passed": true,
       "present": true
     },
     "scan": {
       "passed": true,
+      "skipped": false,
       "last_scan_utc": "2026-06-16T14:23:00Z",
       "days_since_scan": 0
     },
     "compat": {
       "passed": true,
+      "skipped": false,
       "db_scanner_version": "0.2.0",
       "binary_version": "0.2.0"
     }
@@ -119,8 +131,9 @@ Config absent (not an error):
 }
 ```
 
-When DB is missing, `"db"`, `"scan"`, and `"compat"` each include `"passed": false` and
-an `"error"` string. `"compat"` also includes `"skipped": true`.
+When the DB is missing, `"db"` reports `"passed": false` with `"schema_version"` and
+`"asset_count"` null, and the dependent `"schema"`, `"scan"`, and `"compat"` checks each report
+`"passed": false` with `"skipped": true` (a skipped check never increments `issues_found`).
 
 ---
 
