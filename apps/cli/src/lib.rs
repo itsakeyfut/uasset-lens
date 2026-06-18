@@ -4,6 +4,7 @@ mod ignore;
 pub(crate) mod lint_builder;
 mod paths;
 mod sarif;
+mod time;
 
 use std::path::{Path, PathBuf};
 
@@ -249,6 +250,11 @@ pub enum Commands {
         #[arg(long)]
         force: bool,
     },
+    /// Check installation health: DB, schema version, config, scan freshness, scanner compat
+    Doctor {
+        /// Project directory to diagnose (default: current directory)
+        project_dir: Option<PathBuf>,
+    },
     /// Inspect and validate the project configuration
     Config {
         #[command(subcommand)]
@@ -347,6 +353,7 @@ fn dispatch(cli: &Cli) -> anyhow::Result<i32> {
         Commands::Path { .. }
         | Commands::Completions { .. }
         | Commands::Init { .. }
+        | Commands::Doctor { .. }
         | Commands::Config { .. } => None,
     };
 
@@ -574,6 +581,12 @@ fn dispatch(cli: &Cli) -> anyhow::Result<i32> {
             preset,
             force,
         } => commands::init::handle_init(project_dir, *preset, *force, cli.yes, &cli.format),
+        Commands::Doctor { project_dir } => commands::doctor::handle_doctor(
+            project_dir.as_deref(),
+            cli.db.as_deref(),
+            cli.config.as_deref(),
+            &cli.format,
+        ),
         Commands::Config { command } => match command {
             ConfigCommand::Validate { project_dir } => {
                 commands::config_validate::handle_config_validate(

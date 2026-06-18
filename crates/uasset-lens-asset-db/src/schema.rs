@@ -1,10 +1,15 @@
-use crate::db::AssetDb;
+use crate::db::{AssetDb, CURRENT_SCHEMA_VERSION};
 use crate::error::DbError;
 
 impl AssetDb {
     pub(crate) fn init_schema(&self) -> Result<(), DbError> {
         self.conn.execute_batch(
             "PRAGMA foreign_keys = ON;
+
+             CREATE TABLE IF NOT EXISTS meta (
+                 key   TEXT PRIMARY KEY,
+                 value TEXT NOT NULL
+             );
 
              CREATE TABLE IF NOT EXISTS assets (
                  id            INTEGER PRIMARY KEY,
@@ -52,6 +57,19 @@ impl AssetDb {
              CREATE INDEX IF NOT EXISTS idx_deps_to_path          ON dependencies(to_path);
              CREATE INDEX IF NOT EXISTS idx_scan_history_scanned_at ON scan_history(scanned_at);",
         )?;
+
+        // Stamp the schema version on an unversioned DB (new or pre-versioning). A DB already at a
+        // higher version is left untouched so a newer-built DB is not silently downgraded. Stamping
+        // a pre-versioning DB as the current version is sound only because every schema change so
+        // far is additive (CREATE TABLE/INDEX IF NOT EXISTS); a future destructive change must bump
+        // CURRENT_SCHEMA_VERSION and add real migration handling here.
+        let current: i64 = self
+            .conn
+            .pragma_query_value(None, "user_version", |row| row.get(0))?;
+        if current == 0 {
+            self.conn
+                .pragma_update(None, "user_version", CURRENT_SCHEMA_VERSION)?;
+        }
         Ok(())
     }
 }
@@ -121,5 +139,27 @@ mod tests {
             col_names.contains(&"is_soft".to_string()),
             "dependencies table must have is_soft column"
         );
+    }
+
+    #[test]
+    fn init_schema_should_stamp_current_version_and_round_trip_scanner_version() {
+        let db = AssetDb::open(Path::new(":memory:")).unwrap();
+        assert_eq!(db.schema_version().unwrap(), CURRENT_SCHEMA_VERSION);
+        assert_eq!(db.scanner_version().unwrap(), None);
+        db.set_scanner_version("1.2.3").unwrap();
+        assert_eq!(db.scanner_version().unwrap(), Some("1.2.3".to_string()));
+    }
+
+    #[test]
+    fn asset_count_should_count_indexed_assets() {
+        use uasset_lens_shared::AssetType;
+        let db = AssetDb::open(Path::new(":memory:")).unwrap();
+        assert_eq!(db.asset_count().unwrap(), 0);
+        db.upsert_asset(&uasset_lens_scanner::make_meta(
+            "/Game/A",
+            AssetType::Blueprint,
+        ))
+        .unwrap();
+        assert_eq!(db.asset_count().unwrap(), 1);
     }
 }

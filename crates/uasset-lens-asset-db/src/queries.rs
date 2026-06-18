@@ -27,6 +27,34 @@ fn parse_asset_record(
 }
 
 impl AssetDb {
+    /// The on-disk schema version, stored in SQLite `PRAGMA user_version`.
+    pub fn schema_version(&self) -> Result<i64, DbError> {
+        Ok(self
+            .conn
+            .pragma_query_value(None, "user_version", |row| row.get(0))?)
+    }
+
+    /// The scanner (binary) version that last wrote this DB, if it was recorded.
+    pub fn scanner_version(&self) -> Result<Option<String>, DbError> {
+        match self.conn.query_row(
+            "SELECT value FROM meta WHERE key = 'scanner_version'",
+            [],
+            |row| row.get::<_, String>(0),
+        ) {
+            Ok(s) => Ok(Some(s)),
+            Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
+            Err(e) => Err(e.into()),
+        }
+    }
+
+    /// Number of indexed assets.
+    pub fn asset_count(&self) -> Result<u64, DbError> {
+        let n: i64 = self
+            .conn
+            .query_row("SELECT COUNT(*) FROM assets", [], |row| row.get(0))?;
+        Ok(n as u64)
+    }
+
     /// Returns the subset of `files` that are new (not in DB) or whose mtime differs.
     pub fn filter_changed(&self, files: &[(PathBuf, u64)]) -> Result<Vec<PathBuf>, DbError> {
         let mut stmt = self

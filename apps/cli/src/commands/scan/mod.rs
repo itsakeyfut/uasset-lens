@@ -1,5 +1,4 @@
 mod diff;
-mod format_time;
 
 use std::collections::{HashMap, HashSet};
 use std::io::{self, IsTerminal, Write};
@@ -369,6 +368,9 @@ pub fn handle_scan(
     let snapshot_id = db
         .record_scan_snapshot()
         .context("Failed to record scan snapshot")?;
+    // Stamp the scanner (binary) version into the DB for `doctor`'s compat check.
+    db.set_scanner_version(env!("CARGO_PKG_VERSION"))
+        .context("Failed to record scanner version")?;
     if let Some(name) = opts.save_baseline {
         db.save_baseline(name, snapshot_id)
             .context("Failed to save baseline")?;

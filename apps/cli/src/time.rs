@@ -1,4 +1,9 @@
-pub(super) fn format_utc(unix_secs: u64) -> String {
+// Civil date/time formatting from a Unix timestamp without pulling in a date crate.
+
+fn ymd_hms(unix_secs: u64) -> (u64, u64, u64, u64, u64, u64) {
+    // Clamp to 9999-12-31T23:59:59Z so a corrupt/garbage timestamp (e.g. read from a tampered
+    // DB) renders as an obviously-bogus far-future date instead of hanging the year loop below.
+    let unix_secs = unix_secs.min(253_402_300_799);
     let s = unix_secs % 60;
     let m = (unix_secs / 60) % 60;
     let h = (unix_secs / 3600) % 24;
@@ -37,8 +42,17 @@ pub(super) fn format_utc(unix_secs: u64) -> String {
         month += 1;
     }
     let day = rem_days + 1;
+    (year, month, day, h, m, s)
+}
 
+pub(crate) fn format_utc(unix_secs: u64) -> String {
+    let (year, month, day, h, m, s) = ymd_hms(unix_secs);
     format!("{year:04}-{month:02}-{day:02} {h:02}:{m:02}:{s:02} UTC")
+}
+
+pub(crate) fn format_rfc3339(unix_secs: u64) -> String {
+    let (year, month, day, h, m, s) = ymd_hms(unix_secs);
+    format!("{year:04}-{month:02}-{day:02}T{h:02}:{m:02}:{s:02}Z")
 }
 
 fn is_leap_year(y: u64) -> bool {
@@ -66,5 +80,22 @@ mod tests {
         //   1970: 365, 1971: 365, then 31 (Jan) + 29 (Feb day 29) - 1 = 59 days into 1972
         //   total = 365 + 365 + 59 = 789 days → epoch 789 * 86400 = 68169600
         assert_eq!(format_utc(68_169_600), "1972-02-29 00:00:00 UTC");
+    }
+
+    #[test]
+    fn format_rfc3339_should_format_epoch_zero() {
+        assert_eq!(format_rfc3339(0), "1970-01-01T00:00:00Z");
+    }
+
+    #[test]
+    fn format_rfc3339_should_format_date_and_time() {
+        // 1972-02-29 00:00:00 UTC
+        assert_eq!(format_rfc3339(68_169_600), "1972-02-29T00:00:00Z");
+    }
+
+    #[test]
+    fn format_utc_should_clamp_absurd_timestamp_instead_of_hanging() {
+        // Without the clamp, u64::MAX would spin the year loop ~584 billion times.
+        assert_eq!(format_utc(u64::MAX), "9999-12-31 23:59:59 UTC");
     }
 }

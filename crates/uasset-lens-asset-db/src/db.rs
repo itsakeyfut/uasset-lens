@@ -4,6 +4,10 @@ use rusqlite::Connection;
 
 use crate::DbError;
 
+/// On-disk schema version, stored in SQLite `PRAGMA user_version`. Bump this when the schema
+/// changes in a way that requires a re-scan or migration; `doctor` reports a mismatch.
+pub const CURRENT_SCHEMA_VERSION: i64 = 1;
+
 pub struct AssetDb {
     pub(crate) conn: Connection,
 }

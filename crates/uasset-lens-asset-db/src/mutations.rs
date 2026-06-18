@@ -107,6 +107,15 @@ impl AssetDb {
         Ok(self.conn.last_insert_rowid())
     }
 
+    /// Records the scanner (binary) version that wrote this DB, for `doctor`'s compat check.
+    pub fn set_scanner_version(&self, version: &str) -> Result<(), DbError> {
+        self.conn.execute(
+            "INSERT OR REPLACE INTO meta (key, value) VALUES ('scanner_version', ?1)",
+            rusqlite::params![version],
+        )?;
+        Ok(())
+    }
+
     pub fn save_baseline(&self, name: &str, snapshot_id: i64) -> Result<(), DbError> {
         let saved_at = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)

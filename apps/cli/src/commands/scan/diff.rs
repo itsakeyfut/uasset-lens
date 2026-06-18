@@ -3,8 +3,8 @@ use std::path::{Path, PathBuf};
 
 use anyhow::Context;
 
-use super::format_time::format_utc;
 use crate::FormatKind;
+use crate::time::format_utc;
 
 #[derive(serde::Serialize)]
 pub(super) struct BpRegressionEntry {
