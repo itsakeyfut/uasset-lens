@@ -9,19 +9,17 @@
    └── exit 1
 3. Determine preset:
    └── if --preset given: use it directly
-   └── elif -y / --yes: use "indie" default
+   └── elif -y / --yes or stdin is not a TTY: use "indie" default
    └── else: run interactive prompt (stdin/stderr)
        a. ask "Project scale? [indie/mid/aaa] (default: indie):"
-       b. ask "Content root name? [Content] (default: Content):"
-       c. ask "Write .uasset-lens.toml? [Y/n]:"
+       b. ask "Write .uasset-lens.toml? [Y/n]:"
           └── if "n": abort without writing, exit 0
 4. Load preset template string for chosen preset    [cli]
-5. If content root differs from "Content": patch the template string
-6. fs::write(config_path, template)                [cli]
+5. fs::write(config_path, template)                 [cli]
    └── on I/O error → exit 2
-7. Print success message to stdout
-8. Print .gitignore tip to stdout
-9. exit 0
+6. Print success message to stdout
+7. Print .gitignore tip to stdout
+8. exit 0
 ```
 
 ---
@@ -30,10 +28,10 @@
 
 | Step | Crate |
 |---|---|
-| Interactive prompt (stdin/stderr) | `uasset-lens-cli` |
-| Preset template strings | `uasset-lens-cli` (init/presets.rs) |
-| File write | `uasset-lens-cli` |
-| JSON output formatting | `uasset-lens-cli` |
+| Interactive prompt (stdin/stderr) | `apps/cli` |
+| Preset template strings | `apps/cli` (commands/init.rs) |
+| File write | `apps/cli` |
+| JSON output formatting | `apps/cli` |
 
 No library crates are involved. Config templates are embedded as string constants; no
 external template engine is used.
@@ -42,34 +40,22 @@ external template engine is used.
 
 ## Preset Templates
 
-Each preset is a static `&str` holding the complete TOML content. Templates are stored
-in `crates/uasset-lens-cli/src/commands/init/presets.rs` and selected by a match:
+Each preset is a static `&str` holding the complete TOML content, selected by a match:
 
 ```rust
-fn preset_template(preset: Preset) -> &'static str {
-    match preset {
-        Preset::Indie => include_str!("templates/indie.toml"),
-        Preset::Mid   => include_str!("templates/mid.toml"),
-        Preset::Aaa   => include_str!("templates/aaa.toml"),
+fn template(self) -> &'static str {
+    match self {
+        Preset::Indie => include_str!("init/templates/indie.toml"),
+        Preset::Mid   => include_str!("init/templates/mid.toml"),
+        Preset::Aaa   => include_str!("init/templates/aaa.toml"),
     }
 }
 ```
 
 The template files are checked into the repository under
-`crates/uasset-lens-cli/src/commands/init/templates/`.
-
----
-
-## Content Root Patching
-
-When the user provides a non-default content root name (anything other than `"Content"`),
-the command performs a single string replacement on the template before writing:
-
-```
-"content_root = \"Content\""  →  "content_root = \"<user_value>\""
-```
-
-This avoids a full TOML parse-modify-serialize round-trip for a single field substitution.
+`apps/cli/src/commands/init/templates/`. They use only the implemented config schema (e.g.
+budgets are `<Type>.max_size = <bytes>`); there is no content-root field to patch, so the
+template is written verbatim.
 
 ---
 

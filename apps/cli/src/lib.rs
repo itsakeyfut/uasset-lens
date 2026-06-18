@@ -229,6 +229,16 @@ pub enum Commands {
         /// Shell to generate completions for (bash, zsh, fish, powershell, elvish)
         shell: String,
     },
+    /// Generate a starter .uasset-lens.toml from a project-scale preset
+    Init {
+        project_dir: PathBuf,
+        /// Preset to apply without prompting (indie, mid, aaa)
+        #[arg(long, value_enum)]
+        preset: Option<commands::init::Preset>,
+        /// Overwrite an existing .uasset-lens.toml
+        #[arg(long)]
+        force: bool,
+    },
 }
 
 /// Opens an existing database, translating `DbError::NotFound` into a user-friendly CLI message.
@@ -309,7 +319,8 @@ fn dispatch(cli: &Cli) -> anyhow::Result<i32> {
         | Commands::Check { project_dir, .. }
         | Commands::Clean { project_dir, .. }
         | Commands::Watch { project_dir } => Some(project_dir.as_path()),
-        Commands::Path { .. } | Commands::Completions { .. } => None,
+        // `init` creates the config; it must not try to load one.
+        Commands::Path { .. } | Commands::Completions { .. } | Commands::Init { .. } => None,
     };
 
     let cfg = if let Some(pd) = project_dir_for_cfg {
@@ -521,6 +532,11 @@ fn dispatch(cli: &Cli) -> anyhow::Result<i32> {
             &cli.format,
         ),
         // Intercepted before dispatch in apps/uasset-lens-cli/src/main.rs
+        Commands::Init {
+            project_dir,
+            preset,
+            force,
+        } => commands::init::handle_init(project_dir, *preset, *force, cli.yes, &cli.format),
         Commands::Completions { .. } => {
             unreachable!("completions is handled at the binary entry point before dispatch")
         }
