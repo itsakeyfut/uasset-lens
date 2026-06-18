@@ -49,6 +49,7 @@ globset    = "0.4"
 notify     = "8"
 tempfile   = "3.27.0"
 ctrlc      = "3.5.2"
+indicatif  = "0.18.4"
 
 [profile.dev]
 opt-level    = 0

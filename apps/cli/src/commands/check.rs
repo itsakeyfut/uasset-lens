@@ -202,6 +202,7 @@ pub(crate) fn auto_scan(
             save_baseline: None,
             diff_from: None,
             quiet: true,
+            no_progress: true,
         },
     )?;
     Ok(())

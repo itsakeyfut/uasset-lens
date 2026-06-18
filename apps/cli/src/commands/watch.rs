@@ -27,6 +27,7 @@ pub fn handle_watch(
             save_baseline: None,
             diff_from: None,
             quiet: false,
+            no_progress: true, // keep the watch session's own output clean
         },
     )?;
 
