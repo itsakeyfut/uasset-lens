@@ -90,10 +90,10 @@ Exclusions defined in `.uasset-lens-ignore` apply to every sub-command. Excluded
 assets are invisible to the tool — they are not indexed, not reported as dead, not
 linted, and not counted in stats.
 
-To verify which paths are being excluded, run:
+Exclusions are evaluated at **scan-index time**: ignored paths are never written to the
+database, so all downstream commands inherit the exclusion. Editing `.uasset-lens-ignore`
+takes effect on the next `scan`; a previously-indexed path that becomes ignored is treated
+as stale and removed on rescan.
 
-```bash
-uasset-lens scan ./Project --dry-run
-```
-
-Excluded paths are shown in the dry-run output with an `[ignored]` marker.
+A `scan --dry-run` preview that lists scanned vs. `[ignored]` paths without touching the
+database is planned separately (see issue #359).

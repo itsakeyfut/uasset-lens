@@ -1,5 +1,6 @@
 mod commands;
 pub mod config;
+mod ignore;
 pub(crate) mod lint_builder;
 mod paths;
 mod sarif;

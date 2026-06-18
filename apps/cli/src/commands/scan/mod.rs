@@ -78,6 +78,8 @@ pub fn handle_scan(
         .collect();
 
     let excluded = cfg.scan.exclude_paths.clone();
+    // Load `.uasset-lens-ignore` up front so a malformed pattern fails before the walk.
+    let ignore_rules = crate::ignore::IgnoreRules::load(project_dir)?;
 
     let effective_diff = opts.diff || opts.diff_from.is_some();
 
@@ -100,7 +102,7 @@ pub fn handle_scan(
         (HashMap::new(), HashMap::new())
     };
 
-    let all_files: Vec<(PathBuf, u64)> = WalkDir::new(project_dir)
+    let mut all_files: Vec<(PathBuf, u64)> = WalkDir::new(project_dir)
         .into_iter()
         .filter_entry(|e| {
             if e.file_type().is_dir()
@@ -135,6 +137,18 @@ pub fn handle_scan(
             (e.path().to_path_buf(), mtime)
         })
         .collect();
+
+    // Apply `.uasset-lens-ignore` (additive with TOML scan.exclude_paths). Ignored files are
+    // treated as absent: never indexed, and any previously-indexed path becomes stale on rescan.
+    if !ignore_rules.is_empty() {
+        all_files.retain(|(p, _)| {
+            let rel = p
+                .strip_prefix(project_dir)
+                .map(|r| r.to_string_lossy().replace('\\', "/"))
+                .unwrap_or_default();
+            !ignore_rules.is_ignored(&rel)
+        });
+    }
 
     let walkdir_paths: HashSet<&PathBuf> = all_files.iter().map(|(p, _)| p).collect();
 
@@ -476,6 +490,61 @@ mod tests {
         );
 
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn handle_scan_should_not_index_files_matched_by_ignore_file() {
+        let (dir, db_path) = test_db_in_tempdir("scan_ignore");
+        let fixture = std::path::PathBuf::from(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../tests/fixtures/valid/BP_Simple.uasset"
+        ));
+        let dev = dir.join("Content").join("Dev");
+        let maps = dir.join("Content").join("Maps");
+        std::fs::create_dir_all(&dev).unwrap();
+        std::fs::create_dir_all(&maps).unwrap();
+        std::fs::copy(&fixture, dev.join("BP_Ignored.uasset")).unwrap();
+        std::fs::copy(&fixture, maps.join("BP_Kept.uasset")).unwrap();
+        std::fs::write(dir.join(".uasset-lens-ignore"), "Content/Dev/\n").unwrap();
+
+        let _ = handle_scan(
+            &dir,
+            &db_path,
+            &FormatKind::Text,
+            &Default::default(),
+            &ScanOptions {
+                full_scan: false,
+                diff: false,
+                yes: false,
+                save_baseline: None,
+                diff_from: None,
+                quiet: false,
+            },
+        )
+        .unwrap();
+
+        let db = uasset_lens_asset_db::AssetDb::open(&db_path).unwrap();
+        let paths: Vec<String> = db
+            .all_assets()
+            .unwrap()
+            .iter()
+            .map(|a| a.asset_path.as_str().to_owned())
+            .collect();
+        let _ = std::fs::remove_dir_all(&dir);
+
+        assert_eq!(
+            paths.len(),
+            1,
+            "only the non-ignored asset should be indexed; got {paths:?}"
+        );
+        assert!(
+            paths.iter().any(|p| p.contains("BP_Kept")),
+            "kept asset should be indexed: {paths:?}"
+        );
+        assert!(
+            !paths.iter().any(|p| p.contains("BP_Ignored")),
+            "ignored asset must not be indexed: {paths:?}"
+        );
     }
 
     #[test]
