@@ -414,6 +414,112 @@ pub fn handle_scan(
     if removed_count > 0 { Ok(1) } else { Ok(0) }
 }
 
+/// An asset excluded by a `--dry-run` preview, with the rule source that excluded it.
+struct IgnoredEntry {
+    path: String,
+    /// `exclude_paths` (TOML prefix or glob) or `.uasset-lens-ignore`.
+    source: &'static str,
+}
+
+/// A `--dry-run` classification: assets that would be scanned, and those excluded.
+struct DryRunPlan {
+    scanned: Vec<String>,
+    ignored: Vec<IgnoredEntry>,
+}
+
+/// Walks the project and partitions assets into scanned vs. excluded, without touching the
+/// database. `exclude_paths` covers both prefix and glob patterns; `.uasset-lens-ignore`
+/// covers ignore-file rules.
+fn classify_for_dry_run(
+    project_dir: &Path,
+    cfg: &crate::config::ConfigFile,
+) -> anyhow::Result<DryRunPlan> {
+    let prefixes = normalize_exclude_paths(&cfg.scan.exclude_paths);
+    let exclude_globs = compile_exclude_globs(&cfg.scan.exclude_paths)?;
+    let ignore_rules = crate::ignore::IgnoreRules::load(project_dir)?;
+
+    let mut scanned: Vec<String> = Vec::new();
+    let mut ignored: Vec<IgnoredEntry> = Vec::new();
+
+    for entry in WalkDir::new(project_dir).into_iter().filter_map(|e| e.ok()) {
+        if !entry.file_type().is_file() {
+            continue;
+        }
+        let path = entry.path();
+        let is_asset = path
+            .extension()
+            .and_then(|ext| ext.to_str())
+            .map(|ext| ext.eq_ignore_ascii_case("uasset") || ext.eq_ignore_ascii_case("umap"))
+            .unwrap_or(false);
+        if !is_asset {
+            continue;
+        }
+        let rel = path
+            .strip_prefix(project_dir)
+            .map(|r| r.to_string_lossy().replace('\\', "/"))
+            .unwrap_or_default();
+
+        if prefixes.iter().any(|p| rel.starts_with(p.as_str()))
+            || exclude_globs.iter().any(|g| g.is_match(&rel))
+        {
+            ignored.push(IgnoredEntry {
+                path: rel,
+                source: "exclude_paths",
+            });
+        } else if ignore_rules.is_ignored(&rel) {
+            ignored.push(IgnoredEntry {
+                path: rel,
+                source: ".uasset-lens-ignore",
+            });
+        } else {
+            scanned.push(rel);
+        }
+    }
+
+    scanned.sort();
+    ignored.sort_by(|a, b| a.path.cmp(&b.path));
+    Ok(DryRunPlan { scanned, ignored })
+}
+
+/// Previews which assets would be scanned vs. excluded without writing to the database.
+pub fn handle_scan_dry_run(
+    project_dir: &Path,
+    cfg: &crate::config::ConfigFile,
+    format: &FormatKind,
+) -> anyhow::Result<i32> {
+    let plan = classify_for_dry_run(project_dir, cfg)?;
+
+    match format {
+        FormatKind::Sarif => return Err(crate::sarif_not_supported()),
+        FormatKind::Json => {
+            let out = serde_json::json!({
+                "scanned": plan.scanned,
+                "ignored": plan.ignored.iter().map(|e| &e.path).collect::<Vec<_>>(),
+            });
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&out)
+                    .context("Failed to serialize dry-run output to JSON")?
+            );
+        }
+        FormatKind::GithubActions | FormatKind::Text => {
+            for path in &plan.scanned {
+                println!("  {path}");
+            }
+            for entry in &plan.ignored {
+                println!("  {}  [ignored: {}]", entry.path, entry.source);
+            }
+            println!();
+            println!(
+                "  Dry run: {} to scan, {} ignored (0 written)",
+                plan.scanned.len(),
+                plan.ignored.len()
+            );
+        }
+    }
+    Ok(0)
+}
+
 fn scan_header(content_root: &Path, full_scan: bool, total: usize, changed: usize) -> String {
     if !full_scan && changed == 0 {
         format!(
@@ -521,6 +627,84 @@ mod tests {
         // Contains `*` (routes to the glob branch) with an unterminated character class.
         let result = compile_exclude_globs(&["Content/*[bad".to_string()]);
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn classify_for_dry_run_should_separate_scanned_and_ignored() {
+        let dir = std::env::temp_dir().join(format!("uasset_lens_dryrun_{}", std::process::id()));
+        let content = dir.join("Content");
+        for sub in ["Maps", "Dev", "QA", "Junk"] {
+            std::fs::create_dir_all(content.join(sub)).unwrap();
+        }
+        // dry-run does not parse, so empty files suffice.
+        std::fs::write(content.join("Maps/BP_Keep.uasset"), b"").unwrap();
+        std::fs::write(content.join("Dev/BP_Tool.uasset"), b"").unwrap();
+        std::fs::write(content.join("QA/TestRig.uasset"), b"").unwrap();
+        std::fs::write(content.join("Junk/X.uasset"), b"").unwrap();
+        std::fs::write(
+            dir.join(".uasset-lens.toml"),
+            "[scan]\nexclude_paths = [\"Content/Dev/\", \"Content/**/Test*.uasset\"]\n",
+        )
+        .unwrap();
+        std::fs::write(dir.join(".uasset-lens-ignore"), "Content/Junk/\n").unwrap();
+        let cfg = crate::config::load_config(&dir);
+
+        let plan = classify_for_dry_run(&dir, &cfg).unwrap();
+        let _ = std::fs::remove_dir_all(&dir);
+
+        assert_eq!(plan.scanned, vec!["Content/Maps/BP_Keep.uasset"]);
+        let by_path: std::collections::HashMap<&str, &str> = plan
+            .ignored
+            .iter()
+            .map(|e| (e.path.as_str(), e.source))
+            .collect();
+        assert_eq!(plan.ignored.len(), 3);
+        assert_eq!(
+            by_path.get("Content/Dev/BP_Tool.uasset"),
+            Some(&"exclude_paths")
+        );
+        assert_eq!(
+            by_path.get("Content/QA/TestRig.uasset"),
+            Some(&"exclude_paths")
+        );
+        assert_eq!(
+            by_path.get("Content/Junk/X.uasset"),
+            Some(&".uasset-lens-ignore")
+        );
+    }
+
+    #[test]
+    fn classify_for_dry_run_should_error_on_invalid_glob() {
+        let dir =
+            std::env::temp_dir().join(format!("uasset_lens_dryrun_bad_{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(
+            dir.join(".uasset-lens.toml"),
+            "[scan]\nexclude_paths = [\"Content/*[bad\"]\n",
+        )
+        .unwrap();
+        let cfg = crate::config::load_config(&dir);
+        let result = classify_for_dry_run(&dir, &cfg);
+        let _ = std::fs::remove_dir_all(&dir);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn handle_scan_dry_run_should_return_0_and_not_create_db() {
+        let dir =
+            std::env::temp_dir().join(format!("uasset_lens_dryrun_nodb_{}", std::process::id()));
+        std::fs::create_dir_all(dir.join("Content")).unwrap();
+        std::fs::write(dir.join("Content/BP_A.uasset"), b"").unwrap();
+
+        let result = handle_scan_dry_run(&dir, &Default::default(), &FormatKind::Text).unwrap();
+        let db_created = dir.join(".uasset-lens").exists();
+        let _ = std::fs::remove_dir_all(&dir);
+
+        assert_eq!(result, 0);
+        assert!(
+            !db_created,
+            "dry-run must not create the .uasset-lens database directory"
+        );
     }
 
     #[test]
