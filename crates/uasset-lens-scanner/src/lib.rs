@@ -55,17 +55,29 @@ pub struct SkippedFile {
 }
 
 pub fn scan_files(files: &[PathBuf], content_root: &Path) -> ScanResult {
+    scan_files_with_progress(files, content_root, || {})
+}
+
+/// Like [`scan_files`], but invokes `on_file` once as each file finishes parsing. The callback
+/// runs from `rayon` worker threads (hence `Sync`); the CLI uses it to advance a progress bar.
+pub fn scan_files_with_progress<F: Fn() + Sync>(
+    files: &[PathBuf],
+    content_root: &Path,
+    on_file: F,
+) -> ScanResult {
     let pairs: Vec<Result<AssetMetadata, SkippedFile>> = files
         .par_iter()
         .map(|path| {
-            scan_single(path, content_root).map_err(|reason| {
+            let result = scan_single(path, content_root).map_err(|reason| {
                 tracing::warn!(path = %path.display(), reason = %reason, "Skipping file");
                 SkippedFile {
                     // clone required: SkippedFile owns the path; par_iter yields references
                     file_path: path.clone(),
                     reason,
                 }
-            })
+            });
+            on_file();
+            result
         })
         .collect();
 
@@ -228,6 +240,26 @@ mod tests {
     use super::*;
 
     const FIXTURES_DIR: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../../tests/fixtures");
+
+    #[test]
+    fn scan_files_with_progress_should_invoke_callback_for_each_file_including_skipped() {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+
+        // Root is the fixtures dir so both the valid and the invalid file resolve under it.
+        let content_root = PathBuf::from(FIXTURES_DIR);
+        let files = vec![
+            PathBuf::from(format!("{FIXTURES_DIR}/valid/BP_Simple.uasset")),
+            PathBuf::from(format!("{FIXTURES_DIR}/invalid/bad_magic.bin")),
+        ];
+        let calls = AtomicUsize::new(0);
+        let result = scan_files_with_progress(&files, &content_root, || {
+            calls.fetch_add(1, Ordering::Relaxed);
+        });
+        // The callback must fire for the skipped file too, so a progress bar reaches its total.
+        assert_eq!(calls.load(Ordering::Relaxed), files.len());
+        assert_eq!(result.assets.len(), 1);
+        assert_eq!(result.skipped.len(), 1);
+    }
 
     #[test]
     fn scan_files_should_set_blueprint_metrics_for_blueprint_asset() {

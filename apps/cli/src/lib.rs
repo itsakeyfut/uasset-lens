@@ -76,6 +76,9 @@ pub enum Commands {
         /// Preview scanned vs. excluded paths without writing to the database
         #[arg(long)]
         dry_run: bool,
+        /// Suppress the animated progress bar
+        #[arg(long)]
+        no_progress: bool,
     },
     /// Show the dependency graph summary and detect circular dependencies
     Graph {
@@ -345,6 +348,7 @@ fn dispatch(cli: &Cli) -> anyhow::Result<i32> {
             diff_from,
             exclude,
             dry_run,
+            no_progress,
         } => {
             // `--exclude` patterns are additive one-off exclusions on top of config.
             cfg.scan.exclude_paths.extend(exclude.iter().cloned());
@@ -364,6 +368,7 @@ fn dispatch(cli: &Cli) -> anyhow::Result<i32> {
                         save_baseline: save_baseline.as_deref(),
                         diff_from: diff_from.as_deref(),
                         quiet: false,
+                        no_progress: *no_progress,
                     },
                 )
             }
@@ -783,6 +788,7 @@ mod tests {
                 diff_from: None,
                 exclude: vec![],
                 dry_run: false,
+                no_progress: false,
             },
         };
         let result = dispatch(&cli);

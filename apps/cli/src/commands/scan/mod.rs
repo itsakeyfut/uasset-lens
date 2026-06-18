@@ -35,6 +35,20 @@ pub struct ScanOptions<'a> {
     /// Suppress the stdout scan report (per-category counts and summary). Progress on
     /// stderr is unaffected. Used by `check`'s auto-scan to keep its own stdout clean.
     pub quiet: bool,
+    /// Suppress the animated progress bar (set by `--no-progress`).
+    pub no_progress: bool,
+}
+
+/// Whether to draw the animated scan progress bar. The bar goes to stderr, so it is shown only
+/// for interactive text-format runs; it is suppressed for JSON output, `--quiet`, `--no-progress`,
+/// and non-TTY stderr (pipes, redirects, CI).
+fn should_show_progress(
+    format: &FormatKind,
+    quiet: bool,
+    no_progress: bool,
+    stderr_tty: bool,
+) -> bool {
+    matches!(format, FormatKind::Text) && !quiet && !no_progress && stderr_tty
 }
 
 /// True if a pattern uses glob metacharacters and must be matched as a glob (not a prefix).
@@ -233,7 +247,33 @@ pub fn handle_scan(
         )
     );
 
-    let result = uasset_lens_scanner::scan_files(&paths_to_scan, &content_root);
+    let progress = if should_show_progress(
+        format,
+        opts.quiet,
+        opts.no_progress,
+        std::io::stderr().is_terminal(),
+    ) {
+        let pb = indicatif::ProgressBar::new(paths_to_scan.len() as u64);
+        pb.set_style(
+            indicatif::ProgressStyle::with_template(
+                "  {spinner} [{elapsed_precise}] [{bar:30}] {pos}/{len} files (ETA {eta})",
+            )
+            .unwrap_or_else(|_| indicatif::ProgressStyle::default_bar())
+            .progress_chars("=>-"),
+        );
+        // Redraw on a timer so the spinner and elapsed time animate even while a single large
+        // file is being parsed (between per-file increments).
+        pb.enable_steady_tick(std::time::Duration::from_millis(100));
+        pb
+    } else {
+        indicatif::ProgressBar::hidden()
+    };
+
+    let result =
+        uasset_lens_scanner::scan_files_with_progress(&paths_to_scan, &content_root, || {
+            progress.inc(1);
+        });
+    progress.finish_and_clear();
 
     let new_count = result
         .assets
@@ -598,6 +638,31 @@ mod tests {
     }
 
     #[test]
+    fn should_show_progress_should_be_true_for_text_format_on_a_tty() {
+        assert!(should_show_progress(&FormatKind::Text, false, false, true));
+    }
+
+    #[test]
+    fn should_show_progress_should_be_false_when_suppressed() {
+        assert!(
+            !should_show_progress(&FormatKind::Text, false, false, false),
+            "non-TTY stderr must suppress the bar"
+        );
+        assert!(
+            !should_show_progress(&FormatKind::Text, true, false, true),
+            "--quiet must suppress the bar"
+        );
+        assert!(
+            !should_show_progress(&FormatKind::Text, false, true, true),
+            "--no-progress must suppress the bar"
+        );
+        assert!(
+            !should_show_progress(&FormatKind::Json, false, false, true),
+            "JSON output must suppress the bar"
+        );
+    }
+
+    #[test]
     fn normalize_exclude_paths_should_skip_glob_patterns() {
         let out = normalize_exclude_paths(&[
             "Content/Dev/".to_string(),
@@ -739,6 +804,7 @@ mod tests {
                 save_baseline: None,
                 diff_from: None,
                 quiet: false,
+                no_progress: false,
             },
         )
         .unwrap();
@@ -800,6 +866,7 @@ mod tests {
                 save_baseline: None,
                 diff_from: None,
                 quiet: false,
+                no_progress: false,
             },
         )
         .unwrap();
@@ -889,6 +956,7 @@ mod tests {
                 save_baseline: None,
                 diff_from: None,
                 quiet: false,
+                no_progress: false,
             },
         )
         .unwrap();
@@ -926,6 +994,7 @@ mod tests {
                 save_baseline: None,
                 diff_from: None,
                 quiet: false,
+                no_progress: false,
             },
         )
         .unwrap();
@@ -966,6 +1035,7 @@ mod tests {
                 save_baseline: None,
                 diff_from: None,
                 quiet: false,
+                no_progress: false,
             },
         )
         .unwrap();
@@ -1010,6 +1080,7 @@ mod tests {
                 save_baseline: None,
                 diff_from: None,
                 quiet: false,
+                no_progress: false,
             },
         )
         .unwrap();
@@ -1041,6 +1112,7 @@ mod tests {
                 save_baseline: None,
                 diff_from: None,
                 quiet: false,
+                no_progress: false,
             },
         )
         .unwrap();
@@ -1083,6 +1155,7 @@ mod tests {
                 save_baseline: None,
                 diff_from: None,
                 quiet: false,
+                no_progress: false,
             },
         )
         .unwrap();
@@ -1118,6 +1191,7 @@ mod tests {
                 save_baseline: None,
                 diff_from: None,
                 quiet: false,
+                no_progress: false,
             },
         )
         .unwrap();
@@ -1147,6 +1221,7 @@ mod tests {
                 save_baseline: None,
                 diff_from: None,
                 quiet: false,
+                no_progress: false,
             },
         )
         .unwrap();
@@ -1164,6 +1239,7 @@ mod tests {
                 save_baseline: None,
                 diff_from: None,
                 quiet: false,
+                no_progress: false,
             },
         )
         .unwrap();
@@ -1189,6 +1265,7 @@ mod tests {
                 save_baseline: None,
                 diff_from: None,
                 quiet: false,
+                no_progress: false,
             },
         )
         .unwrap();
@@ -1205,6 +1282,7 @@ mod tests {
                 save_baseline: None,
                 diff_from: None,
                 quiet: false,
+                no_progress: false,
             },
         )
         .unwrap();
@@ -1237,6 +1315,7 @@ mod tests {
                 save_baseline: None,
                 diff_from: None,
                 quiet: false,
+                no_progress: false,
             },
         )
         .unwrap();
@@ -1254,6 +1333,7 @@ mod tests {
                 save_baseline: None,
                 diff_from: None,
                 quiet: false,
+                no_progress: false,
             },
         )
         .unwrap();
@@ -1282,6 +1362,7 @@ mod tests {
                 save_baseline: None,
                 diff_from: None,
                 quiet: false,
+                no_progress: false,
             },
         )
         .unwrap();
@@ -1298,6 +1379,7 @@ mod tests {
                 save_baseline: None,
                 diff_from: None,
                 quiet: false,
+                no_progress: false,
             },
         )
         .unwrap();
@@ -1323,6 +1405,7 @@ mod tests {
                 save_baseline: Some("main"),
                 diff_from: None,
                 quiet: false,
+                no_progress: false,
             },
         )
         .unwrap();
@@ -1351,6 +1434,7 @@ mod tests {
                 save_baseline: Some("main"),
                 diff_from: None,
                 quiet: false,
+                no_progress: false,
             },
         )
         .unwrap();
@@ -1367,6 +1451,7 @@ mod tests {
                 save_baseline: None,
                 diff_from: Some("main"),
                 quiet: false,
+                no_progress: false,
             },
         )
         .unwrap();
@@ -1391,6 +1476,7 @@ mod tests {
                 save_baseline: None,
                 diff_from: None,
                 quiet: false,
+                no_progress: false,
             },
         )
         .unwrap();
@@ -1407,6 +1493,7 @@ mod tests {
                 save_baseline: None,
                 diff_from: Some("ghost"),
                 quiet: false,
+                no_progress: false,
             },
         );
         assert!(
