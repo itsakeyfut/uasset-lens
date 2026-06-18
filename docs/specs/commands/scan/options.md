@@ -72,7 +72,9 @@ uasset-lens scan ./Project --diff-from main
 ### `--exclude <PATTERN>`
 
 Exclude files matching a glob pattern in addition to `scan.exclude_paths` from config.
-Repeatable. Patterns are matched against the path relative to the content root.
+Repeatable. Patterns are matched against the path relative to the project directory
+(e.g. `Content/Dev/BP_Tool.uasset`), using the same prefix-or-glob rules as
+`scan.exclude_paths`.
 
 ```bash
 uasset-lens scan ./Project --exclude "Content/Dev/**"

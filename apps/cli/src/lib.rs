@@ -70,6 +70,9 @@ pub enum Commands {
         /// Diff against a named baseline instead of the previous scan (implies --diff)
         #[arg(long)]
         diff_from: Option<String>,
+        /// Exclude paths matching this pattern, in addition to config (repeatable; prefix or glob)
+        #[arg(long = "exclude")]
+        exclude: Vec<String>,
     },
     /// Show the dependency graph summary and detect circular dependencies
     Graph {
@@ -324,7 +327,7 @@ fn dispatch(cli: &Cli) -> anyhow::Result<i32> {
         Commands::Path { .. } | Commands::Completions { .. } | Commands::Init { .. } => None,
     };
 
-    let cfg = if let Some(pd) = project_dir_for_cfg {
+    let mut cfg = if let Some(pd) = project_dir_for_cfg {
         crate::config::resolve_config(pd, cli.config.as_deref())?
     } else {
         crate::config::ConfigFile::default()
@@ -337,7 +340,10 @@ fn dispatch(cli: &Cli) -> anyhow::Result<i32> {
             diff,
             save_baseline,
             diff_from,
+            exclude,
         } => {
+            // `--exclude` patterns are additive one-off exclusions on top of config.
+            cfg.scan.exclude_paths.extend(exclude.iter().cloned());
             let db_path = resolve_db_path(project_dir, cli.db.as_deref());
             commands::scan::handle_scan(
                 project_dir,
@@ -767,6 +773,7 @@ mod tests {
                 diff: false,
                 save_baseline: None,
                 diff_from: None,
+                exclude: vec![],
             },
         };
         let result = dispatch(&cli);
