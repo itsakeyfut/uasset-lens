@@ -8,6 +8,7 @@ pub mod duplicates;
 pub mod find;
 pub mod graph;
 pub mod impact;
+pub mod init;
 pub mod lint;
 pub mod path_conv;
 pub mod redirectors;
