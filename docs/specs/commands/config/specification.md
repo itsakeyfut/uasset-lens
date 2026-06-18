@@ -64,14 +64,16 @@ $ uasset-lens config validate ./Project
 ```
 $ uasset-lens config validate ./Project
 
-.uasset-lens.toml: 3 errors found
+.uasset-lens.toml: 2 error(s) found
 
-  line 12: [lint.rules.naming] — missing required field 'prefix'
-  line 18: [budget.limits.Texture2D] — value '0' must be > 0
+  line 8: [rules] — invalid severity 'errorr' (expected one of error, warn, off)
+  line 14: [budget.Texture2D] — value '0' must be > 0
   line 23: [scan] — unknown field 'exclude_glob' (did you mean 'exclude_patterns'?)
 ```
 
-Errors and warnings are listed in file order (ascending line number).
+Errors and warnings are interleaved in file order (ascending line number); the header counts
+only errors (warnings never cause a non-zero exit). Section paths follow the TOML structure
+(e.g. `budget.Texture2D` for `[budget]` with `Texture2D.max_size`).
 
 ---
 
@@ -109,8 +111,8 @@ Invalid:
   "valid": false,
   "path": ".uasset-lens.toml",
   "errors": [
-    { "line": 12, "section": "lint.rules.naming", "message": "missing required field 'prefix'" },
-    { "line": 18, "section": "budget.limits.Texture2D", "message": "value '0' must be > 0" }
+    { "line": 8, "section": "rules", "message": "invalid severity 'errorr' (expected one of error, warn, off)" },
+    { "line": 14, "section": "budget.Texture2D", "message": "value '0' must be > 0" }
   ],
   "warnings": [
     { "line": 23, "section": "scan", "message": "unknown field 'exclude_glob' (did you mean 'exclude_patterns'?)" }
@@ -137,7 +139,8 @@ No config found:
 `validate` checks:
 
 - TOML syntax (handled by the TOML parser before field-level validation)
-- Required fields per section are present
+- Required fields are present where the schema demands them (every `[budget]` entry must
+  declare `max_size`; all other fields are optional with built-in defaults)
 - Numeric fields satisfy minimum and maximum constraints (e.g., budget values must be > 0)
 - Enum fields hold one of the allowed string values
 - Unknown top-level and nested fields (reported as warnings with typo suggestions where

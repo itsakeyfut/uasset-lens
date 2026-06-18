@@ -2,6 +2,7 @@
 pub mod budget;
 pub mod check;
 pub mod clean;
+pub mod config_validate;
 pub mod dead_assets;
 pub mod deps;
 pub mod duplicates;
