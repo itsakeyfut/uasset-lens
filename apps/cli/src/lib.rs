@@ -73,6 +73,9 @@ pub enum Commands {
         /// Exclude paths matching this pattern, in addition to config (repeatable; prefix or glob)
         #[arg(long = "exclude")]
         exclude: Vec<String>,
+        /// Preview scanned vs. excluded paths without writing to the database
+        #[arg(long)]
+        dry_run: bool,
     },
     /// Show the dependency graph summary and detect circular dependencies
     Graph {
@@ -341,24 +344,29 @@ fn dispatch(cli: &Cli) -> anyhow::Result<i32> {
             save_baseline,
             diff_from,
             exclude,
+            dry_run,
         } => {
             // `--exclude` patterns are additive one-off exclusions on top of config.
             cfg.scan.exclude_paths.extend(exclude.iter().cloned());
-            let db_path = resolve_db_path(project_dir, cli.db.as_deref());
-            commands::scan::handle_scan(
-                project_dir,
-                &db_path,
-                &cli.format,
-                &cfg,
-                &commands::scan::ScanOptions {
-                    full_scan: *full_scan,
-                    diff: *diff,
-                    yes: cli.yes,
-                    save_baseline: save_baseline.as_deref(),
-                    diff_from: diff_from.as_deref(),
-                    quiet: false,
-                },
-            )
+            if *dry_run {
+                commands::scan::handle_scan_dry_run(project_dir, &cfg, &cli.format)
+            } else {
+                let db_path = resolve_db_path(project_dir, cli.db.as_deref());
+                commands::scan::handle_scan(
+                    project_dir,
+                    &db_path,
+                    &cli.format,
+                    &cfg,
+                    &commands::scan::ScanOptions {
+                        full_scan: *full_scan,
+                        diff: *diff,
+                        yes: cli.yes,
+                        save_baseline: save_baseline.as_deref(),
+                        diff_from: diff_from.as_deref(),
+                        quiet: false,
+                    },
+                )
+            }
         }
         Commands::Graph {
             project_dir,
@@ -774,6 +782,7 @@ mod tests {
                 save_baseline: None,
                 diff_from: None,
                 exclude: vec![],
+                dry_run: false,
             },
         };
         let result = dispatch(&cli);

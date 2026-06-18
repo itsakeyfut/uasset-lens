@@ -85,6 +85,24 @@ This flag provides a one-off override without modifying `.uasset-lens.toml`.
 
 ---
 
+### `--dry-run`
+
+Preview which assets would be scanned versus excluded, without writing to the database.
+
+Walks the project and evaluates all exclusion rules (TOML `scan.exclude_paths` prefix and
+glob patterns, plus `.uasset-lens-ignore`). Each asset is listed; excluded ones are marked
+`[ignored: <source>]`. No database is opened or modified, no assets are parsed, and no stale
+records are removed. Exits `0`.
+
+```bash
+uasset-lens scan ./Project --dry-run
+uasset-lens scan ./Project --dry-run --format json
+```
+
+With `--format json`, a single object is emitted: `{ "scanned": [...], "ignored": [...] }`.
+
+---
+
 ### `--hash`
 
 Use SHA-256 file content hashing in addition to `mtime` to detect changed assets.

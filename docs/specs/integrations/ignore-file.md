@@ -95,5 +95,14 @@ database, so all downstream commands inherit the exclusion. Editing `.uasset-len
 takes effect on the next `scan`; a previously-indexed path that becomes ignored is treated
 as stale and removed on rescan.
 
-A `scan --dry-run` preview that lists scanned vs. `[ignored]` paths without touching the
-database is planned separately (see issue #359).
+To preview which paths would be scanned versus excluded — without writing to the database —
+run:
+
+```bash
+uasset-lens scan ./Project --dry-run
+```
+
+Each asset is listed; excluded ones are marked `[ignored: <source>]`, where the source is
+`exclude_paths` (TOML prefix or glob patterns) or `.uasset-lens-ignore`. `--format json`
+emits a single object: `{ "scanned": [...], "ignored": [...] }`. The command makes no
+database writes and exits `0`.
