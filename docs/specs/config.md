@@ -225,7 +225,10 @@ exclude_paths = [
 ]
 ```
 
-Patterns are matched against the relative path from the content root (not the game path).
+Patterns are matched against the path relative to the project directory (e.g.
+`Content/Dev/BP_Tool.uasset`), not the game path. Entries containing `*` or `?` are treated
+as globs (`*`/`?` do not cross `/`; `**` does); entries without them use directory-prefix
+matching.
 
 For more expressive ignore rules (negation, per-directory granularity), see
 `docs/specs/integrations/ignore-file.md`.

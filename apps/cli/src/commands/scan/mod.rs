@@ -37,19 +37,42 @@ pub struct ScanOptions<'a> {
     pub quiet: bool,
 }
 
-/// Normalizes `scan.exclude_paths`: drops empty entries and ensures a trailing `/` so matching
-/// is path-segment aware. This makes `Content/Dev` and `Content/Dev/` behave identically and
-/// prevents a sibling-prefix match (`Content/Dev` must not exclude `Content/Development`).
+/// True if a pattern uses glob metacharacters and must be matched as a glob (not a prefix).
+fn is_glob_pattern(p: &str) -> bool {
+    p.contains('*') || p.contains('?')
+}
+
+/// Normalizes the prefix subset of `scan.exclude_paths`: drops empty and glob entries (globs are
+/// handled by [`compile_exclude_globs`]) and ensures a trailing `/` so matching is path-segment
+/// aware. This makes `Content/Dev` and `Content/Dev/` behave identically and prevents a
+/// sibling-prefix match (`Content/Dev` must not exclude `Content/Development`).
 fn normalize_exclude_paths(patterns: &[String]) -> Vec<String> {
     patterns
         .iter()
-        .filter(|p| !p.is_empty())
+        .filter(|p| !p.is_empty() && !is_glob_pattern(p))
         .map(|p| {
             if p.ends_with('/') {
                 p.clone()
             } else {
                 format!("{p}/")
             }
+        })
+        .collect()
+}
+
+/// Compiles the glob subset of `scan.exclude_paths` into matchers. `*`/`?` do not cross `/`;
+/// `**` does. Matching is case-insensitive on Windows, mirroring `.uasset-lens-ignore`.
+fn compile_exclude_globs(patterns: &[String]) -> anyhow::Result<Vec<globset::GlobMatcher>> {
+    patterns
+        .iter()
+        .filter(|p| is_glob_pattern(p))
+        .map(|p| {
+            globset::GlobBuilder::new(p)
+                .literal_separator(true)
+                .case_insensitive(cfg!(windows))
+                .build()
+                .with_context(|| format!("invalid glob in scan.exclude_paths: '{p}'"))
+                .map(|g| g.compile_matcher())
         })
         .collect()
 }
@@ -106,6 +129,9 @@ pub fn handle_scan(
         .collect();
 
     let excluded = normalize_exclude_paths(&cfg.scan.exclude_paths);
+    // Glob exclude patterns are matched per-file; they cannot safely prune directories. Compiled
+    // up front so a malformed glob fails before the walk.
+    let exclude_globs = compile_exclude_globs(&cfg.scan.exclude_paths)?;
     // Load `.uasset-lens-ignore` up front so a malformed pattern fails before the walk.
     let ignore_rules = crate::ignore::IgnoreRules::load(project_dir)?;
 
@@ -166,15 +192,16 @@ pub fn handle_scan(
         })
         .collect();
 
-    // Apply `.uasset-lens-ignore` (additive with TOML scan.exclude_paths). Ignored files are
-    // treated as absent: never indexed, and any previously-indexed path becomes stale on rescan.
-    if !ignore_rules.is_empty() {
+    // Drop files excluded by glob `scan.exclude_paths` patterns or by `.uasset-lens-ignore`
+    // (prefix exclude_paths are already pruned during the walk). Excluded files are treated as
+    // absent: never indexed, and any previously-indexed path becomes stale on rescan.
+    if !exclude_globs.is_empty() || !ignore_rules.is_empty() {
         all_files.retain(|(p, _)| {
             let rel = p
                 .strip_prefix(project_dir)
                 .map(|r| r.to_string_lossy().replace('\\', "/"))
                 .unwrap_or_default();
-            !ignore_rules.is_ignored(&rel)
+            !exclude_globs.iter().any(|g| g.is_match(&rel)) && !ignore_rules.is_ignored(&rel)
         });
     }
 
@@ -455,6 +482,105 @@ mod tests {
         let pats = normalize_exclude_paths(&["Content/Dev/".to_string()]);
         assert!(!dir_excluded("", &pats));
         assert!(!dir_excluded("Content/Maps", &[]));
+    }
+
+    #[test]
+    fn is_glob_pattern_should_detect_metacharacters() {
+        assert!(is_glob_pattern("Content/**/Test*.uasset"));
+        assert!(is_glob_pattern("Content/T?.uasset"));
+        assert!(!is_glob_pattern("Content/Dev/"));
+    }
+
+    #[test]
+    fn normalize_exclude_paths_should_skip_glob_patterns() {
+        let out = normalize_exclude_paths(&[
+            "Content/Dev/".to_string(),
+            "Content/**/Test*.uasset".to_string(),
+        ]);
+        assert_eq!(out, vec!["Content/Dev/"]);
+    }
+
+    #[test]
+    fn compile_exclude_globs_should_compile_only_globs() {
+        let globs = compile_exclude_globs(&[
+            "Content/Dev/".to_string(),
+            "Content/**/Test*.uasset".to_string(),
+        ])
+        .unwrap();
+        assert_eq!(
+            globs.len(),
+            1,
+            "only the glob entry should compile to a matcher"
+        );
+        assert!(globs[0].is_match("Content/A/TestRig.uasset"));
+        assert!(!globs[0].is_match("Content/A/BP_Real.uasset"));
+    }
+
+    #[test]
+    fn compile_exclude_globs_should_error_on_invalid_glob() {
+        // Contains `*` (routes to the glob branch) with an unterminated character class.
+        let result = compile_exclude_globs(&["Content/*[bad".to_string()]);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn handle_scan_should_exclude_files_matching_glob_pattern() {
+        let (dir, db_path) = test_db_in_tempdir("scan_glob_exclude");
+        let fixture = std::path::PathBuf::from(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../tests/fixtures/valid/BP_Simple.uasset"
+        ));
+        let qa = dir.join("Content").join("QA");
+        let maps = dir.join("Content").join("Maps");
+        std::fs::create_dir_all(&qa).unwrap();
+        std::fs::create_dir_all(&maps).unwrap();
+        std::fs::copy(&fixture, qa.join("TestRig.uasset")).unwrap();
+        std::fs::copy(&fixture, maps.join("BP_Level.uasset")).unwrap();
+        std::fs::write(
+            dir.join(".uasset-lens.toml"),
+            "[scan]\nexclude_paths = [\"Content/**/Test*.uasset\"]\n",
+        )
+        .unwrap();
+        let cfg = crate::config::load_config(&dir);
+
+        let _ = handle_scan(
+            &dir,
+            &db_path,
+            &FormatKind::Text,
+            &cfg,
+            &ScanOptions {
+                full_scan: false,
+                diff: false,
+                yes: false,
+                save_baseline: None,
+                diff_from: None,
+                quiet: false,
+            },
+        )
+        .unwrap();
+
+        let db = uasset_lens_asset_db::AssetDb::open(&db_path).unwrap();
+        let paths: Vec<String> = db
+            .all_assets()
+            .unwrap()
+            .iter()
+            .map(|a| a.asset_path.as_str().to_owned())
+            .collect();
+        let _ = std::fs::remove_dir_all(&dir);
+
+        assert_eq!(
+            paths.len(),
+            1,
+            "the glob-matched file must be excluded; got {paths:?}"
+        );
+        assert!(
+            paths.iter().any(|p| p.contains("BP_Level")),
+            "non-matching asset should be indexed: {paths:?}"
+        );
+        assert!(
+            !paths.iter().any(|p| p.contains("TestRig")),
+            "glob-matched asset must not be indexed: {paths:?}"
+        );
     }
 
     #[test]
