@@ -289,8 +289,10 @@ pub fn handle_scan(
     db.upsert_all(&result.assets)
         .context("Failed to write assets to database")?;
 
-    // Print per-category scan results before prompting for stale removal.
-    if !opts.quiet {
+    // Print per-category scan results before prompting for stale removal. Text/GitHub-Actions
+    // only: in JSON mode these human-readable lines would corrupt the single-value stdout (the
+    // JSON object already carries new/updated/removed counts).
+    if !opts.quiet && matches!(format, FormatKind::Text | FormatKind::GithubActions) {
         if new_count > 0 {
             println!(
                 "  {} {} new asset(s) indexed",
