@@ -56,7 +56,7 @@ No new crates are required.
 ```rust
 pub struct ConfigError {
     pub line:    Option<u32>,
-    pub section: String,   // e.g. "budget.limits.Texture2D"
+    pub section: String,   // TOML path, e.g. "budget.Texture2D"
     pub message: String,   // e.g. "value '0' must be > 0"
 }
 

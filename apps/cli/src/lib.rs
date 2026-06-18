@@ -249,6 +249,20 @@ pub enum Commands {
         #[arg(long)]
         force: bool,
     },
+    /// Inspect and validate the project configuration
+    Config {
+        #[command(subcommand)]
+        command: ConfigCommand,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+pub enum ConfigCommand {
+    /// Validate .uasset-lens.toml syntax, field types, and value constraints
+    Validate {
+        /// Project directory containing .uasset-lens.toml (default: current directory)
+        project_dir: Option<PathBuf>,
+    },
 }
 
 /// Opens an existing database, translating `DbError::NotFound` into a user-friendly CLI message.
@@ -329,8 +343,11 @@ fn dispatch(cli: &Cli) -> anyhow::Result<i32> {
         | Commands::Check { project_dir, .. }
         | Commands::Clean { project_dir, .. }
         | Commands::Watch { project_dir } => Some(project_dir.as_path()),
-        // `init` creates the config; it must not try to load one.
-        Commands::Path { .. } | Commands::Completions { .. } | Commands::Init { .. } => None,
+        // `init` creates the config; `config validate` reads it directly. Neither loads one here.
+        Commands::Path { .. }
+        | Commands::Completions { .. }
+        | Commands::Init { .. }
+        | Commands::Config { .. } => None,
     };
 
     let mut cfg = if let Some(pd) = project_dir_for_cfg {
@@ -557,6 +574,15 @@ fn dispatch(cli: &Cli) -> anyhow::Result<i32> {
             preset,
             force,
         } => commands::init::handle_init(project_dir, *preset, *force, cli.yes, &cli.format),
+        Commands::Config { command } => match command {
+            ConfigCommand::Validate { project_dir } => {
+                commands::config_validate::handle_config_validate(
+                    project_dir.as_deref(),
+                    cli.config.as_deref(),
+                    &cli.format,
+                )
+            }
+        },
         Commands::Completions { .. } => {
             unreachable!("completions is handled at the binary entry point before dispatch")
         }
