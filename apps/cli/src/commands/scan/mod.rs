@@ -37,6 +37,34 @@ pub struct ScanOptions<'a> {
     pub quiet: bool,
 }
 
+/// Normalizes `scan.exclude_paths`: drops empty entries and ensures a trailing `/` so matching
+/// is path-segment aware. This makes `Content/Dev` and `Content/Dev/` behave identically and
+/// prevents a sibling-prefix match (`Content/Dev` must not exclude `Content/Development`).
+fn normalize_exclude_paths(patterns: &[String]) -> Vec<String> {
+    patterns
+        .iter()
+        .filter(|p| !p.is_empty())
+        .map(|p| {
+            if p.ends_with('/') {
+                p.clone()
+            } else {
+                format!("{p}/")
+            }
+        })
+        .collect()
+}
+
+/// Returns whether the directory at `rel` (project-relative, forward-slash normalized) is
+/// excluded. `normalized` must come from [`normalize_exclude_paths`]. A trailing slash is
+/// appended to `rel` so a directory matches its own `Dir/` pattern, not only nested subdirs.
+fn dir_excluded(rel: &str, normalized: &[String]) -> bool {
+    if rel.is_empty() {
+        return false;
+    }
+    let rel_dir = format!("{rel}/");
+    normalized.iter().any(|p| rel_dir.starts_with(p.as_str()))
+}
+
 pub fn handle_scan(
     project_dir: &Path,
     db_path: &Path,
@@ -77,7 +105,7 @@ pub fn handle_scan(
         .into_iter()
         .collect();
 
-    let excluded = cfg.scan.exclude_paths.clone();
+    let excluded = normalize_exclude_paths(&cfg.scan.exclude_paths);
     // Load `.uasset-lens-ignore` up front so a malformed pattern fails before the walk.
     let ignore_rules = crate::ignore::IgnoreRules::load(project_dir)?;
 
@@ -111,7 +139,7 @@ pub fn handle_scan(
             {
                 // normalize to forward slashes for cross-platform comparison
                 let rel_str = rel.to_string_lossy().replace('\\', "/");
-                if !rel_str.is_empty() && excluded.iter().any(|p| rel_str.starts_with(p.as_str())) {
+                if dir_excluded(&rel_str, &excluded) {
                     return false;
                 }
             }
@@ -380,6 +408,115 @@ mod tests {
     use super::*;
     use crate::commands::test_db_in_tempdir;
     use uasset_lens_shared::{AssetPath, AssetType};
+
+    #[test]
+    fn normalize_exclude_paths_should_add_trailing_slash() {
+        let out =
+            normalize_exclude_paths(&["Content/Dev".to_string(), "Content/Test/".to_string()]);
+        assert_eq!(out, vec!["Content/Dev/", "Content/Test/"]);
+    }
+
+    #[test]
+    fn normalize_exclude_paths_should_drop_empty() {
+        let out = normalize_exclude_paths(&["".to_string(), "Content/Dev/".to_string()]);
+        assert_eq!(out, vec!["Content/Dev/"]);
+    }
+
+    #[test]
+    fn dir_excluded_should_match_trailing_slash_pattern() {
+        // The bug: a trailing-slash pattern must exclude the directory itself, not only subdirs.
+        let pats = normalize_exclude_paths(&["Content/Dev/".to_string()]);
+        assert!(dir_excluded("Content/Dev", &pats));
+    }
+
+    #[test]
+    fn dir_excluded_should_match_no_slash_pattern_consistently() {
+        let pats = normalize_exclude_paths(&["Content/Dev".to_string()]);
+        assert!(dir_excluded("Content/Dev", &pats));
+    }
+
+    #[test]
+    fn dir_excluded_should_not_match_sibling_prefix() {
+        let pats = normalize_exclude_paths(&["Content/Dev".to_string()]);
+        assert!(
+            !dir_excluded("Content/Development", &pats),
+            "a segment-aware pattern must not match a sibling sharing the prefix"
+        );
+    }
+
+    #[test]
+    fn dir_excluded_should_match_nested_subdir() {
+        let pats = normalize_exclude_paths(&["Content/Dev/".to_string()]);
+        assert!(dir_excluded("Content/Dev/Sub", &pats));
+    }
+
+    #[test]
+    fn dir_excluded_should_return_false_for_root_and_empty_patterns() {
+        let pats = normalize_exclude_paths(&["Content/Dev/".to_string()]);
+        assert!(!dir_excluded("", &pats));
+        assert!(!dir_excluded("Content/Maps", &[]));
+    }
+
+    #[test]
+    fn handle_scan_should_exclude_direct_file_under_trailing_slash_dir() {
+        let (dir, db_path) = test_db_in_tempdir("scan_exclude_direct");
+        let fixture = std::path::PathBuf::from(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../tests/fixtures/valid/BP_Simple.uasset"
+        ));
+        let dev = dir.join("Content").join("Dev");
+        let maps = dir.join("Content").join("Maps");
+        std::fs::create_dir_all(&dev).unwrap();
+        std::fs::create_dir_all(&maps).unwrap();
+        std::fs::copy(&fixture, dev.join("BP_Direct.uasset")).unwrap();
+        std::fs::copy(&fixture, maps.join("BP_Keep.uasset")).unwrap();
+        // Trailing-slash directory pattern, as documented in config.md.
+        std::fs::write(
+            dir.join(".uasset-lens.toml"),
+            "[scan]\nexclude_paths = [\"Content/Dev/\"]\n",
+        )
+        .unwrap();
+        let cfg = crate::config::load_config(&dir);
+
+        let _ = handle_scan(
+            &dir,
+            &db_path,
+            &FormatKind::Text,
+            &cfg,
+            &ScanOptions {
+                full_scan: false,
+                diff: false,
+                yes: false,
+                save_baseline: None,
+                diff_from: None,
+                quiet: false,
+            },
+        )
+        .unwrap();
+
+        let db = uasset_lens_asset_db::AssetDb::open(&db_path).unwrap();
+        let paths: Vec<String> = db
+            .all_assets()
+            .unwrap()
+            .iter()
+            .map(|a| a.asset_path.as_str().to_owned())
+            .collect();
+        let _ = std::fs::remove_dir_all(&dir);
+
+        assert_eq!(
+            paths.len(),
+            1,
+            "the direct file under Content/Dev/ must be excluded; got {paths:?}"
+        );
+        assert!(
+            paths.iter().any(|p| p.contains("BP_Keep")),
+            "non-excluded asset should be indexed: {paths:?}"
+        );
+        assert!(
+            !paths.iter().any(|p| p.contains("BP_Direct")),
+            "direct file under excluded dir must not be indexed: {paths:?}"
+        );
+    }
 
     #[test]
     fn scan_header_should_show_files_when_changes_exist() {
