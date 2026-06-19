@@ -42,6 +42,17 @@ pub enum FailOn {
     Never,
 }
 
+/// Sort order for `find` results. `path` is the default (alphabetical by game path).
+#[derive(Debug, Clone, Copy, PartialEq, ValueEnum)]
+pub enum SortKey {
+    Path,
+    #[value(name = "size-desc")]
+    SizeDesc,
+    #[value(name = "size-asc")]
+    SizeAsc,
+    Type,
+}
+
 #[derive(Debug, Parser)]
 #[command(name = "uasset-lens", about = "Unreal Engine 5 asset static analyzer")]
 pub struct Cli {
@@ -182,9 +193,9 @@ pub enum Commands {
         /// Filter by glob path pattern (e.g. "**/Characters/**")
         #[arg(long)]
         path: Option<String>,
-        /// Sort results by file size, largest first
-        #[arg(long)]
-        sort_by_size: bool,
+        /// Sort order: path (default), size-desc, size-asc, or type
+        #[arg(long, value_enum, default_value_t = SortKey::Path)]
+        sort: SortKey,
         /// Show only assets that reference this game path (direct + transitive)
         #[arg(long)]
         refs: Option<String>,
@@ -512,7 +523,7 @@ fn dispatch(cli: &Cli) -> anyhow::Result<i32> {
             smaller_than,
             unreferenced,
             path,
-            sort_by_size,
+            sort,
             refs,
             deps,
         } => {
@@ -524,7 +535,7 @@ fn dispatch(cli: &Cli) -> anyhow::Result<i32> {
                 *smaller_than,
                 *unreferenced,
                 path.as_deref(),
-                *sort_by_size,
+                *sort,
                 refs.as_deref(),
                 deps.as_deref(),
                 &db_path,

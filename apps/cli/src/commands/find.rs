@@ -28,7 +28,7 @@ pub fn handle_find(
     smaller_than: Option<u64>,
     unreferenced: bool,
     path_pattern: Option<&str>,
-    sort_by_size: bool,
+    sort: crate::SortKey,
     refs: Option<&str>,
     deps: Option<&str>,
     db_path: &Path,
@@ -89,9 +89,7 @@ pub fn handle_find(
         }
     }
 
-    if sort_by_size {
-        results.sort_by_key(|r| std::cmp::Reverse(r.file_size));
-    }
+    apply_sort(&mut results, sort);
 
     let entries: Vec<FindEntry> = results
         .iter()
@@ -143,11 +141,107 @@ pub fn handle_find(
     Ok(0)
 }
 
+/// Sorts query results in place per `--sort`. Size and type orders break ties by game path so the
+/// output is deterministic; `find_assets` itself returns rows in unspecified (insertion) order.
+fn apply_sort(results: &mut [uasset_lens_asset_db::AssetRecord], sort: crate::SortKey) {
+    match sort {
+        crate::SortKey::Path => {
+            results.sort_by(|a, b| a.asset_path.as_str().cmp(b.asset_path.as_str()))
+        }
+        crate::SortKey::SizeDesc => results.sort_by(|a, b| {
+            b.file_size
+                .cmp(&a.file_size)
+                .then_with(|| a.asset_path.as_str().cmp(b.asset_path.as_str()))
+        }),
+        crate::SortKey::SizeAsc => results.sort_by(|a, b| {
+            a.file_size
+                .cmp(&b.file_size)
+                .then_with(|| a.asset_path.as_str().cmp(b.asset_path.as_str()))
+        }),
+        crate::SortKey::Type => results
+            .sort_by_cached_key(|r| (r.asset_type.to_string(), r.asset_path.as_str().to_owned())),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::commands::{make_meta, test_db_in_tempdir};
     use uasset_lens_shared::{AssetPath, AssetType};
+
+    fn rec(path: &str, asset_type: AssetType, size: u64) -> uasset_lens_asset_db::AssetRecord {
+        let mut r = uasset_lens_asset_db::make_record(path, asset_type);
+        r.file_size = size;
+        r
+    }
+
+    fn paths(v: &[uasset_lens_asset_db::AssetRecord]) -> Vec<&str> {
+        v.iter().map(|r| r.asset_path.as_str()).collect()
+    }
+
+    fn sizes(v: &[uasset_lens_asset_db::AssetRecord]) -> Vec<u64> {
+        v.iter().map(|r| r.file_size).collect()
+    }
+
+    #[test]
+    fn apply_sort_path_should_order_alphabetically() {
+        let mut v = vec![
+            rec("/Game/C", AssetType::Blueprint, 1),
+            rec("/Game/A", AssetType::Blueprint, 1),
+            rec("/Game/B", AssetType::Blueprint, 1),
+        ];
+        apply_sort(&mut v, crate::SortKey::Path);
+        assert_eq!(paths(&v), ["/Game/A", "/Game/B", "/Game/C"]);
+    }
+
+    #[test]
+    fn apply_sort_size_desc_should_order_largest_first() {
+        let mut v = vec![
+            rec("/Game/A", AssetType::Blueprint, 512),
+            rec("/Game/B", AssetType::Blueprint, 8192),
+            rec("/Game/C", AssetType::Blueprint, 2048),
+        ];
+        apply_sort(&mut v, crate::SortKey::SizeDesc);
+        assert_eq!(sizes(&v), [8192, 2048, 512]);
+    }
+
+    #[test]
+    fn apply_sort_size_asc_should_order_smallest_first() {
+        let mut v = vec![
+            rec("/Game/A", AssetType::Blueprint, 512),
+            rec("/Game/B", AssetType::Blueprint, 8192),
+            rec("/Game/C", AssetType::Blueprint, 2048),
+        ];
+        apply_sort(&mut v, crate::SortKey::SizeAsc);
+        assert_eq!(sizes(&v), [512, 2048, 8192]);
+    }
+
+    #[test]
+    fn apply_sort_size_desc_should_break_ties_by_path() {
+        let mut v = vec![
+            rec("/Game/B", AssetType::Blueprint, 100),
+            rec("/Game/A", AssetType::Blueprint, 100),
+        ];
+        apply_sort(&mut v, crate::SortKey::SizeDesc);
+        assert_eq!(
+            paths(&v),
+            ["/Game/A", "/Game/B"],
+            "equal sizes break ties by path"
+        );
+    }
+
+    #[test]
+    fn apply_sort_type_should_group_by_type_then_path() {
+        let mut v = vec![
+            rec("/Game/T2", AssetType::Texture2D, 1),
+            rec("/Game/B1", AssetType::Blueprint, 1),
+            rec("/Game/T1", AssetType::Texture2D, 1),
+            rec("/Game/B2", AssetType::Blueprint, 1),
+        ];
+        apply_sort(&mut v, crate::SortKey::Type);
+        // Blueprint < Texture2D alphabetically; within each type, ordered by path.
+        assert_eq!(paths(&v), ["/Game/B1", "/Game/B2", "/Game/T1", "/Game/T2"]);
+    }
 
     #[test]
     fn handle_find_should_return_err_when_db_does_not_exist() {
@@ -161,7 +255,7 @@ mod tests {
             None,
             false,
             None,
-            false,
+            crate::SortKey::Path,
             None,
             None,
             &db_path,
@@ -183,7 +277,7 @@ mod tests {
             None,
             false,
             None,
-            false,
+            crate::SortKey::Path,
             None,
             None,
             &db_path,
@@ -218,7 +312,7 @@ mod tests {
             None,
             false,
             None,
-            false,
+            crate::SortKey::Path,
             None,
             None,
             &db_path,
@@ -262,7 +356,7 @@ mod tests {
             None,
             false,
             None,
-            false,
+            crate::SortKey::Path,
             None,
             None,
             &db_path,
@@ -315,7 +409,7 @@ mod tests {
             None,
             true,
             None,
-            false,
+            crate::SortKey::Path,
             None,
             None,
             &db_path,
@@ -350,7 +444,7 @@ mod tests {
             None,
             false,
             None,
-            false,
+            crate::SortKey::Path,
             None,
             None,
             &db_path,
@@ -452,7 +546,7 @@ mod tests {
             None,
             false,
             None,
-            false,
+            crate::SortKey::Path,
             None,
             None,
             &db_path,
@@ -496,7 +590,7 @@ mod tests {
             Some(1024),
             false,
             None,
-            false,
+            crate::SortKey::Path,
             None,
             None,
             &db_path,
@@ -540,7 +634,7 @@ mod tests {
             None,
             false,
             Some("**/Characters/**"),
-            false,
+            crate::SortKey::Path,
             None,
             None,
             &db_path,
@@ -553,7 +647,7 @@ mod tests {
     }
 
     #[test]
-    fn handle_find_sort_by_size_should_return_0_and_order_results_largest_first() {
+    fn handle_find_sort_size_desc_should_return_0_and_order_results_largest_first() {
         let (dir, db_path) = test_db_in_tempdir("find28_sort");
 
         {
@@ -591,7 +685,7 @@ mod tests {
             None,
             false,
             None,
-            true,
+            crate::SortKey::SizeDesc,
             None,
             None,
             &db_path,
@@ -599,7 +693,7 @@ mod tests {
             &FormatKind::Text,
         )
         .unwrap();
-        assert_eq!(result, 0, "--sort-by-size → exit 0");
+        assert_eq!(result, 0, "--sort size-desc → exit 0");
         // Verify sort order at the data layer: largest first
         let db_verify = uasset_lens_asset_db::AssetDb::open(&db_path).unwrap();
         let no_filter = uasset_lens_asset_db::AssetFilter {
@@ -664,7 +758,7 @@ mod tests {
             None,
             false,
             None,
-            false,
+            crate::SortKey::Path,
             Some("/Game/T"),
             None,
             &db_path,
@@ -749,7 +843,7 @@ mod tests {
             None,
             false,
             None,
-            false,
+            crate::SortKey::Path,
             None,
             Some("/Game/A"),
             &db_path,
@@ -814,7 +908,7 @@ mod tests {
             None,
             false,
             None,
-            false,
+            crate::SortKey::Path,
             None,
             None,
             &db_path,

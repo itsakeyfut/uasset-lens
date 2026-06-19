@@ -55,8 +55,8 @@ uasset-lens find ./Project --unreferenced
 uasset-lens find ./Project --path "**/Characters/**"
 uasset-lens find ./Project --path "**/Plugins/**"
 
-# Sorted by size
-uasset-lens find ./Project --type Texture2D --sort-by-size
+# Sorted by size (largest first)
+uasset-lens find ./Project --type Texture2D --sort size-desc
 ```
 
 ---

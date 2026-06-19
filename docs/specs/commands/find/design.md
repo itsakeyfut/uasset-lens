@@ -22,7 +22,7 @@
       └── graph.dependencies_of(&target)             [dependency-graph]
       └── build dep_set (direct only, no transitive)
       └── retain only assets in dep_set
-6. Optional: --sort-by-size → sort descending
+6. --sort <path|size-desc|size-asc|type> → sort results (path order is the default)
 7. Format and output
 8. Return 0 always (find is a search tool, not a gate)
 ```
