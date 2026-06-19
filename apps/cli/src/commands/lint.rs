@@ -18,8 +18,9 @@ pub fn handle_lint(
     db_path: &Path,
     cfg: &crate::config::ConfigFile,
     format: &FormatKind,
+    quiet: bool,
 ) -> anyhow::Result<i32> {
-    crate::maybe_hint_github_actions(format);
+    crate::maybe_hint_github_actions(format, quiet);
     let db = crate::open_db(db_path)?;
 
     let engine =
@@ -218,6 +219,7 @@ mod tests {
             &db_path,
             &Default::default(),
             &FormatKind::GithubActions,
+            false,
         )
         .unwrap();
 
@@ -240,6 +242,7 @@ mod tests {
             &db_path,
             &Default::default(),
             &FormatKind::GithubActions,
+            false,
         )
         .unwrap();
 
@@ -280,6 +283,7 @@ mod tests {
             &db_path,
             &Default::default(),
             &FormatKind::GithubActions,
+            false,
         )
         .unwrap();
 
@@ -299,6 +303,7 @@ mod tests {
             &db_path,
             &Default::default(),
             &FormatKind::Text,
+            false,
         );
         assert!(result.is_err());
     }
@@ -308,7 +313,14 @@ mod tests {
         let (dir, db_path) = test_db_in_tempdir("lint_empty");
         uasset_lens_asset_db::AssetDb::open(&db_path).unwrap();
 
-        let result = handle_lint(&dir, &db_path, &Default::default(), &FormatKind::Text).unwrap();
+        let result = handle_lint(
+            &dir,
+            &db_path,
+            &Default::default(),
+            &FormatKind::Text,
+            false,
+        )
+        .unwrap();
 
         assert_eq!(result, 0);
         let _ = std::fs::remove_dir_all(&dir);
@@ -325,7 +337,14 @@ mod tests {
                 .unwrap();
         }
 
-        let result = handle_lint(&dir, &db_path, &Default::default(), &FormatKind::Text).unwrap();
+        let result = handle_lint(
+            &dir,
+            &db_path,
+            &Default::default(),
+            &FormatKind::Text,
+            false,
+        )
+        .unwrap();
 
         assert_eq!(result, 1);
         let _ = std::fs::remove_dir_all(&dir);
@@ -341,7 +360,14 @@ mod tests {
                 .unwrap();
         }
 
-        let result = handle_lint(&dir, &db_path, &Default::default(), &FormatKind::Text).unwrap();
+        let result = handle_lint(
+            &dir,
+            &db_path,
+            &Default::default(),
+            &FormatKind::Text,
+            false,
+        )
+        .unwrap();
 
         assert_eq!(result, 0);
         let _ = std::fs::remove_dir_all(&dir);
@@ -357,7 +383,14 @@ mod tests {
                 .unwrap();
         }
 
-        let result = handle_lint(&dir, &db_path, &Default::default(), &FormatKind::Json).unwrap();
+        let result = handle_lint(
+            &dir,
+            &db_path,
+            &Default::default(),
+            &FormatKind::Json,
+            false,
+        )
+        .unwrap();
 
         assert_eq!(result, 1);
         let _ = std::fs::remove_dir_all(&dir);
@@ -389,7 +422,14 @@ mod tests {
             .unwrap();
         }
 
-        let result = handle_lint(&dir, &db_path, &Default::default(), &FormatKind::Text).unwrap();
+        let result = handle_lint(
+            &dir,
+            &db_path,
+            &Default::default(),
+            &FormatKind::Text,
+            false,
+        )
+        .unwrap();
 
         assert_eq!(result, 1);
         let _ = std::fs::remove_dir_all(&dir);
@@ -409,7 +449,14 @@ mod tests {
             )])
             .unwrap();
         }
-        let result = handle_lint(&dir, &db_path, &Default::default(), &FormatKind::Text).unwrap();
+        let result = handle_lint(
+            &dir,
+            &db_path,
+            &Default::default(),
+            &FormatKind::Text,
+            false,
+        )
+        .unwrap();
         assert_eq!(result, 1);
         let _ = std::fs::remove_dir_all(&dir);
     }
@@ -434,7 +481,7 @@ mod tests {
             .unwrap();
         }
         let cfg = crate::config::load_config(&dir);
-        let result = handle_lint(&dir, &db_path, &cfg, &FormatKind::Text).unwrap();
+        let result = handle_lint(&dir, &db_path, &cfg, &FormatKind::Text, false).unwrap();
         assert_eq!(result, 0);
         let _ = std::fs::remove_dir_all(&dir);
     }
@@ -447,7 +494,14 @@ mod tests {
             db.upsert_all(&[make_bp_asset("/Game/Blueprints/Rock_BP", &dir)])
                 .unwrap();
         }
-        let result = handle_lint(&dir, &db_path, &Default::default(), &FormatKind::Sarif).unwrap();
+        let result = handle_lint(
+            &dir,
+            &db_path,
+            &Default::default(),
+            &FormatKind::Sarif,
+            false,
+        )
+        .unwrap();
         assert_eq!(result, 1, "sarif mode keeps the format-agnostic exit code");
         let _ = std::fs::remove_dir_all(&dir);
     }

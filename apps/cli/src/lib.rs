@@ -50,8 +50,28 @@ pub struct Cli {
         help = "Path to config file (default: <project_dir>/.uasset-lens.toml)"
     )]
     pub config: Option<PathBuf>,
+    /// Suppress progress and informational output on stderr (the result still goes to stdout)
+    #[arg(long, global = true)]
+    pub quiet: bool,
+    /// Disable ANSI color output (also honored via the NO_COLOR environment variable)
+    #[arg(long, global = true)]
+    pub no_color: bool,
     #[command(subcommand)]
     pub command: Commands,
+}
+
+/// Whether ANSI color should be emitted: text format, not disabled by `--no-color` or a non-empty
+/// `NO_COLOR` env var (https://no-color.org), and stdout is a TTY.
+pub(crate) fn use_color(format: &FormatKind, no_color: bool) -> bool {
+    use std::io::IsTerminal;
+    matches!(format, FormatKind::Text)
+        && !no_color
+        && !env_disables_color(std::env::var_os("NO_COLOR").as_deref())
+        && std::io::stdout().is_terminal()
+}
+
+fn env_disables_color(value: Option<&std::ffi::OsStr>) -> bool {
+    value.is_some_and(|v| !v.is_empty())
 }
 
 #[derive(Debug, Subcommand)]
@@ -391,7 +411,9 @@ fn dispatch(cli: &Cli) -> anyhow::Result<i32> {
                         yes: cli.yes,
                         save_baseline: save_baseline.as_deref(),
                         diff_from: diff_from.as_deref(),
-                        quiet: false,
+                        quiet: cli.quiet,
+                        suppress_report: false,
+                        no_color: cli.no_color,
                         no_progress: *no_progress,
                     },
                 )
@@ -500,7 +522,7 @@ fn dispatch(cli: &Cli) -> anyhow::Result<i32> {
         }
         Commands::Blueprint { project_dir } => {
             let db_path = resolve_db_path(project_dir, cli.db.as_deref());
-            commands::blueprint::handle_blueprint(project_dir, &db_path, &cli.format)
+            commands::blueprint::handle_blueprint(project_dir, &db_path, &cli.format, cli.quiet)
         }
         Commands::Stats { project_dir, top } => {
             let db_path = resolve_db_path(project_dir, cli.db.as_deref());
@@ -508,7 +530,7 @@ fn dispatch(cli: &Cli) -> anyhow::Result<i32> {
         }
         Commands::Budget { project_dir } => {
             let db_path = resolve_db_path(project_dir, cli.db.as_deref());
-            commands::budget::handle_budget(project_dir, &db_path, &cfg, &cli.format)
+            commands::budget::handle_budget(project_dir, &db_path, &cfg, &cli.format, cli.quiet)
         }
         Commands::Duplicates { project_dir } => {
             let db_path = resolve_db_path(project_dir, cli.db.as_deref());
@@ -516,7 +538,7 @@ fn dispatch(cli: &Cli) -> anyhow::Result<i32> {
         }
         Commands::Lint { project_dir } => {
             let db_path = resolve_db_path(project_dir, cli.db.as_deref());
-            commands::lint::handle_lint(project_dir, &db_path, &cfg, &cli.format)
+            commands::lint::handle_lint(project_dir, &db_path, &cfg, &cli.format, cli.quiet)
         }
         Commands::Check {
             project_dir,
@@ -602,8 +624,9 @@ fn dispatch(cli: &Cli) -> anyhow::Result<i32> {
     }
 }
 
-pub(crate) fn maybe_hint_github_actions(format: &FormatKind) {
-    if !matches!(format, FormatKind::GithubActions)
+pub(crate) fn maybe_hint_github_actions(format: &FormatKind, quiet: bool) {
+    if !quiet
+        && !matches!(format, FormatKind::GithubActions)
         && (std::env::var("GITHUB_ACTIONS").is_ok()
             || std::env::var("ACTIONS_RUNNER_ENVIRONMENT").is_ok())
     {
@@ -690,6 +713,28 @@ pub(crate) fn digit_count(n: usize) -> usize {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::ffi::OsStr;
+
+    #[test]
+    fn env_disables_color_should_follow_no_color_spec() {
+        // https://no-color.org: any non-empty value disables; empty or unset does not.
+        assert!(env_disables_color(Some(OsStr::new("1"))));
+        assert!(env_disables_color(Some(OsStr::new("anything"))));
+        assert!(!env_disables_color(Some(OsStr::new(""))));
+        assert!(!env_disables_color(None));
+    }
+
+    #[test]
+    fn use_color_should_be_false_when_no_color_flag_set() {
+        assert!(!use_color(&FormatKind::Text, true));
+    }
+
+    #[test]
+    fn use_color_should_be_false_for_non_text_format() {
+        // JSON / SARIF must never contain ANSI codes, regardless of TTY or --no-color.
+        assert!(!use_color(&FormatKind::Json, false));
+        assert!(!use_color(&FormatKind::Sarif, false));
+    }
 
     #[test]
     fn rel_path_for_annotation_should_strip_project_prefix() {
@@ -819,6 +864,8 @@ mod tests {
             db: None,
             yes: false,
             config: None,
+            quiet: false,
+            no_color: false,
             command: Commands::Scan {
                 project_dir: std::path::PathBuf::from("."),
                 full_scan: false,

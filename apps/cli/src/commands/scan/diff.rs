@@ -50,8 +50,9 @@ pub(super) fn print_diff(
     input: DiffInput<'_>,
     format: &FormatKind,
     use_color: bool,
+    quiet: bool,
 ) -> anyhow::Result<i32> {
-    crate::maybe_hint_github_actions(format);
+    crate::maybe_hint_github_actions(format, quiet);
 
     let regressions = compute_regressions(input.assets.iter(), &input.old_bp);
     let size_increases =

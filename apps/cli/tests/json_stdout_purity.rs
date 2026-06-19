@@ -9,9 +9,8 @@
 use std::path::Path;
 use std::process::Command;
 
-/// Creates a temp project with one fixture asset and scans it so DB-reading commands have data.
-/// Returns the project directory.
-fn scanned_project(tag: &str) -> std::path::PathBuf {
+/// Creates a temp project dir with one fixture asset under `Content/` (not yet scanned).
+fn project_with_fixture(tag: &str) -> std::path::PathBuf {
     let dir = std::env::temp_dir().join(format!(
         "uasset_lens_jsonpurity_{}_{}",
         tag,
@@ -24,6 +23,13 @@ fn scanned_project(tag: &str) -> std::path::PathBuf {
         "/../../tests/fixtures/valid/BP_Simple.uasset"
     );
     std::fs::copy(fixture, content.join("BP_Hero.uasset")).unwrap();
+    dir
+}
+
+/// Creates a temp project with one fixture asset and scans it so DB-reading commands have data.
+/// Returns the project directory.
+fn scanned_project(tag: &str) -> std::path::PathBuf {
+    let dir = project_with_fixture(tag);
     let status = Command::new(env!("CARGO_BIN_EXE_uasset-lens"))
         .args(["scan", dir.to_str().unwrap()])
         .status()
@@ -71,6 +77,52 @@ fn scan_format_json_should_emit_only_json_to_stdout() {
     assert!(
         trimmed.starts_with('{') && trimmed.ends_with('}'),
         "scan --format json stdout must be a single JSON object:\n{stdout}"
+    );
+}
+
+#[test]
+fn scan_quiet_should_keep_summary_but_suppress_breakdown_and_stderr() {
+    // First scan of a fresh project: without --quiet this prints "N new asset(s) indexed"
+    // (per-category breakdown) to stdout and a scan banner to stderr. --quiet must suppress both
+    // while keeping the final summary line on stdout (the result is not silenced — only noise is).
+    let dir = project_with_fixture("quiet");
+    let output = Command::new(env!("CARGO_BIN_EXE_uasset-lens"))
+        .args(["--quiet", "scan", dir.to_str().unwrap()])
+        .output()
+        .expect("failed to run the uasset-lens binary");
+    let _ = std::fs::remove_dir_all(&dir);
+
+    let stdout = String::from_utf8(output.stdout).expect("stdout is not UTF-8");
+    assert!(
+        stdout.contains("assets total"),
+        "--quiet must keep the final summary line on stdout:\n{stdout}"
+    );
+    assert!(
+        !stdout.contains("new asset(s) indexed"),
+        "--quiet must suppress the per-category breakdown:\n{stdout}"
+    );
+    assert!(
+        output.stderr.is_empty(),
+        "--quiet must suppress all progress/info on stderr, got:\n{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+}
+
+#[test]
+fn scan_quiet_with_json_should_still_emit_json_to_stdout() {
+    // Per global-flags.md: `--quiet` with `--format json` still writes the JSON result to stdout.
+    let dir = project_with_fixture("quietjson");
+    let output = Command::new(env!("CARGO_BIN_EXE_uasset-lens"))
+        .args(["--quiet", "scan", dir.to_str().unwrap(), "--format", "json"])
+        .output()
+        .expect("failed to run the uasset-lens binary");
+    let _ = std::fs::remove_dir_all(&dir);
+
+    let stdout = String::from_utf8(output.stdout).expect("stdout is not UTF-8");
+    let trimmed = stdout.trim();
+    assert!(
+        trimmed.starts_with('{') && trimmed.ends_with('}'),
+        "--quiet --format json must still emit a single JSON object:\n{stdout}"
     );
 }
 
