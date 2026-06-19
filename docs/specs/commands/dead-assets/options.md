@@ -20,14 +20,15 @@ uasset-lens dead-assets <project_dir> [options]
 
 ### `--type <TYPE>`
 
-Filter results to a specific asset type.
+Filter results to one or more asset types. Repeatable — pass `--type` multiple times to keep
+assets matching **any** of the listed types (OR-combined). With no `--type`, all types are shown.
 
 Accepts the class name as it appears in the UE Import Table (e.g. `Texture2D`,
 `Blueprint`, `StaticMesh`, `SkeletalMesh`, `Material`, `SoundWave`).
 
 ```bash
 uasset-lens dead-assets ./Project --type Texture2D
-uasset-lens dead-assets ./Project --type Blueprint
+uasset-lens dead-assets ./Project --type AnimSequence --type SoundWave
 ```
 
 ---

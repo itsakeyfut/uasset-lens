@@ -135,9 +135,9 @@ pub enum Commands {
     #[command(name = "dead-assets")]
     DeadAssets {
         project_dir: PathBuf,
-        /// Filter by asset type (e.g. Texture2D, Blueprint)
+        /// Filter by asset type (e.g. Texture2D, Blueprint); repeatable, OR-combined
         #[arg(long = "type")]
-        asset_type: Option<String>,
+        asset_type: Vec<String>,
         /// Sort results by file size, largest first
         #[arg(long)]
         sort_by_size: bool,
@@ -469,7 +469,7 @@ fn dispatch(cli: &Cli) -> anyhow::Result<i32> {
             let db_path = resolve_db_path(project_dir, cli.db.as_deref());
             commands::dead_assets::handle_dead_assets(
                 project_dir,
-                asset_type.as_deref(),
+                asset_type,
                 *sort_by_size,
                 *min_size,
                 exclude_patterns,

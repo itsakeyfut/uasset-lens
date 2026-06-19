@@ -39,7 +39,7 @@ struct GroupEntry {
 #[allow(clippy::too_many_arguments)]
 pub fn handle_dead_assets(
     _project_dir: &Path,
-    asset_type_filter: Option<&str>,
+    asset_type_filter: &[String],
     sort_by_size: bool,
     min_size: Option<u64>,
     exclude_patterns: &[String],
@@ -67,9 +67,9 @@ pub fn handle_dead_assets(
     let mut entries: Vec<DeadAssetEntry> = dead_paths
         .iter()
         .filter(|path| {
-            asset_type_filter
-                .map(|filter| type_map.get(path).map(|t| t == filter).unwrap_or(false))
-                .unwrap_or(true)
+            type_map
+                .get(path)
+                .is_some_and(|t| type_matches(t, asset_type_filter))
         })
         .map(|path| {
             let asset_type = type_map
@@ -224,6 +224,12 @@ fn print_by_type(by_type: &[ByTypeEntry]) {
             cnt = max_cnt,
         );
     }
+}
+
+/// Whether `asset_type` passes the `--type` filter: an empty filter accepts everything, otherwise
+/// the type must match one of the (OR-combined) requested types.
+fn type_matches(asset_type: &str, filters: &[String]) -> bool {
+    filters.is_empty() || filters.iter().any(|f| f == asset_type)
 }
 
 /// Aggregates dead assets by asset type, sorted by wasted bytes descending (ties broken by type
@@ -396,7 +402,7 @@ mod tests {
 
         let result = handle_dead_assets(
             Path::new("/proj"),
-            None,
+            &[],
             false,
             None,
             &[],
@@ -416,7 +422,7 @@ mod tests {
 
         let result = handle_dead_assets(
             &dir,
-            None,
+            &[],
             false,
             None,
             &[],
@@ -459,7 +465,7 @@ mod tests {
 
         let result = handle_dead_assets(
             &dir,
-            None,
+            &[],
             false,
             None,
             &[],
@@ -492,7 +498,7 @@ mod tests {
 
         let result = handle_dead_assets(
             &dir,
-            None,
+            &[],
             false,
             None,
             &[],
@@ -525,7 +531,7 @@ mod tests {
 
         let result = handle_dead_assets(
             &dir,
-            Some("Texture2D"),
+            &["Texture2D".to_owned()],
             false,
             None,
             &[],
@@ -570,7 +576,7 @@ mod tests {
 
         let result = handle_dead_assets(
             &dir,
-            Some("Texture2D"),
+            &["Texture2D".to_owned()],
             false,
             None,
             &[],
@@ -586,13 +592,88 @@ mod tests {
     }
 
     #[test]
+    fn type_matches_should_accept_all_when_empty_and_or_combine_otherwise() {
+        assert!(type_matches("Blueprint", &[]), "empty filter accepts all");
+        let filters = vec!["Blueprint".to_owned(), "Texture2D".to_owned()];
+        assert!(type_matches("Blueprint", &filters));
+        assert!(type_matches("Texture2D", &filters));
+        assert!(
+            !type_matches("StaticMesh", &filters),
+            "a non-listed type is filtered out"
+        );
+    }
+
+    #[test]
+    fn handle_dead_assets_multiple_type_filters_should_or_combine() {
+        let (dir, db_path) = test_db_in_tempdir("dead240_multi");
+        {
+            let mut db = uasset_lens_asset_db::AssetDb::open(&db_path).unwrap();
+            db.upsert_all(&[
+                make_meta(
+                    "/Game/OrphanBP",
+                    dir.join("OrphanBP.uasset"),
+                    AssetType::Blueprint,
+                    1024,
+                    vec![],
+                ),
+                make_meta(
+                    "/Game/OrphanTex",
+                    dir.join("OrphanTex.uasset"),
+                    AssetType::Texture2D,
+                    2048,
+                    vec![],
+                ),
+                make_meta(
+                    "/Game/OrphanSM",
+                    dir.join("OrphanSM.uasset"),
+                    AssetType::StaticMesh,
+                    4096,
+                    vec![],
+                ),
+            ])
+            .unwrap();
+        }
+        // Blueprint OR Texture2D match (StaticMesh excluded) → dead assets remain → exit 1.
+        let matched = handle_dead_assets(
+            &dir,
+            &["Blueprint".to_owned(), "Texture2D".to_owned()],
+            false,
+            None,
+            &[],
+            None,
+            false,
+            &db_path,
+            &Default::default(),
+            &FormatKind::Text,
+        )
+        .unwrap();
+        assert_eq!(matched, 1, "Blueprint and Texture2D match the OR filter");
+        // No dead asset is a Material → filtered to empty → exit 0.
+        let unmatched = handle_dead_assets(
+            &dir,
+            &["Material".to_owned()],
+            false,
+            None,
+            &[],
+            None,
+            false,
+            &db_path,
+            &Default::default(),
+            &FormatKind::Text,
+        )
+        .unwrap();
+        assert_eq!(unmatched, 0, "no dead asset is a Material");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
     fn handle_dead_assets_json_should_return_0_when_no_dead_assets() {
         let (dir, db_path) = test_db_in_tempdir("dead22_json_empty");
         uasset_lens_asset_db::AssetDb::open(&db_path).unwrap();
 
         let result = handle_dead_assets(
             &dir,
-            None,
+            &[],
             false,
             None,
             &[],
@@ -625,7 +706,7 @@ mod tests {
 
         let result = handle_dead_assets(
             &dir,
-            None,
+            &[],
             false,
             None,
             &[],
@@ -674,7 +755,7 @@ mod tests {
 
         let result = handle_dead_assets(
             &dir,
-            None,
+            &[],
             true,
             None,
             &[],
@@ -741,7 +822,7 @@ mod tests {
 
         let result = handle_dead_assets(
             &dir,
-            None,
+            &[],
             false,
             Some(1024),
             &[],
@@ -774,7 +855,7 @@ mod tests {
 
         let result = handle_dead_assets(
             &dir,
-            None,
+            &[],
             false,
             Some(1024),
             &[],
@@ -817,7 +898,7 @@ mod tests {
         let patterns = vec!["ThirdPerson".to_owned()];
         let result = handle_dead_assets(
             &dir,
-            None,
+            &[],
             false,
             None,
             &patterns,
@@ -851,7 +932,7 @@ mod tests {
         let patterns = vec!["ThirdPerson".to_owned()];
         let result = handle_dead_assets(
             &dir,
-            None,
+            &[],
             false,
             None,
             &patterns,
@@ -920,7 +1001,7 @@ mod tests {
 
         let result = handle_dead_assets(
             &dir,
-            None,
+            &[],
             false,
             None,
             &[],
@@ -962,7 +1043,7 @@ mod tests {
 
         let result = handle_dead_assets(
             &dir,
-            None,
+            &[],
             false,
             None,
             &[],
@@ -995,7 +1076,7 @@ mod tests {
 
         let result = handle_dead_assets(
             &dir,
-            None,
+            &[],
             false,
             None,
             &[],
@@ -1017,7 +1098,7 @@ mod tests {
 
         let result = handle_dead_assets(
             &dir,
-            None,
+            &[],
             false,
             None,
             &[],
@@ -1057,7 +1138,7 @@ mod tests {
         }
         let result = handle_dead_assets(
             &dir,
-            None,
+            &[],
             false,
             None,
             &[],
@@ -1100,7 +1181,7 @@ mod tests {
         }
         let result = handle_dead_assets(
             &dir,
-            None,
+            &[],
             false,
             None,
             &[],
@@ -1150,7 +1231,7 @@ mod tests {
         let patterns = vec!["ThirdPerson".to_owned(), "EditorTools".to_owned()];
         let result = handle_dead_assets(
             &dir,
-            None,
+            &[],
             false,
             None,
             &patterns,
