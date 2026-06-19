@@ -1,3 +1,6 @@
+#![allow(clippy::unwrap_used, clippy::expect_used)]
+// Test-support helpers (compiled under #[cfg(test)] or the `test-support` feature) may unwrap.
+
 use std::path::PathBuf;
 use uasset_lens_shared::{AssetPath, AssetType};
 

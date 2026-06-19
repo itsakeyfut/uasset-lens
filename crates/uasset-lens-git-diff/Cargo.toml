@@ -16,3 +16,6 @@ uasset-lens-scanner = { workspace = true }
 thiserror           = { workspace = true }
 tracing             = { workspace = true }
 tempfile            = { workspace = true }
+
+[lints]
+workspace = true

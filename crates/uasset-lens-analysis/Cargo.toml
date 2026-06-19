@@ -20,3 +20,6 @@ serde                        = { workspace = true }
 [dev-dependencies]
 uasset-lens-asset-db = { workspace = true, features = ["test-support"] }
 uasset-lens-scanner  = { workspace = true, features = ["test-support"] }
+
+[lints]
+workspace = true
