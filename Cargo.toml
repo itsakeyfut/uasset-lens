@@ -12,7 +12,7 @@ members = [
 ]
 
 [workspace.package]
-version      = "0.1.0"
+version      = "0.2.0"
 edition      = "2024"
 rust-version = "1.96.0"
 authors      = ["itsakeyfut"]
@@ -25,13 +25,13 @@ categories   = ["development-tools", "command-line-utilities"]
 
 [workspace.dependencies]
 # Internal crates (path + version required for crates.io publishing)
-uasset-lens-shared              = { path = "crates/uasset-lens-shared",              version = "0.1.0" }
-uasset-lens-scanner             = { path = "crates/uasset-lens-scanner",             version = "0.1.0" }
-uasset-lens-asset-db            = { path = "crates/uasset-lens-asset-db",            version = "0.1.0" }
-uasset-lens-dependency-graph    = { path = "crates/uasset-lens-dependency-graph",    version = "0.1.0" }
-uasset-lens-analysis            = { path = "crates/uasset-lens-analysis",            version = "0.1.0" }
-uasset-lens-watcher             = { path = "crates/uasset-lens-watcher",             version = "0.1.0" }
-uasset-lens-git-diff            = { path = "crates/uasset-lens-git-diff",            version = "0.1.0" }
+uasset-lens-shared              = { path = "crates/uasset-lens-shared",              version = "0.2.0" }
+uasset-lens-scanner             = { path = "crates/uasset-lens-scanner",             version = "0.2.0" }
+uasset-lens-asset-db            = { path = "crates/uasset-lens-asset-db",            version = "0.2.0" }
+uasset-lens-dependency-graph    = { path = "crates/uasset-lens-dependency-graph",    version = "0.2.0" }
+uasset-lens-analysis            = { path = "crates/uasset-lens-analysis",            version = "0.2.0" }
+uasset-lens-watcher             = { path = "crates/uasset-lens-watcher",             version = "0.2.0" }
+uasset-lens-git-diff            = { path = "crates/uasset-lens-git-diff",            version = "0.2.0" }
 
 thiserror  = "2.0.18"
 serde      = { version = "1.0.228", features = ["derive"] }
