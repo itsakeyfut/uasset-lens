@@ -43,7 +43,17 @@ $ uasset-lens dead-assets ./Project
 /Game/Unused/BP_Test            (Blueprint,    0.3 MB)
 
 Dead assets: 3 found (10.8 MB total)
+
+  By type:
+    SkeletalMesh  1  8.4 MB
+    Texture2D     1  2.1 MB
+    Blueprint     1  0.3 MB
 ```
+
+The summary is followed by a per-type breakdown — every asset type in the dead list with its
+count and wasted bytes, sorted by wasted bytes descending — so a developer can see at a glance
+which types dominate. In `--format json`, the same data is emitted as a `by_type` array
+(`[{ "type": "Texture2D", "count": 28, "bytes": 88473600 }, ...]`) alongside `assets`.
 
 ---
 
