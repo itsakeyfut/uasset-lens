@@ -169,9 +169,18 @@ fn severity_label(severity: CheckSeverity) -> &'static str {
     }
 }
 
+fn fail_on_label(fail_on: crate::FailOn) -> &'static str {
+    match fail_on {
+        crate::FailOn::Error => "error",
+        crate::FailOn::Warn => "warn",
+        crate::FailOn::Never => "never",
+    }
+}
+
 #[derive(serde::Serialize)]
 struct CheckOutput {
     passed: bool,
+    fail_on: &'static str,
     checks: Vec<CheckResultJson>,
 }
 
@@ -232,6 +241,7 @@ pub fn handle_check(
         format,
         None,
         None,
+        crate::FailOn::Error,
     )
 }
 
@@ -246,6 +256,7 @@ pub fn handle_check_with_baseline(
     format: &FormatKind,
     save_baseline: Option<&Path>,
     diff_from: Option<&Path>,
+    fail_on: crate::FailOn,
 ) -> anyhow::Result<i32> {
     for name in only.iter().chain(skip.iter()) {
         if !ALL_CHECKS.contains(&name.as_str()) {
@@ -610,7 +621,13 @@ pub fn handle_check_with_baseline(
         .filter(|r| !r.passed && r.severity == CheckSeverity::Warn)
         .count();
     let total = results.len();
-    let gate_passed = blocking_count == 0;
+    // `--fail-on` selects which findings fail the gate: `error` (only blocking error-severity
+    // checks, the default), `warn` (any finding), or `never` (informational, always pass).
+    let gate_passed = match fail_on {
+        crate::FailOn::Never => true,
+        crate::FailOn::Error => blocking_count == 0,
+        crate::FailOn::Warn => blocking_count == 0 && warning_count == 0,
+    };
     // `--diff-from` re-bases the gate onto regressions; the serialized `passed` and the
     // process exit code must derive from the same effective gate.
     let effective_passed = match &regressions {
@@ -630,6 +647,7 @@ pub fn handle_check_with_baseline(
         FormatKind::Json => {
             let output = CheckOutput {
                 passed: effective_passed,
+                fail_on: fail_on_label(fail_on),
                 checks: results
                     .iter()
                     .map(|r| CheckResultJson {
@@ -690,12 +708,14 @@ pub fn handle_check_with_baseline(
                 }
             }
             println!();
-            if gate_passed && warning_count == 0 {
+            if blocking_count == 0 && warning_count == 0 {
                 println!("Overall: PASSED ({total} of {total} checks passed)");
-            } else if gate_passed {
-                println!("Overall: PASSED ({warning_count} warning(s), 0 blocking)");
             } else {
-                println!("Overall: FAILED ({blocking_count} blocking, {warning_count} warning(s))");
+                // Verdict follows the `--fail-on` gate, so `never` reads PASSED even with findings.
+                let verdict = if gate_passed { "PASSED" } else { "FAILED" };
+                println!(
+                    "Overall: {verdict} ({blocking_count} blocking, {warning_count} warning(s))"
+                );
             }
             if let Some(regs) = &regressions {
                 println!();
@@ -977,6 +997,115 @@ mod tests {
     }
 
     #[test]
+    fn handle_check_fail_on_warn_should_exit_1_on_warning_while_error_exits_0() {
+        let (dir, db_path) = test_db_in_tempdir("check295_warn");
+        upsert_one_orphan(&dir, &db_path);
+        let cfg = crate::config::ConfigFile::default();
+        // dead-assets is Warn by default: it blocks under --fail-on warn but not --fail-on error.
+        let on_error = handle_check_with_baseline(
+            &dir,
+            &[],
+            &[],
+            false,
+            &db_path,
+            &cfg,
+            &FormatKind::Text,
+            None,
+            None,
+            crate::FailOn::Error,
+        )
+        .unwrap();
+        assert_eq!(on_error, 0, "--fail-on error must not block on a warning");
+        let on_warn = handle_check_with_baseline(
+            &dir,
+            &[],
+            &[],
+            false,
+            &db_path,
+            &cfg,
+            &FormatKind::Text,
+            None,
+            None,
+            crate::FailOn::Warn,
+        )
+        .unwrap();
+        assert_eq!(
+            on_warn, 1,
+            "--fail-on warn must block on any warning finding"
+        );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn handle_check_fail_on_never_should_exit_0_despite_blocking_error() {
+        let (dir, db_path) = test_db_in_tempdir("check295_never");
+        upsert_cycle(&dir, &db_path);
+        let cfg = crate::config::ConfigFile::default();
+        // cycles is Error by default → blocks under the default gate but never under --fail-on never.
+        let default = handle_check_with_baseline(
+            &dir,
+            &[],
+            &[],
+            false,
+            &db_path,
+            &cfg,
+            &FormatKind::Text,
+            None,
+            None,
+            crate::FailOn::Error,
+        )
+        .unwrap();
+        assert_eq!(default, 1, "a blocking cycle must fail by default");
+        let never = handle_check_with_baseline(
+            &dir,
+            &[],
+            &[],
+            false,
+            &db_path,
+            &cfg,
+            &FormatKind::Text,
+            None,
+            None,
+            crate::FailOn::Never,
+        )
+        .unwrap();
+        assert_eq!(
+            never, 0,
+            "--fail-on never must exit 0 even with blocking errors"
+        );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn fail_on_should_be_ignored_under_diff_from() {
+        let (dir, db_path) = test_db_in_tempdir("check295_warn_diff");
+        upsert_one_orphan(&dir, &db_path); // dead-assets Warn finding (no error regression)
+        let baseline = dir.join("baseline.json");
+        write_baseline(&baseline, vec![]);
+        let cfg = crate::config::ConfigFile::default();
+        // Without --diff-from, --fail-on warn exits 1 on this warning. Under --diff-from the gate
+        // is regression-only (error), so --fail-on is ignored and the warning does not fail.
+        let result = handle_check_with_baseline(
+            &dir,
+            &[],
+            &[],
+            false,
+            &db_path,
+            &cfg,
+            &FormatKind::Text,
+            None,
+            Some(&baseline),
+            crate::FailOn::Warn,
+        )
+        .unwrap();
+        assert_eq!(
+            result, 0,
+            "--fail-on must not affect the --diff-from regression gate"
+        );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
     fn handle_check_should_return_1_when_dead_assets_severity_is_error() {
         let (dir, db_path) = test_db_in_tempdir("check279_dead_error");
         upsert_one_orphan(&dir, &db_path);
@@ -1073,12 +1202,17 @@ mod tests {
         // CheckOutput is the exact type handle_check serializes; verify its JSON schema.
         let json = serde_json::to_string(&CheckOutput {
             passed: true,
+            fail_on: "error",
             checks: vec![],
         })
         .unwrap();
         assert!(
             json.contains("\"passed\""),
             "JSON must contain 'passed' key"
+        );
+        assert!(
+            json.contains("\"fail_on\":\"error\""),
+            "JSON must contain the effective 'fail_on' level"
         );
         assert!(
             json.contains("\"checks\""),
@@ -1369,6 +1503,7 @@ mod tests {
             &FormatKind::Text,
             None,
             Some(&baseline),
+            crate::FailOn::Error,
         )
         .unwrap();
         // Normal gate would exit 1 (error violation); --diff-from gates only on regressions.
@@ -1394,6 +1529,7 @@ mod tests {
             &FormatKind::Text,
             None,
             Some(&baseline),
+            crate::FailOn::Error,
         )
         .unwrap();
         assert_eq!(result, 1, "a new error violation is a regression");
@@ -1418,6 +1554,7 @@ mod tests {
             &FormatKind::Text,
             None,
             Some(&baseline),
+            crate::FailOn::Error,
         )
         .unwrap();
         assert_eq!(result, 0, "new warning violations never gate");
@@ -1446,6 +1583,7 @@ mod tests {
             &FormatKind::Text,
             None,
             Some(&baseline),
+            crate::FailOn::Error,
         )
         .unwrap();
         assert_eq!(
@@ -1471,6 +1609,7 @@ mod tests {
             &FormatKind::Text,
             None,
             Some(&missing),
+            crate::FailOn::Error,
         );
         assert!(result.is_err(), "missing baseline → error (exit 2)");
         let _ = std::fs::remove_dir_all(&dir);
@@ -1493,6 +1632,7 @@ mod tests {
             &FormatKind::Text,
             Some(&out),
             None,
+            crate::FailOn::Error,
         )
         .unwrap();
 
@@ -1528,6 +1668,7 @@ mod tests {
             &FormatKind::Text,
             Some(&saved),
             Some(&baseline),
+            crate::FailOn::Error,
         )
         .unwrap();
         assert_eq!(result, 1, "regression exits 1 even when also saving");
@@ -1559,6 +1700,7 @@ mod tests {
             &FormatKind::Text,
             None,
             Some(&baseline),
+            crate::FailOn::Error,
         )
         .unwrap();
         assert_eq!(result, 1, "a newly-introduced cycle is an error regression");
@@ -1588,6 +1730,7 @@ mod tests {
             &FormatKind::Json,
             None,
             Some(&baseline),
+            crate::FailOn::Error,
         )
         .unwrap();
         assert_eq!(result, 0, "JSON mode regression gate matches text mode");
@@ -1635,6 +1778,7 @@ mod tests {
             &FormatKind::Text,
             None,
             None, // no CLI --diff-from → config baseline_path is used
+            crate::FailOn::Error,
         )
         .unwrap();
         assert_eq!(
@@ -1667,6 +1811,7 @@ mod tests {
             &FormatKind::Text,
             None,
             Some(&cli_baseline),
+            crate::FailOn::Error,
         )
         .unwrap();
         assert_eq!(result, 1, "CLI --diff-from overrides config baseline_path");
@@ -1691,6 +1836,7 @@ mod tests {
             &FormatKind::Text,
             None,
             None,
+            crate::FailOn::Error,
         );
         assert!(
             result.is_err(),
@@ -1717,6 +1863,7 @@ mod tests {
             &FormatKind::Text,
             None,
             None,
+            crate::FailOn::Error,
         )
         .unwrap();
         assert_eq!(result, 1, "no baseline_path → normal gate, no auto-diff");
@@ -1747,6 +1894,7 @@ mod tests {
             &FormatKind::Text,
             None,
             None,
+            crate::FailOn::Error,
         )
         .unwrap(); // would Err (not found) if resolved against CWD instead of project_dir
         assert_eq!(

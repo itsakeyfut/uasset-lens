@@ -33,6 +33,15 @@ pub enum GroupMode {
     Dir,
 }
 
+/// Severity threshold at which `check` exits 1. `error` is the default (only error-severity
+/// findings fail); `warn` fails on any finding; `never` is informational (always exit 0).
+#[derive(Debug, Clone, Copy, PartialEq, ValueEnum)]
+pub enum FailOn {
+    Error,
+    Warn,
+    Never,
+}
+
 #[derive(Debug, Parser)]
 #[command(name = "uasset-lens", about = "Unreal Engine 5 asset static analyzer")]
 pub struct Cli {
@@ -222,6 +231,9 @@ pub enum Commands {
         /// Skip the pre-check mtime delta scan (use the existing DB as-is)
         #[arg(long)]
         skip_scan: bool,
+        /// Severity at which to exit 1: error (default), warn (any finding), or never
+        #[arg(long, value_enum, default_value_t = FailOn::Error)]
+        fail_on: FailOn,
     },
     /// Delete confirmed dead assets from disk
     #[command(name = "clean")]
@@ -548,6 +560,7 @@ fn dispatch(cli: &Cli) -> anyhow::Result<i32> {
             save_baseline,
             diff_from,
             skip_scan,
+            fail_on,
         } => {
             let db_path = resolve_db_path(project_dir, cli.db.as_deref());
             commands::check::auto_scan(*skip_scan, project_dir, &db_path, &cfg)?;
@@ -561,6 +574,7 @@ fn dispatch(cli: &Cli) -> anyhow::Result<i32> {
                 &cli.format,
                 save_baseline.as_deref(),
                 diff_from.as_deref(),
+                *fail_on,
             )
         }
         Commands::Clean {
