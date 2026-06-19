@@ -1,8 +1,8 @@
 name: Publish
 
 # Publishes all workspace crates to crates.io via Trusted Publishing (OIDC) —
-# no long-lived API token. Triggered by pushing a version tag (e.g. v0.2.0),
-# or manually via workflow_dispatch (publish only, no GitHub Release).
+# no long-lived API token. Triggered manually via workflow_dispatch only
+# (publish only, no GitHub Release); release tags are handled by release.yml.
 #
 # Prerequisites:
 #   - Each crate must have a Trusted Publisher configured on crates.io
@@ -16,9 +16,6 @@ name: Publish
 # because this workflow holds the crates.io OIDC token and contents:write.
 
 on:
-  push:
-    tags:
-      - "v*.*.*"
   workflow_dispatch:
 
 env:
