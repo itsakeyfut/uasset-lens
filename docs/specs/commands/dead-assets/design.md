@@ -12,7 +12,7 @@
 5. Map dead_paths → Vec<DeadAssetEntry>:
    └── join with DB to get file_size
 6. Apply filter pipeline (in order):
-   a. --type <TYPE>: retain entries where asset_type == TYPE
+   a. --type <TYPE> (repeatable): retain entries whose asset_type matches any requested type
    b. --min-size <N>: retain entries where file_size >= N
    c. --exclude <PATTERN,...>: retain entries where path does NOT contain any pattern
 7. Optional: --sort-by-size → sort descending by file_size
