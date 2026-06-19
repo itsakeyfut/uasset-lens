@@ -37,3 +37,6 @@ clap_complete = "4.6.5"
 [dev-dependencies]
 uasset-lens-scanner  = { workspace = true, features = ["test-support"] }
 uasset-lens-asset-db = { workspace = true, features = ["test-support"] }
+
+[lints]
+workspace = true

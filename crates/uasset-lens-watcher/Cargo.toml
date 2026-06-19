@@ -18,3 +18,6 @@ uasset-lens-shared              = { workspace = true }
 uasset-lens-scanner             = { workspace = true }
 uasset-lens-asset-db            = { workspace = true }
 uasset-lens-dependency-graph    = { workspace = true }
+
+[lints]
+workspace = true
