@@ -18,8 +18,9 @@ pub fn handle_blueprint(
     project_dir: &Path,
     db_path: &Path,
     format: &FormatKind,
+    quiet: bool,
 ) -> anyhow::Result<i32> {
-    crate::maybe_hint_github_actions(format);
+    crate::maybe_hint_github_actions(format, quiet);
     let db = crate::open_db(db_path)?;
 
     let mut rows = db
@@ -166,7 +167,7 @@ mod tests {
 
         make_db_with_blueprints(&db_path);
 
-        let result = handle_blueprint(&dir, &db_path, &FormatKind::GithubActions).unwrap();
+        let result = handle_blueprint(&dir, &db_path, &FormatKind::GithubActions, false).unwrap();
 
         assert_eq!(result, 0, "blueprint is informational — always exits 0");
         let _ = std::fs::remove_dir_all(&dir);
@@ -176,7 +177,12 @@ mod tests {
     fn handle_blueprint_should_return_err_when_db_does_not_exist() {
         let (dir, db_path) = test_db_in_tempdir("bp_missing");
         let _ = std::fs::remove_dir_all(&dir);
-        let result = handle_blueprint(std::path::Path::new("."), &db_path, &FormatKind::Text);
+        let result = handle_blueprint(
+            std::path::Path::new("."),
+            &db_path,
+            &FormatKind::Text,
+            false,
+        );
         assert!(result.is_err());
     }
 
@@ -185,7 +191,7 @@ mod tests {
         let (dir, db_path) = test_db_in_tempdir("bp_empty");
         uasset_lens_asset_db::AssetDb::open(&db_path).unwrap();
 
-        let result = handle_blueprint(&dir, &db_path, &FormatKind::Text).unwrap();
+        let result = handle_blueprint(&dir, &db_path, &FormatKind::Text, false).unwrap();
 
         assert_eq!(result, 0);
         let _ = std::fs::remove_dir_all(&dir);
@@ -197,7 +203,7 @@ mod tests {
 
         make_db_with_blueprints(&db_path);
 
-        let result = handle_blueprint(&dir, &db_path, &FormatKind::Json).unwrap();
+        let result = handle_blueprint(&dir, &db_path, &FormatKind::Json, false).unwrap();
 
         assert_eq!(result, 0);
         let _ = std::fs::remove_dir_all(&dir);

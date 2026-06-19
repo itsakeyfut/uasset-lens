@@ -31,9 +31,16 @@ pub struct ScanOptions<'a> {
     pub yes: bool,
     pub save_baseline: Option<&'a str>,
     pub diff_from: Option<&'a str>,
-    /// Suppress the stdout scan report (per-category counts and summary). Progress on
-    /// stderr is unaffected. Used by `check`'s auto-scan to keep its own stdout clean.
+    /// Global `--quiet`: suppress the progress bar, the per-category breakdown, and
+    /// informational stderr lines. The final summary line / JSON result on stdout is still
+    /// printed (use `suppress_report` to silence that too).
     pub quiet: bool,
+    /// Suppress scan's own stdout result (the summary line and the JSON object) entirely.
+    /// Set by `check`'s auto-scan to keep its stdout clean; distinct from `quiet`, which keeps
+    /// the result.
+    pub suppress_report: bool,
+    /// Global `--no-color`: force-disable ANSI color in the scan report.
+    pub no_color: bool,
     /// Suppress the animated progress bar (set by `--no-progress`).
     pub no_progress: bool,
 }
@@ -108,9 +115,7 @@ pub fn handle_scan(
     cfg: &crate::config::ConfigFile,
     opts: &ScanOptions<'_>,
 ) -> anyhow::Result<i32> {
-    let use_color = matches!(format, FormatKind::Text)
-        && std::io::stdout().is_terminal()
-        && std::env::var("NO_COLOR").is_err();
+    let use_color = crate::use_color(format, opts.no_color);
 
     if let Some(parent) = db_path.parent().filter(|p| !p.as_os_str().is_empty()) {
         std::fs::create_dir_all(parent)?;
@@ -236,15 +241,17 @@ pub fn handle_scan(
             .context("Failed to check for changed files")?
     };
 
-    eprintln!(
-        "{}",
-        scan_header(
-            &content_root,
-            opts.full_scan,
-            total_file_count,
-            paths_to_scan.len()
-        )
-    );
+    if !opts.quiet {
+        eprintln!(
+            "{}",
+            scan_header(
+                &content_root,
+                opts.full_scan,
+                total_file_count,
+                paths_to_scan.len()
+            )
+        );
+    }
 
     let progress = if should_show_progress(
         format,
@@ -291,7 +298,10 @@ pub fn handle_scan(
     // Print per-category scan results before prompting for stale removal. Text/GitHub-Actions
     // only: in JSON mode these human-readable lines would corrupt the single-value stdout (the
     // JSON object already carries new/updated/removed counts).
-    if !opts.quiet && matches!(format, FormatKind::Text | FormatKind::GithubActions) {
+    if !opts.quiet
+        && !opts.suppress_report
+        && matches!(format, FormatKind::Text | FormatKind::GithubActions)
+    {
         if new_count > 0 {
             println!(
                 "  {} {} new asset(s) indexed",
@@ -359,9 +369,9 @@ pub fn handle_scan(
         }
     };
 
-    // In quiet mode the stdout report is suppressed, but stale removals still mutate the DB.
-    // Surface them on stderr so an unexpected mass deletion (e.g. wrong project dir) is not silent.
-    if opts.quiet && removed_count > 0 {
+    // When the stdout report is suppressed (e.g. `check`'s auto-scan), stale removals still
+    // mutate the DB. Surface them on stderr so an unexpected mass deletion is not silent.
+    if opts.suppress_report && removed_count > 0 {
         eprintln!("  {removed_count} stale record(s) removed during scan");
     }
 
@@ -374,7 +384,9 @@ pub fn handle_scan(
     if let Some(name) = opts.save_baseline {
         db.save_baseline(name, snapshot_id)
             .context("Failed to save baseline")?;
-        eprintln!("Baseline '{}' saved.", name);
+        if !opts.quiet {
+            eprintln!("Baseline '{}' saved.", name);
+        }
     }
     let assets_total = db_files.len() + new_count - removed_count;
 
@@ -404,13 +416,14 @@ pub fn handle_scan(
             },
             format,
             use_color,
+            opts.quiet,
         );
     }
 
     match format {
         FormatKind::Sarif => return Err(crate::sarif_not_supported()),
         FormatKind::Json => {
-            if !opts.quiet {
+            if !opts.suppress_report {
                 let skipped_entries: Vec<SkippedEntry> = result
                     .skipped
                     .iter()
@@ -434,7 +447,7 @@ pub fn handle_scan(
             }
         }
         FormatKind::Text | FormatKind::GithubActions => {
-            if !opts.quiet {
+            if !opts.suppress_report {
                 println!();
                 println!(
                     "  {} {} assets total, {} record(s) cleaned, {} skipped (parse error)",
@@ -445,7 +458,7 @@ pub fn handle_scan(
                 );
             }
 
-            if !result.skipped.is_empty() {
+            if !opts.quiet && !result.skipped.is_empty() {
                 eprintln!();
                 eprintln!("Skipped:");
                 for sf in &result.skipped {
@@ -808,6 +821,8 @@ mod tests {
                 save_baseline: None,
                 diff_from: None,
                 quiet: false,
+                suppress_report: false,
+                no_color: false,
                 no_progress: false,
             },
         )
@@ -870,6 +885,8 @@ mod tests {
                 save_baseline: None,
                 diff_from: None,
                 quiet: false,
+                suppress_report: false,
+                no_color: false,
                 no_progress: false,
             },
         )
@@ -960,6 +977,8 @@ mod tests {
                 save_baseline: None,
                 diff_from: None,
                 quiet: false,
+                suppress_report: false,
+                no_color: false,
                 no_progress: false,
             },
         )
@@ -998,6 +1017,8 @@ mod tests {
                 save_baseline: None,
                 diff_from: None,
                 quiet: false,
+                suppress_report: false,
+                no_color: false,
                 no_progress: false,
             },
         )
@@ -1039,6 +1060,8 @@ mod tests {
                 save_baseline: None,
                 diff_from: None,
                 quiet: false,
+                suppress_report: false,
+                no_color: false,
                 no_progress: false,
             },
         )
@@ -1084,6 +1107,8 @@ mod tests {
                 save_baseline: None,
                 diff_from: None,
                 quiet: false,
+                suppress_report: false,
+                no_color: false,
                 no_progress: false,
             },
         )
@@ -1116,6 +1141,8 @@ mod tests {
                 save_baseline: None,
                 diff_from: None,
                 quiet: false,
+                suppress_report: false,
+                no_color: false,
                 no_progress: false,
             },
         )
@@ -1159,6 +1186,8 @@ mod tests {
                 save_baseline: None,
                 diff_from: None,
                 quiet: false,
+                suppress_report: false,
+                no_color: false,
                 no_progress: false,
             },
         )
@@ -1195,6 +1224,8 @@ mod tests {
                 save_baseline: None,
                 diff_from: None,
                 quiet: false,
+                suppress_report: false,
+                no_color: false,
                 no_progress: false,
             },
         )
@@ -1225,6 +1256,8 @@ mod tests {
                 save_baseline: None,
                 diff_from: None,
                 quiet: false,
+                suppress_report: false,
+                no_color: false,
                 no_progress: false,
             },
         )
@@ -1243,6 +1276,8 @@ mod tests {
                 save_baseline: None,
                 diff_from: None,
                 quiet: false,
+                suppress_report: false,
+                no_color: false,
                 no_progress: false,
             },
         )
@@ -1269,6 +1304,8 @@ mod tests {
                 save_baseline: None,
                 diff_from: None,
                 quiet: false,
+                suppress_report: false,
+                no_color: false,
                 no_progress: false,
             },
         )
@@ -1286,6 +1323,8 @@ mod tests {
                 save_baseline: None,
                 diff_from: None,
                 quiet: false,
+                suppress_report: false,
+                no_color: false,
                 no_progress: false,
             },
         )
@@ -1319,6 +1358,8 @@ mod tests {
                 save_baseline: None,
                 diff_from: None,
                 quiet: false,
+                suppress_report: false,
+                no_color: false,
                 no_progress: false,
             },
         )
@@ -1337,6 +1378,8 @@ mod tests {
                 save_baseline: None,
                 diff_from: None,
                 quiet: false,
+                suppress_report: false,
+                no_color: false,
                 no_progress: false,
             },
         )
@@ -1366,6 +1409,8 @@ mod tests {
                 save_baseline: None,
                 diff_from: None,
                 quiet: false,
+                suppress_report: false,
+                no_color: false,
                 no_progress: false,
             },
         )
@@ -1383,6 +1428,8 @@ mod tests {
                 save_baseline: None,
                 diff_from: None,
                 quiet: false,
+                suppress_report: false,
+                no_color: false,
                 no_progress: false,
             },
         )
@@ -1409,6 +1456,8 @@ mod tests {
                 save_baseline: Some("main"),
                 diff_from: None,
                 quiet: false,
+                suppress_report: false,
+                no_color: false,
                 no_progress: false,
             },
         )
@@ -1438,6 +1487,8 @@ mod tests {
                 save_baseline: Some("main"),
                 diff_from: None,
                 quiet: false,
+                suppress_report: false,
+                no_color: false,
                 no_progress: false,
             },
         )
@@ -1455,6 +1506,8 @@ mod tests {
                 save_baseline: None,
                 diff_from: Some("main"),
                 quiet: false,
+                suppress_report: false,
+                no_color: false,
                 no_progress: false,
             },
         )
@@ -1480,6 +1533,8 @@ mod tests {
                 save_baseline: None,
                 diff_from: None,
                 quiet: false,
+                suppress_report: false,
+                no_color: false,
                 no_progress: false,
             },
         )
@@ -1497,6 +1552,8 @@ mod tests {
                 save_baseline: None,
                 diff_from: Some("ghost"),
                 quiet: false,
+                suppress_report: false,
+                no_color: false,
                 no_progress: false,
             },
         );
