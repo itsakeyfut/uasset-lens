@@ -18,9 +18,9 @@ jobs:
           - os: ubuntu-latest
             target: x86_64-unknown-linux-gnu
             archive: uasset-lens-linux-x86_64.tar.gz
-          - os: macos-13  # macos-14+ is ARM64; stay on Intel for x86_64-apple-darwin
-            target: x86_64-apple-darwin
-            archive: uasset-lens-macos-x86_64.tar.gz
+          - os: macos-latest  # Apple Silicon; GitHub-hosted Intel macOS runners are retired
+            target: aarch64-apple-darwin
+            archive: uasset-lens-macos-arm64.tar.gz
           - os: windows-latest
             target: x86_64-pc-windows-msvc
             archive: uasset-lens-windows-x86_64.zip

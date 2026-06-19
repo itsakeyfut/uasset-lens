@@ -63,7 +63,7 @@ Download the latest binary from [GitHub Releases](https://github.com/itsakeyfut/
 | Platform | File |
 |---|---|
 | Linux x86_64 | `uasset-lens-linux-x86_64.tar.gz` |
-| macOS x86_64 | `uasset-lens-macos-x86_64.tar.gz` |
+| macOS arm64 | `uasset-lens-macos-arm64.tar.gz` |
 | Windows x86_64 | `uasset-lens-windows-x86_64.zip` |
 
 Extract the archive and place `uasset-lens` (or `uasset-lens.exe`) somewhere on your `PATH`.
