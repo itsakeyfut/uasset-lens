@@ -1,4 +1,4 @@
-﻿use std::collections::HashMap;
+use std::collections::HashMap;
 use std::path::Path;
 
 use anyhow::Context;
@@ -14,9 +14,18 @@ struct DeadAssetEntry {
 }
 
 #[derive(serde::Serialize)]
+struct ByTypeEntry {
+    #[serde(rename = "type")]
+    asset_type: String,
+    count: usize,
+    bytes: u64,
+}
+
+#[derive(serde::Serialize)]
 struct DeadAssetsOutput {
     assets: Vec<DeadAssetEntry>,
     total_size_bytes: u64,
+    by_type: Vec<ByTypeEntry>,
 }
 
 #[derive(serde::Serialize)]
@@ -152,12 +161,15 @@ pub fn handle_dead_assets(
         return if count == 0 { Ok(0) } else { Ok(1) };
     }
 
+    let by_type = compute_by_type(&entries);
+
     match format {
         FormatKind::Sarif => return Err(crate::sarif_not_supported()),
         FormatKind::Json => {
             let output = DeadAssetsOutput {
                 assets: entries,
                 total_size_bytes,
+                by_type,
             };
             println!(
                 "{}",
@@ -178,10 +190,65 @@ pub fn handle_dead_assets(
                 println!();
             }
             println!("  {}", format_dead_summary(count, total_size_bytes));
+            print_by_type(&by_type);
         }
     }
 
     if count == 0 { Ok(0) } else { Ok(1) }
+}
+
+/// Prints the `By type:` breakdown (all types, wasted-bytes descending) below the summary.
+fn print_by_type(by_type: &[ByTypeEntry]) {
+    if by_type.is_empty() {
+        return;
+    }
+    let max_name = by_type
+        .iter()
+        .map(|b| b.asset_type.len())
+        .max()
+        .unwrap_or(1);
+    let max_cnt = by_type
+        .iter()
+        .map(|b| crate::digit_count(b.count))
+        .max()
+        .unwrap_or(1);
+    println!();
+    println!("  By type:");
+    for b in by_type {
+        println!(
+            "    {:<name$}  {:>cnt$}  {}",
+            b.asset_type,
+            b.count,
+            crate::format_size(b.bytes),
+            name = max_name,
+            cnt = max_cnt,
+        );
+    }
+}
+
+/// Aggregates dead assets by asset type, sorted by wasted bytes descending (ties broken by type
+/// name for deterministic output). Drives the `By type:` breakdown shown alongside the summary.
+fn compute_by_type(entries: &[DeadAssetEntry]) -> Vec<ByTypeEntry> {
+    let mut map: HashMap<&str, (usize, u64)> = HashMap::new();
+    for e in entries {
+        let (count, bytes) = map.entry(e.asset_type.as_str()).or_default();
+        *count += 1;
+        *bytes += e.file_size;
+    }
+    let mut by_type: Vec<ByTypeEntry> = map
+        .into_iter()
+        .map(|(asset_type, (count, bytes))| ByTypeEntry {
+            asset_type: asset_type.to_owned(),
+            count,
+            bytes,
+        })
+        .collect();
+    by_type.sort_unstable_by(|a, b| {
+        b.bytes
+            .cmp(&a.bytes)
+            .then_with(|| a.asset_type.cmp(&b.asset_type))
+    });
+    by_type
 }
 
 fn format_dead_summary(count: usize, total_bytes: u64) -> String {
@@ -220,6 +287,7 @@ mod tests {
         let output = DeadAssetsOutput {
             assets: vec![],
             total_size_bytes: 347_200_000,
+            by_type: vec![],
         };
         let json = serde_json::to_string(&output).unwrap();
         assert!(
@@ -241,10 +309,84 @@ mod tests {
                 file_size: 4096,
             }],
             total_size_bytes: 4096,
+            by_type: vec![],
         };
         let json = serde_json::to_string(&output).unwrap();
         assert!(json.contains("\"assets\""), "JSON must contain assets key");
         assert!(json.contains("/Game/A"));
+    }
+
+    #[test]
+    fn compute_by_type_should_aggregate_and_sort_by_bytes_desc() {
+        let entries = vec![
+            DeadAssetEntry {
+                path: "/Game/A".to_owned(),
+                asset_type: "Blueprint".to_owned(),
+                file_size: 100,
+            },
+            DeadAssetEntry {
+                path: "/Game/B".to_owned(),
+                asset_type: "Texture2D".to_owned(),
+                file_size: 500,
+            },
+            DeadAssetEntry {
+                path: "/Game/C".to_owned(),
+                asset_type: "Blueprint".to_owned(),
+                file_size: 50,
+            },
+            DeadAssetEntry {
+                path: "/Game/D".to_owned(),
+                asset_type: "Texture2D".to_owned(),
+                file_size: 200,
+            },
+        ];
+        let by = compute_by_type(&entries);
+        // Texture2D: 2 assets / 700 B, Blueprint: 2 assets / 150 B → bytes descending.
+        assert_eq!(by.len(), 2);
+        assert_eq!(by[0].asset_type, "Texture2D");
+        assert_eq!(by[0].count, 2);
+        assert_eq!(by[0].bytes, 700);
+        assert_eq!(by[1].asset_type, "Blueprint");
+        assert_eq!(by[1].count, 2);
+        assert_eq!(by[1].bytes, 150);
+    }
+
+    #[test]
+    fn compute_by_type_should_break_byte_ties_by_type_name() {
+        let entries = vec![
+            DeadAssetEntry {
+                path: "/Game/A".to_owned(),
+                asset_type: "Texture2D".to_owned(),
+                file_size: 100,
+            },
+            DeadAssetEntry {
+                path: "/Game/B".to_owned(),
+                asset_type: "Blueprint".to_owned(),
+                file_size: 100,
+            },
+        ];
+        let by = compute_by_type(&entries);
+        assert_eq!(
+            by[0].asset_type, "Blueprint",
+            "equal bytes break ties alphabetically"
+        );
+        assert_eq!(by[1].asset_type, "Texture2D");
+    }
+
+    #[test]
+    fn by_type_entry_json_should_use_type_count_bytes_keys() {
+        let json = serde_json::to_string(&ByTypeEntry {
+            asset_type: "AnimSequence".to_owned(),
+            count: 161,
+            bytes: 43_690_000,
+        })
+        .unwrap();
+        assert!(
+            json.contains("\"type\":\"AnimSequence\""),
+            "asset_type must serialize as 'type'"
+        );
+        assert!(json.contains("\"count\":161"));
+        assert!(json.contains("\"bytes\":43690000"));
     }
 
     #[test]
