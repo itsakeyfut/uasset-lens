@@ -1,0 +1,7 @@
+- id: uasset-lens-check
+  name: uasset-lens asset check
+  description: Run lint and budget checks on staged UE5 assets before commit
+  entry: uasset-lens check --only lint,budget --skip-scan --fail-on error
+  language: system
+  files: \.(uasset|umap)$
+  pass_filenames: false

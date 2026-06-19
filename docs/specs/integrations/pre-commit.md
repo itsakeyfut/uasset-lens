@@ -27,6 +27,9 @@ pre-commit hook is too slow for interactive use.
 #!/usr/bin/env bash
 set -euo pipefail
 
+# UE project directory (the folder containing Content/). Override with UASSET_LENS_PROJECT_DIR.
+PROJECT_DIR="${UASSET_LENS_PROJECT_DIR:-.}"
+
 # Collect staged .uasset / .umap files
 STAGED=$(git diff --cached --name-only --diff-filter=ACM | grep -E '\.(uasset|umap)$' || true)
 
@@ -34,15 +37,24 @@ if [ -z "$STAGED" ]; then
   exit 0
 fi
 
+if ! command -v uasset-lens >/dev/null 2>&1; then
+  echo "uasset-lens: command not found — install it to enable asset checks." >&2
+  exit 2
+fi
+
 echo "uasset-lens: checking $(echo "$STAGED" | wc -l | tr -d ' ') staged asset(s)..."
 
-uasset-lens check ./Project \
+# A non-zero exit propagates via set -e and blocks the commit.
+uasset-lens check "$PROJECT_DIR" \
   --only lint,budget \
   --skip-scan \
   --fail-on error
-
-# Exit code from uasset-lens propagates automatically via set -e
 ```
+
+`PROJECT_DIR` defaults to the current directory and can be overridden with the
+`UASSET_LENS_PROJECT_DIR` environment variable. The `command -v` guard returns
+exit `2` (per the table below) with a clear message when `uasset-lens` is not
+installed, instead of bash's bare `command not found`.
 
 ---
 
@@ -86,13 +98,16 @@ As an alternative to a manual shell script, the hook can be managed by the
 ```yaml
 - id: uasset-lens-check
   name: uasset-lens asset check
-  description: Run lint and budget checks on staged UE5 assets
-  entry: uasset-lens check
-  args: [--only, lint,budget, --skip-scan, --fail-on, error]
+  description: Run lint and budget checks on staged UE5 assets before commit
+  entry: uasset-lens check --only lint,budget --skip-scan --fail-on error
   language: system
   files: \.(uasset|umap)$
   pass_filenames: false
 ```
+
+The check flags are baked into `entry` rather than `args`. A consuming repo's
+`args` *replaces* the hook's default `args`, so putting the flags in `args` would
+drop them as soon as a consumer sets `args` to point at their project directory.
 
 ### `.pre-commit-config.yaml` (in consuming repositories)
 
@@ -105,9 +120,10 @@ repos:
         args: [./MyProject]
 ```
 
-The `pass_filenames: false` setting prevents pre-commit from forwarding individual
-file paths to the tool — `uasset-lens check` expects a project directory, not a file
-list.
+The consumer supplies only the project directory via `args`; it is appended to the
+baked-in `entry`. The `pass_filenames: false` setting prevents pre-commit from
+forwarding individual file paths to the tool — `uasset-lens check` expects a project
+directory, not a file list.
 
 ---
 
