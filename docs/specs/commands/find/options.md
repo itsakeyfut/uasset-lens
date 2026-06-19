@@ -74,16 +74,6 @@ uasset-lens find ./Project --path "/Game/UI/**"
 
 ---
 
-### `--sort-by-size`
-
-Sort results by file size, largest first (default: alphabetical by path).
-
-```bash
-uasset-lens find ./Project --type Texture2D --sort-by-size
-```
-
----
-
 ### `--refs <GAME_PATH>`
 
 Show only assets that reference the given game path (direct or transitive).
@@ -131,13 +121,15 @@ Sort results by the given field (default: `path`).
 | Value | Sort order |
 |---|---|
 | `path` | Alphabetical by game path (default) |
-| `size` | File size descending |
+| `size-desc` | File size descending (largest first) |
+| `size-asc` | File size ascending (smallest first) |
 | `type` | Asset type alphabetical, then path |
-| `health` | Health score ascending (worst first) |
+
+Size and type orders break ties by game path for deterministic output. A `health` value
+(worst-first) is planned alongside the asset health score (#318).
 
 ```bash
-uasset-lens find ./Project --type Texture2D --sort size
-uasset-lens find ./Project --has-violation lint --sort health
+uasset-lens find ./Project --type Texture2D --sort size-desc
 ```
 
 ---
