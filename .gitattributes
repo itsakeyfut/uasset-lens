@@ -1,3 +1,6 @@
 tests/fixtures/**/*.uasset binary
 tests/fixtures/**/*.umap   binary
 tests/fixtures/**/*.bin    binary
+
+# Shell scripts must keep LF endings so installed git hooks run on all platforms
+*.sh text eol=lf
