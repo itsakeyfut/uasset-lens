@@ -177,7 +177,7 @@ checksum = "c8d4a3bb8b1e0c1050499d1815f5ab16d04f0959b233085fb31653fbfc9d98f9"
 
 [[package]]
 name = "cli"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "anyhow",
  "clap",
@@ -1013,7 +1013,7 @@ dependencies = [
 
 [[package]]
 name = "uasset-lens-analysis"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "serde",
  "uasset-lens-asset-db",
@@ -1024,7 +1024,7 @@ dependencies = [
 
 [[package]]
 name = "uasset-lens-asset-db"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "globset",
  "rusqlite",
@@ -1036,7 +1036,7 @@ dependencies = [
 
 [[package]]
 name = "uasset-lens-dependency-graph"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "petgraph",
  "uasset-lens-shared",
@@ -1044,7 +1044,7 @@ dependencies = [
 
 [[package]]
 name = "uasset-lens-git-diff"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "tempfile",
  "thiserror",
@@ -1055,7 +1055,7 @@ dependencies = [
 
 [[package]]
 name = "uasset-lens-scanner"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "byteorder",
  "rayon",
@@ -1066,7 +1066,7 @@ dependencies = [
 
 [[package]]
 name = "uasset-lens-shared"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "serde",
  "serde_json",
@@ -1075,7 +1075,7 @@ dependencies = [
 
 [[package]]
 name = "uasset-lens-watcher"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "notify",
  "thiserror",
