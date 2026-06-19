@@ -1,6 +1,8 @@
-﻿use std::path::Path;
+use std::collections::{HashMap, HashSet};
+use std::path::Path;
 
 use anyhow::Context;
+use uasset_lens_shared::AssetPath;
 
 use crate::FormatKind;
 
@@ -8,10 +10,19 @@ use crate::FormatKind;
 const CYCLE_TRUNCATE_THRESHOLD: usize = 6;
 
 #[derive(serde::Serialize)]
+struct CycleEntry {
+    /// Closed cycle path (first node repeated at the end).
+    nodes: Vec<String>,
+    /// Deduplicated asset types in the cycle, in first-appearance order. Distinguishes harmless
+    /// UE structural cycles (e.g. SkeletalMesh/Skeleton/PhysicsAsset) from Blueprint cycle bugs.
+    types: Vec<String>,
+}
+
+#[derive(serde::Serialize)]
 struct GraphOutput {
     total_assets: usize,
     total_edges: usize,
-    cycles: Vec<Vec<String>>,
+    cycles: Vec<CycleEntry>,
 }
 
 pub fn handle_graph(
@@ -28,18 +39,34 @@ pub fn handle_graph(
     let total_assets = graph.nodes().count();
     let total_edges = graph.edge_count();
 
-    // Build closed-path cycle representation (first node repeated at end).
-    let cycle_paths: Vec<Vec<String>> = cycles
+    // Resolve asset types only for nodes that appear in a cycle, so large projects do not pay an
+    // O(n) string allocation over every node just to annotate a handful of cycles.
+    let cycle_node_paths: HashSet<&str> = cycles
+        .iter()
+        .flat_map(|scc| scc.iter().map(|p| p.as_str()))
+        .collect();
+    let type_by_path: HashMap<&str, String> = graph
+        .nodes()
+        .filter(|n| cycle_node_paths.contains(n.path.as_str()))
+        .map(|n| (n.path.as_str(), n.asset_type.to_string()))
+        .collect();
+
+    // Build the closed-path cycle representation (first node repeated at end) and the
+    // deduplicated asset-type composition of each cycle.
+    let cycle_entries: Vec<CycleEntry> = cycles
         .iter()
         .map(|scc| {
-            let mut paths: Vec<String> = scc
+            let mut nodes: Vec<String> = scc
                 .iter()
                 .map(|p| p.as_str().to_owned()) // clone required: AssetPath is not Copy
                 .collect();
-            if let Some(first) = paths.first().cloned() {
-                paths.push(first);
+            if let Some(first) = nodes.first().cloned() {
+                nodes.push(first);
             }
-            paths
+            CycleEntry {
+                nodes,
+                types: dedup_cycle_types(scc, &type_by_path),
+            }
         })
         .collect();
 
@@ -49,7 +76,7 @@ pub fn handle_graph(
             let output = GraphOutput {
                 total_assets,
                 total_edges,
-                cycles: cycle_paths,
+                cycles: cycle_entries,
             };
             println!(
                 "{}",
@@ -64,13 +91,20 @@ pub fn handle_graph(
                 println!("  Total edges    : {}", crate::format_number(total_edges));
                 println!("  Circular deps  : {} cycles detected", cycles.len());
             }
-            if !cycle_paths.is_empty() {
+            if !cycle_entries.is_empty() {
                 if !cycles_only {
                     println!();
                 }
                 println!("  Cycles:");
-                for (i, path_list) in cycle_paths.iter().enumerate() {
-                    println!("    [{}] {}", i + 1, format_cycle(path_list, full_cycles));
+                for (i, entry) in cycle_entries.iter().enumerate() {
+                    println!(
+                        "    [{}] {}",
+                        i + 1,
+                        format_cycle(&entry.nodes, full_cycles)
+                    );
+                    if !entry.types.is_empty() {
+                        println!("        [{}]", entry.types.join(", "));
+                    }
                 }
             }
         }
@@ -81,6 +115,18 @@ pub fn handle_graph(
     } else {
         Ok(0)
     }
+}
+
+/// The asset types present in a cycle, deduplicated and kept in first-appearance order. Nodes
+/// missing from `type_by_path` (should not happen — every cycle node is a graph node) are skipped.
+fn dedup_cycle_types(cycle: &[AssetPath], type_by_path: &HashMap<&str, String>) -> Vec<String> {
+    let mut seen = HashSet::new();
+    cycle
+        .iter()
+        .filter_map(|p| type_by_path.get(p.as_str()))
+        .filter(|t| seen.insert(t.as_str()))
+        .cloned()
+        .collect()
 }
 
 fn format_cycle(nodes: &[String], full: bool) -> String {
@@ -402,5 +448,38 @@ mod tests {
         .unwrap();
         assert_eq!(result, 1, "full_cycles=true, 7-node cycle → exits 1");
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn dedup_cycle_types_should_dedup_preserving_first_appearance() {
+        let cycle = vec![
+            AssetPath::new("/Game/A").unwrap(),
+            AssetPath::new("/Game/B").unwrap(),
+            AssetPath::new("/Game/C").unwrap(),
+        ];
+        let mut type_by_path: HashMap<&str, String> = HashMap::new();
+        type_by_path.insert("/Game/A", "Blueprint".to_owned());
+        type_by_path.insert("/Game/B", "Texture2D".to_owned());
+        type_by_path.insert("/Game/C", "Blueprint".to_owned()); // duplicate type, later node
+        assert_eq!(
+            dedup_cycle_types(&cycle, &type_by_path),
+            vec!["Blueprint".to_owned(), "Texture2D".to_owned()],
+            "types deduplicated in first-appearance order"
+        );
+    }
+
+    #[test]
+    fn cycle_entry_json_should_include_nodes_and_types() {
+        let json = serde_json::to_string(&CycleEntry {
+            nodes: vec![
+                "/Game/A".to_owned(),
+                "/Game/B".to_owned(),
+                "/Game/A".to_owned(),
+            ],
+            types: vec!["Blueprint".to_owned()],
+        })
+        .unwrap();
+        assert!(json.contains("\"nodes\""), "cycle entry must include nodes");
+        assert!(json.contains("\"types\""), "cycle entry must include types");
     }
 }
