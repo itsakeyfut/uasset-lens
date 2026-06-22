@@ -23,7 +23,7 @@ pub fn parse_soft_object_paths(
     let mut cur = Cursor::new(data);
     cur.set_position(offset);
 
-    let mut paths = Vec::with_capacity(count);
+    let mut paths = Vec::with_capacity(super::bounded_capacity(count, data.len(), 16));
 
     for _ in 0..count {
         let pkg_idx = cur.read_i32::<LittleEndian>().map_err(map_io)?;
@@ -117,5 +117,12 @@ mod tests {
 
         let result = parse_soft_object_paths(&data, 0, 2, &name_table).unwrap();
         assert_eq!(result.len(), 2);
+    }
+
+    #[test]
+    fn parse_soft_object_paths_should_return_error_for_huge_count() {
+        // A crafted soft_object_path_count must not drive a multi-GB allocation; EOF stops the loop.
+        let result = parse_soft_object_paths(&[0u8; 8], 0, i32::MAX as usize, &[]);
+        assert!(result.is_err());
     }
 }

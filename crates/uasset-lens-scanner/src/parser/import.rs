@@ -27,7 +27,7 @@ pub(crate) fn parse_import_entries(
     let mut cur = Cursor::new(data);
     cur.set_position(offset);
 
-    let mut class_name_idxs = Vec::with_capacity(count);
+    let mut class_name_idxs = Vec::with_capacity(super::bounded_capacity(count, data.len(), 40));
     let mut deps = Vec::new();
 
     for _ in 0..count {
@@ -140,5 +140,12 @@ mod tests {
         let (_, deps) = parse_import_entries(&import_data, 0, 2, &name_table).unwrap();
         assert_eq!(deps.len(), 1);
         assert_eq!(deps[0].as_str(), "/Game/Characters/BP_Hero");
+    }
+
+    #[test]
+    fn parse_import_entries_should_return_error_for_huge_import_count() {
+        // A crafted import_count must not drive a multi-GB allocation; the loop hits EOF first.
+        let result = parse_import_entries(&[0u8; 16], 0, i32::MAX as usize, &[]);
+        assert!(result.is_err());
     }
 }

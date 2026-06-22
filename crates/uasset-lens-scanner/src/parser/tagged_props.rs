@@ -142,7 +142,8 @@ pub(crate) fn scan_props_depth(
                     }
                     advance(cur, len as u64)?;
                 } else if len < 0 {
-                    advance(cur, (-len as u64) * 2)?;
+                    // Widen before negating: -len overflows i32 when len == i32::MIN.
+                    advance(cur, (-(i64::from(len))) as u64 * 2)?;
                 }
             }
             "NameProperty" => {
