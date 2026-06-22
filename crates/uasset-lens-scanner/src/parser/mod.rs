@@ -37,13 +37,27 @@ pub(crate) fn skip_fstring(cur: &mut Cursor<&[u8]>) -> Result<(), ScanError> {
     let byte_count: u64 = if len == 0 {
         0
     } else if len < 0 {
-        // UTF-16LE: negative length encodes char count; 2 bytes per char
-        (-len as u64) * 2
+        // UTF-16LE: negative length encodes char count; 2 bytes per char.
+        // Widen before negating: -len overflows i32 when len == i32::MIN.
+        (-(i64::from(len))) as u64 * 2
     } else {
         // UTF-8/ASCII including null terminator
         len as u64
     };
     advance(cur, byte_count)
+}
+
+/// Clamps a parsed (untrusted) entry count to what the remaining buffer could actually hold, so a
+/// crafted header (e.g. `count == i32::MAX`) cannot drive a multi-gigabyte `Vec::with_capacity`
+/// before the read loop reaches EOF (memory DoS). `min_entry_bytes` is the smallest possible
+/// serialized size of one entry; for a valid file the true count never exceeds
+/// `data_len / min_entry_bytes`, so this is a no-op on correct input and only caps malicious counts.
+pub(crate) fn bounded_capacity(
+    parsed_count: usize,
+    data_len: usize,
+    min_entry_bytes: usize,
+) -> usize {
+    parsed_count.min(data_len / min_entry_bytes.max(1))
 }
 
 /// Reads the export entry's `ClassIndex` (i32 at `entry_pos`) and resolves it to the import's
@@ -79,7 +93,26 @@ pub(crate) fn export_class_name<'a>(
 
 #[cfg(test)]
 mod tests {
-    use super::export_class_name;
+    use super::{bounded_capacity, export_class_name, skip_fstring};
+
+    #[test]
+    fn bounded_capacity_should_clamp_to_buffer_bound() {
+        // A huge (malicious) parsed count is clamped to what the buffer could hold.
+        assert_eq!(bounded_capacity(i32::MAX as usize, 80, 8), 10);
+        // A realistic count under the bound is returned unchanged (no-op on valid input).
+        assert_eq!(bounded_capacity(5, 80, 8), 5);
+        // Empty buffer clamps to zero.
+        assert_eq!(bounded_capacity(100, 0, 8), 0);
+    }
+
+    #[test]
+    fn skip_fstring_should_not_panic_on_i32_min_length() {
+        // len = i32::MIN takes the UTF-16 branch; the negation must widen to i64 to avoid an
+        // overflow panic in debug builds. The huge skip lands past EOF → graceful UnexpectedEof.
+        let data = i32::MIN.to_le_bytes();
+        let mut cur = std::io::Cursor::new(&data[..]);
+        assert!(skip_fstring(&mut cur).is_err());
+    }
 
     #[test]
     fn export_class_name_should_resolve_import_class() {

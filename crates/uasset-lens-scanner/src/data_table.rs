@@ -93,7 +93,11 @@ fn collect_soft_refs(serial_data: &[u8], name_table: &[String]) -> Vec<AssetPath
         _ => return Vec::new(),
     };
 
-    let mut paths = Vec::with_capacity(row_count);
+    let mut paths = Vec::with_capacity(crate::parser::bounded_capacity(
+        row_count,
+        serial_data.len(),
+        8,
+    ));
 
     for _ in 0..row_count {
         // Row key: FName (index i32 + number i32)
@@ -196,7 +200,8 @@ fn scan_props(
                     }
                     advance(cur, len as u64)?;
                 } else if len < 0 {
-                    advance(cur, (-len as u64) * 2)?;
+                    // Widen before negating: -len overflows i32 when len == i32::MIN.
+                    advance(cur, (-(i64::from(len))) as u64 * 2)?;
                 }
             }
             "NameProperty" => {

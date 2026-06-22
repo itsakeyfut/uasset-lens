@@ -8,19 +8,25 @@ pub fn parse_name_table(data: &[u8], offset: u64, count: usize) -> Result<Vec<St
     let mut cur = Cursor::new(data);
     cur.set_position(offset);
 
-    let mut names = Vec::with_capacity(count);
+    let mut names = Vec::with_capacity(super::bounded_capacity(count, data.len(), 8));
     for _ in 0..count {
         let len = cur.read_i32::<LittleEndian>().map_err(map_io)?;
 
         let name = if len == 0 {
             String::new()
         } else if len < 0 {
-            // UTF-16LE: each char is 2 bytes (negative length encodes char count)
-            let byte_count = (-len as u64) * 2;
+            // UTF-16LE: each char is 2 bytes (negative length encodes char count).
+            // Widen before negating: -len overflows i32 when len == i32::MIN.
+            let byte_count = (-(i64::from(len))) as u64 * 2;
             cur.set_position(cur.position() + byte_count);
             tracing::warn!("UTF-16 name entry skipped");
             String::new()
         } else {
+            // Bound the allocation by remaining bytes so a crafted len can't request gigabytes.
+            let pos = cur.position() as usize;
+            if len as usize > data.len().saturating_sub(pos) {
+                return Err(ScanError::UnexpectedEof);
+            }
             let mut bytes = vec![0u8; len as usize];
             cur.read_exact(&mut bytes).map_err(map_io)?;
             if bytes.last() == Some(&0) {
@@ -97,5 +103,33 @@ mod tests {
         assert_eq!(names.len(), 2);
         assert_eq!(names[0], ""); // UTF-16 entry becomes empty
         assert_eq!(names[1], "Good");
+    }
+
+    #[test]
+    fn parse_name_table_should_return_error_for_huge_name_count() {
+        // A crafted name_count must not drive a multi-GB allocation; the loop hits EOF first.
+        let data = build_name_table(&["None"]);
+        let result = parse_name_table(&data, 0, i32::MAX as usize);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn parse_name_table_should_return_error_for_huge_fstring_length() {
+        // FString len = i32::MAX with only a few bytes available → graceful error, no allocation.
+        let mut data = Vec::new();
+        data.extend_from_slice(&i32::MAX.to_le_bytes());
+        data.extend_from_slice(b"AB");
+        let result = parse_name_table(&data, 0, 1);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn parse_name_table_should_not_panic_on_i32_min_utf16_length() {
+        // len = i32::MIN takes the UTF-16 branch; the negation must not overflow in debug builds.
+        let mut data = Vec::new();
+        data.extend_from_slice(&i32::MIN.to_le_bytes());
+        data.extend_from_slice(&[0u8; 4]);
+        let result = parse_name_table(&data, 0, 1);
+        assert!(result.is_err());
     }
 }
