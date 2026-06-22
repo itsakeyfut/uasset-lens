@@ -39,9 +39,11 @@ pub fn parse_properties(
         let name_idx = usize::try_from(cur.read_i32::<LittleEndian>().map_err(map_io)?)
             .map_err(|_| ScanError::UnexpectedEof)?;
         let _name_num = cur.read_i32::<LittleEndian>().map_err(map_io)?;
+        // Borrow the name/type from the name table; only the few variants that store the name
+        // own a `String`, and the type is only compared, never stored — so no per-property clone.
         let prop_name = name_table
             .get(name_idx)
-            .cloned()
+            .map(String::as_str)
             .ok_or(ScanError::UnexpectedEof)?;
 
         if prop_name == "None" {
@@ -53,19 +55,19 @@ pub fn parse_properties(
         let _type_num = cur.read_i32::<LittleEndian>().map_err(map_io)?;
         let prop_type = name_table
             .get(type_idx)
-            .cloned()
+            .map(String::as_str)
             .ok_or(ScanError::UnexpectedEof)?;
 
         let prop_size = cur.read_i64::<LittleEndian>().map_err(map_io)?;
         let _array_idx = cur.read_i32::<LittleEndian>().map_err(map_io)?;
 
-        let parsed = match prop_type.as_str() {
+        let parsed = match prop_type {
             "BoolProperty" => {
                 // Tag: 1 byte holds the bool; PropertySize = 0 (value section is empty)
                 let byte = cur.read_u8().map_err(map_io)?;
                 advance(&mut cur, prop_size as u64)?;
                 ParsedProperty::Bool {
-                    name: prop_name,
+                    name: prop_name.to_owned(),
                     value: byte != 0,
                 }
             }
@@ -78,7 +80,7 @@ pub fn parse_properties(
                 let remaining = (prop_size - 4).max(0) as u64;
                 advance(&mut cur, remaining)?;
                 ParsedProperty::Array {
-                    name: prop_name,
+                    name: prop_name.to_owned(),
                     count,
                 }
             }
@@ -88,7 +90,7 @@ pub fn parse_properties(
                 let remaining = (prop_size - 4).max(0) as u64;
                 advance(&mut cur, remaining)?;
                 ParsedProperty::Int {
-                    name: prop_name,
+                    name: prop_name.to_owned(),
                     value,
                 }
             }
@@ -98,13 +100,15 @@ pub fn parse_properties(
                 let remaining = (prop_size - 4).max(0) as u64;
                 advance(&mut cur, remaining)?;
                 ParsedProperty::Object {
-                    name: prop_name,
+                    name: prop_name.to_owned(),
                     class_name: pkg_idx.to_string(),
                 }
             }
             _ => {
                 advance(&mut cur, prop_size.max(0) as u64)?;
-                ParsedProperty::Skipped { name: prop_name }
+                ParsedProperty::Skipped {
+                    name: prop_name.to_owned(),
+                }
             }
         };
 
