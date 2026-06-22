@@ -6,111 +6,17 @@ use anyhow::Context;
 use crate::FormatKind;
 use crate::config::{CheckSeverity, RulesConfig};
 
-/// Severity as serialized in the violation baseline. Only `Error` participates in
-/// regression detection; `Warn` is recorded but never gates.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
-#[serde(rename_all = "lowercase")]
-enum ViolationSeverity {
-    Error,
-    Warn,
-}
+mod baseline;
+mod output;
 
-/// A single check finding in structured form, used for the baseline JSON.
-/// `file` is intentionally omitted to keep comparisons path-stable across machines.
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-struct Violation {
-    severity: ViolationSeverity,
-    rule: String,
-    asset_path: String,
-    message: String,
-}
-
-#[derive(Debug, serde::Serialize, serde::Deserialize)]
-struct BaselineSummary {
-    errors: usize,
-    warnings: usize,
-}
-
-#[derive(Debug, serde::Serialize, serde::Deserialize)]
-struct BaselineDoc {
-    version: u32,
-    git_commit: String,
-    summary: BaselineSummary,
-    violations: Vec<Violation>,
-}
-
-fn to_violation_severity(s: CheckSeverity) -> ViolationSeverity {
-    match s {
-        CheckSeverity::Error => ViolationSeverity::Error,
-        _ => ViolationSeverity::Warn,
-    }
-}
-
-fn violation_key(v: &Violation) -> (String, String) {
-    (v.rule.clone(), v.asset_path.clone())
-}
-
-/// New error-severity violations present in `current` but not in `baseline`,
-/// matched by (rule, asset_path). Warnings are excluded on both sides.
-fn compute_regressions(baseline: &[Violation], current: &[Violation]) -> Vec<Violation> {
-    let baseline_errors: HashSet<(String, String)> = baseline
-        .iter()
-        .filter(|v| v.severity == ViolationSeverity::Error)
-        .map(violation_key)
-        .collect();
-    current
-        .iter()
-        .filter(|v| v.severity == ViolationSeverity::Error)
-        .filter(|v| !baseline_errors.contains(&violation_key(v)))
-        .cloned()
-        .collect()
-}
-
-fn load_baseline(path: &Path) -> anyhow::Result<BaselineDoc> {
-    let s = std::fs::read_to_string(path)
-        .with_context(|| format!("failed to read baseline file: {}", path.display()))?;
-    serde_json::from_str(&s).with_context(|| format!("invalid baseline JSON: {}", path.display()))
-}
-
-fn save_baseline_file(
-    path: &Path,
-    project_dir: &Path,
-    violations: Vec<Violation>,
-    errors: usize,
-    warnings: usize,
-) -> anyhow::Result<()> {
-    if let Some(parent) = path.parent()
-        && !parent.as_os_str().is_empty()
-    {
-        std::fs::create_dir_all(parent).with_context(|| {
-            format!("failed to create baseline directory: {}", parent.display())
-        })?;
-    }
-    let doc = BaselineDoc {
-        version: 1,
-        git_commit: git_commit(project_dir),
-        summary: BaselineSummary { errors, warnings },
-        violations,
-    };
-    let json = serde_json::to_string_pretty(&doc).context("failed to serialize baseline JSON")?;
-    std::fs::write(path, json)
-        .with_context(|| format!("failed to write baseline file: {}", path.display()))?;
-    eprintln!("Saved baseline to {}", path.display());
-    Ok(())
-}
-
-/// `git rev-parse HEAD` in `project_dir`; empty string if git is unavailable or fails.
-fn git_commit(project_dir: &Path) -> String {
-    std::process::Command::new("git")
-        .args(["rev-parse", "HEAD"])
-        .current_dir(project_dir)
-        .output()
-        .ok()
-        .filter(|o| o.status.success())
-        .and_then(|o| String::from_utf8(o.stdout).ok())
-        .map(|s| s.trim().to_owned())
-        .unwrap_or_default()
-}
+use baseline::{
+    Violation, ViolationSeverity, compute_regressions, load_baseline, save_baseline_file,
+    to_violation_severity,
+};
+use output::{
+    CheckOutput, CheckResultJson, build_check_findings, check_display_name, check_full_command,
+    fail_on_label, finding_lines, is_full_output, severity_label,
+};
 
 const ALL_CHECKS: &[&str] = &[
     "dead-assets",
@@ -121,7 +27,7 @@ const ALL_CHECKS: &[&str] = &[
     "duplicates",
 ];
 
-const CHECK_SAMPLE_LIMIT: usize = 5;
+pub(super) const CHECK_SAMPLE_LIMIT: usize = 5;
 
 struct CheckResult {
     name: &'static str,
@@ -140,14 +46,6 @@ impl CheckResult {
     }
 }
 
-#[derive(serde::Serialize)]
-struct CheckResultJson {
-    name: String,
-    severity: &'static str,
-    passed: bool,
-    findings: Vec<String>,
-}
-
 // Built-in default severity for each check when no `[rules]` override is set, plus
 // the mapping from check name to `[rules]` key. `lint` / `budget` are not gated by
 // `[rules]` (they have their own severity model) and always block on findings.
@@ -159,29 +57,6 @@ fn effective_severity(name: &str, rules: &RulesConfig) -> CheckSeverity {
         "redirectors" => rules.redirectors.unwrap_or(CheckSeverity::Warn),
         _ => CheckSeverity::Error,
     }
-}
-
-fn severity_label(severity: CheckSeverity) -> &'static str {
-    match severity {
-        CheckSeverity::Error => "error",
-        CheckSeverity::Warn => "warn",
-        CheckSeverity::Off => "off",
-    }
-}
-
-fn fail_on_label(fail_on: crate::FailOn) -> &'static str {
-    match fail_on {
-        crate::FailOn::Error => "error",
-        crate::FailOn::Warn => "warn",
-        crate::FailOn::Never => "never",
-    }
-}
-
-#[derive(serde::Serialize)]
-struct CheckOutput {
-    passed: bool,
-    fail_on: &'static str,
-    checks: Vec<CheckResultJson>,
 }
 
 /// Runs an mtime delta scan before checks unless `skip_scan` is set, so `check` works
@@ -757,93 +632,9 @@ pub fn handle_check_with_baseline(
     Ok(exit)
 }
 
-fn check_display_name(name: &str) -> &str {
-    match name {
-        "dead-assets" => "Dead assets",
-        "cycles" => "Circular deps",
-        "redirectors" => "Redirectors",
-        "lint" => "Lint",
-        "budget" => "Budget",
-        "duplicates" => "Duplicates",
-        _ => name,
-    }
-}
-
-fn check_full_command(name: &str) -> &str {
-    match name {
-        "dead-assets" => "dead-assets",
-        "cycles" => "graph --cycles-only",
-        "redirectors" => "redirectors",
-        "lint" => "lint",
-        "budget" => "budget",
-        "duplicates" => "duplicates",
-        _ => name,
-    }
-}
-
-/// Converts the aggregated check violations into SARIF findings: severity → level, and each
-/// `asset_path` resolved to a project-relative file uri via the asset table (None when the
-/// violation has no backing file, e.g. a duplicate group name).
-fn build_check_findings(
-    violations: &[Violation],
-    assets: &[uasset_lens_asset_db::AssetRecord],
-    project_dir: &Path,
-) -> Vec<crate::sarif::SarifFinding> {
-    let path_lookup: HashMap<&str, &Path> = assets
-        .iter()
-        .map(|r| (r.asset_path.as_str(), r.file_path.as_path()))
-        .collect();
-    violations
-        .iter()
-        .map(|v| crate::sarif::SarifFinding {
-            rule_id: v.rule.clone(),
-            level: match v.severity {
-                ViolationSeverity::Error => crate::sarif::SarifLevel::Error,
-                ViolationSeverity::Warn => crate::sarif::SarifLevel::Warning,
-            },
-            message: v.message.clone(),
-            uri: path_lookup
-                .get(v.asset_path.as_str())
-                .map(|p| crate::rel_path_for_annotation(p, project_dir)),
-        })
-        .collect()
-}
-
-// The text output caps each check at `CHECK_SAMPLE_LIMIT` items; `--verbose` and the
-// github-actions format always print everything (CI annotation streams must not truncate).
-fn is_full_output(verbose: bool, format: &FormatKind) -> bool {
-    verbose || matches!(format, FormatKind::GithubActions)
-}
-
-/// Renders one check's finding lines: up to `CHECK_SAMPLE_LIMIT` items, then a
-/// "... and N more" line, unless `full_output` shows all items with no truncation line.
-fn finding_lines(
-    findings: &[String],
-    full_output: bool,
-    full_command: &str,
-    project_dir: &Path,
-) -> Vec<String> {
-    let end = if full_output {
-        findings.len()
-    } else {
-        findings.len().min(CHECK_SAMPLE_LIMIT)
-    };
-    let mut lines: Vec<String> = findings[..end]
-        .iter()
-        .map(|f| format!("      {f}"))
-        .collect();
-    if !full_output && findings.len() > CHECK_SAMPLE_LIMIT {
-        let remaining = findings.len() - CHECK_SAMPLE_LIMIT;
-        lines.push(format!(
-            "      ... and {remaining} more. Run `uasset-lens {full_command} {}` for the full list.",
-            project_dir.display(),
-        ));
-    }
-    lines
-}
-
 #[cfg(test)]
 mod tests {
+    use super::baseline::{BaselineDoc, BaselineSummary};
     use super::*;
     use crate::commands::{make_meta, test_db_in_tempdir};
     use uasset_lens_shared::{AssetPath, AssetType};
@@ -1935,44 +1726,6 @@ mod tests {
         let _ = std::fs::remove_dir_all(&dir);
     }
 
-    // --- #278: verbose / github-actions full output ---
-
-    #[test]
-    fn finding_lines_should_truncate_to_sample_limit_with_more_line_when_not_full() {
-        let findings: Vec<String> = (0..10).map(|i| format!("/Game/A{i}")).collect();
-        let lines = finding_lines(&findings, false, "dead-assets", std::path::Path::new("./P"));
-        // 5 sample items + 1 truncation line
-        assert_eq!(lines.len(), 6);
-        assert!(
-            lines.last().unwrap().contains("... and 5 more"),
-            "non-full output must end with a truncation line"
-        );
-        assert_eq!(
-            lines.iter().filter(|l| l.contains("/Game/A")).count(),
-            5,
-            "only CHECK_SAMPLE_LIMIT items are shown"
-        );
-    }
-
-    #[test]
-    fn finding_lines_should_show_all_items_without_more_line_when_full() {
-        let findings: Vec<String> = (0..10).map(|i| format!("/Game/A{i}")).collect();
-        let lines = finding_lines(&findings, true, "dead-assets", std::path::Path::new("./P"));
-        assert_eq!(lines.len(), 10);
-        assert!(
-            lines.iter().all(|l| !l.contains("...")),
-            "full output must not contain a truncation line"
-        );
-    }
-
-    #[test]
-    fn is_full_output_should_be_true_for_github_actions_regardless_of_verbose() {
-        assert!(is_full_output(false, &FormatKind::GithubActions));
-        assert!(is_full_output(true, &FormatKind::GithubActions));
-        assert!(!is_full_output(false, &FormatKind::Text));
-        assert!(is_full_output(true, &FormatKind::Text));
-    }
-
     #[test]
     fn handle_check_sarif_should_emit_and_keep_blocking_exit_code() {
         let (dir, db_path) = test_db_in_tempdir("check292_sarif");
@@ -1983,47 +1736,5 @@ mod tests {
             handle_check(&dir, &[], &[], false, &db_path, &cfg, &FormatKind::Sarif).unwrap();
         assert_eq!(result, 1, "sarif mode keeps the format-agnostic exit code");
         let _ = std::fs::remove_dir_all(&dir);
-    }
-
-    #[test]
-    fn build_check_findings_should_map_severity_and_resolve_uri() {
-        use std::path::PathBuf;
-        use uasset_lens_shared::{AssetPath, AssetType};
-        let assets = vec![uasset_lens_asset_db::AssetRecord {
-            id: 0,
-            asset_path: AssetPath::new("/Game/Rock").unwrap(),
-            file_path: PathBuf::from("/proj/Content/Rock.uasset"),
-            asset_type: AssetType::Texture2D,
-            file_size: 0,
-            last_modified: 0,
-        }];
-        let violations = vec![
-            Violation {
-                severity: ViolationSeverity::Error,
-                rule: "naming/prefix".to_owned(),
-                asset_path: "/Game/Rock".to_owned(),
-                message: "m".to_owned(),
-            },
-            Violation {
-                severity: ViolationSeverity::Warn,
-                rule: "dead-assets".to_owned(),
-                asset_path: "/Game/Rock".to_owned(),
-                message: "m".to_owned(),
-            },
-            Violation {
-                severity: ViolationSeverity::Warn,
-                rule: "duplicate-assets".to_owned(),
-                asset_path: "Rock".to_owned(), // group name, not a real asset path
-                message: "m".to_owned(),
-            },
-        ];
-        let f = build_check_findings(&violations, &assets, std::path::Path::new("/proj"));
-        assert!(matches!(f[0].level, crate::sarif::SarifLevel::Error));
-        assert_eq!(f[0].uri.as_deref(), Some("Content/Rock.uasset"));
-        // A graph-only finding (dead-assets) still resolves its project-relative file uri.
-        assert!(matches!(f[1].level, crate::sarif::SarifLevel::Warning));
-        assert_eq!(f[1].uri.as_deref(), Some("Content/Rock.uasset"));
-        // A duplicate group name has no backing file → no location.
-        assert!(f[2].uri.is_none());
     }
 }
