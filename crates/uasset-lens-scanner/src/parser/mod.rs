@@ -69,7 +69,8 @@ pub(crate) fn export_class_name<'a>(
     if class_index >= 0 {
         return None;
     }
-    let imp_i = (-class_index - 1) as usize;
+    // Widen before negating: -class_index overflows i32 when class_index == i32::MIN.
+    let imp_i = (-(i64::from(class_index)) - 1) as usize;
     import_class_name_idxs
         .get(imp_i)
         .and_then(|&idx| name_table.get(idx))
@@ -123,6 +124,13 @@ mod tests {
     fn export_class_name_should_return_none_when_entry_pos_out_of_bounds() {
         // Only 3 bytes available but the ClassIndex read needs 4 → None (no panic)
         let data = [0u8, 0, 0];
+        assert_eq!(export_class_name(&data, 0, &[], &[]), None);
+    }
+
+    #[test]
+    fn export_class_name_should_return_none_for_i32_min_class_index() {
+        // ClassIndex = i32::MIN must not overflow on negation in debug builds → None (no panic)
+        let data = i32::MIN.to_le_bytes().to_vec();
         assert_eq!(export_class_name(&data, 0, &[], &[]), None);
     }
 }
