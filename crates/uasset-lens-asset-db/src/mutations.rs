@@ -9,35 +9,37 @@ fn upsert_asset_conn(
     meta: &uasset_lens_scanner::AssetMetadata,
 ) -> Result<i64, DbError> {
     let asset_type = serde_json::to_string(&meta.asset_type)?;
-    conn.execute(
+    // prepare_cached so the bulk `upsert_all` loop reuses these statements instead of
+    // re-parsing the SQL on every asset.
+    conn.prepare_cached(
         "INSERT OR REPLACE INTO assets \
          (asset_path, file_path, asset_type, file_size, last_modified) \
          VALUES (?1, ?2, ?3, ?4, ?5)",
-        rusqlite::params![
-            meta.asset_path.as_str(),
-            meta.file_path.to_string_lossy().as_ref(),
-            asset_type,
-            meta.file_size as i64,
-            meta.last_modified as i64,
-        ],
-    )?;
+    )?
+    .execute(rusqlite::params![
+        meta.asset_path.as_str(),
+        meta.file_path.to_string_lossy().as_ref(),
+        asset_type,
+        meta.file_size as i64,
+        meta.last_modified as i64,
+    ])?;
     let id = conn.last_insert_rowid();
 
     // INSERT OR REPLACE on assets cascade-deletes the old blueprint_metrics row;
     // re-insert if the scan produced metrics for this asset.
     if let Some(ref bm) = meta.blueprint_metrics {
-        conn.execute(
+        conn.prepare_cached(
             "INSERT INTO blueprint_metrics \
              (asset_id, node_count, event_tick, cast_count, dep_depth) \
              VALUES (?1, ?2, ?3, ?4, ?5)",
-            rusqlite::params![
-                id,
-                bm.node_count as i64,
-                bm.event_tick_count as i64,
-                bm.cast_count as i64,
-                bm.dependency_depth as i64,
-            ],
-        )?;
+        )?
+        .execute(rusqlite::params![
+            id,
+            bm.node_count as i64,
+            bm.event_tick_count as i64,
+            bm.cast_count as i64,
+            bm.dependency_depth as i64,
+        ])?;
     }
 
     Ok(id)
@@ -56,29 +58,32 @@ impl AssetDb {
         assets: &[uasset_lens_scanner::AssetMetadata],
     ) -> Result<(), DbError> {
         let tx = self.conn.transaction()?;
-        for meta in assets {
-            let id = upsert_asset_conn(&tx, meta)?;
-            // INSERT OR REPLACE on assets cascade-deletes old dependencies via ON DELETE CASCADE;
-            // this explicit DELETE ensures a clean slate even if the rowid is reused.
-            tx.execute("DELETE FROM dependencies WHERE from_id = ?1", [id])?;
-            let mut seen = std::collections::HashSet::new();
-            for dep in &meta.dependencies {
-                if seen.insert(dep.as_str()) {
-                    tx.execute(
-                        "INSERT INTO dependencies (from_id, to_path, is_soft) VALUES (?1, ?2, 0)",
-                        rusqlite::params![id, dep.as_str()],
-                    )?;
+        {
+            // Prepare the per-row statements once and reuse them across every asset; re-preparing
+            // inside the loop would re-parse and re-plan the SQL on each of ~1M dependency rows.
+            let mut del = tx.prepare_cached("DELETE FROM dependencies WHERE from_id = ?1")?;
+            let mut ins = tx.prepare_cached(
+                "INSERT INTO dependencies (from_id, to_path, is_soft) VALUES (?1, ?2, ?3)",
+            )?;
+            for meta in assets {
+                let id = upsert_asset_conn(&tx, meta)?;
+                // INSERT OR REPLACE on assets cascade-deletes old dependencies via ON DELETE
+                // CASCADE; this explicit DELETE ensures a clean slate even if the rowid is reused.
+                del.execute([id])?;
+                let mut seen = std::collections::HashSet::new();
+                for dep in &meta.dependencies {
+                    if seen.insert(dep.as_str()) {
+                        ins.execute(rusqlite::params![id, dep.as_str(), 0])?;
+                    }
                 }
-            }
-            for dep in &meta.soft_dependencies {
-                if seen.insert(dep.as_str()) {
-                    tx.execute(
-                        "INSERT INTO dependencies (from_id, to_path, is_soft) VALUES (?1, ?2, 1)",
-                        rusqlite::params![id, dep.as_str()],
-                    )?;
+                for dep in &meta.soft_dependencies {
+                    if seen.insert(dep.as_str()) {
+                        ins.execute(rusqlite::params![id, dep.as_str(), 1])?;
+                    }
                 }
             }
         }
+        // del/ins are dropped at the block end so `tx.commit()` can consume `tx`.
         tx.commit()?;
         Ok(())
     }
@@ -349,6 +354,35 @@ mod tests {
         assert_eq!(edges.len(), 1);
         assert_eq!(edges[0].0.as_str(), "/Game/A");
         assert_eq!(edges[0].1.as_str(), "/Game/Dep");
+    }
+
+    #[test]
+    fn upsert_all_should_store_hard_and_soft_dependencies_with_is_soft_flag() {
+        let mut db = AssetDb::open(Path::new(":memory:")).unwrap();
+        let assets = vec![uasset_lens_scanner::AssetMetadata {
+            file_path: PathBuf::from("/proj/Content/BP_Test.uasset"),
+            file_size: 1024,
+            last_modified: 100,
+            dependencies: vec![AssetPath::new("/Game/Hard").unwrap()],
+            soft_dependencies: vec![AssetPath::new("/Game/Soft").unwrap()],
+            ..uasset_lens_scanner::make_meta("/Game/BP_Test", AssetType::Blueprint)
+        }];
+        db.upsert_all(&assets).unwrap();
+
+        // is_soft is now a bound parameter (0 for hard, 1 for soft) rather than a literal in the SQL.
+        let mut rows: Vec<(String, i64)> = db
+            .conn
+            .prepare("SELECT to_path, is_soft FROM dependencies ORDER BY to_path")
+            .unwrap()
+            .query_map([], |r| Ok((r.get(0)?, r.get(1)?)))
+            .unwrap()
+            .map(Result::unwrap)
+            .collect();
+        rows.sort();
+        assert_eq!(
+            rows,
+            vec![("/Game/Hard".to_string(), 0), ("/Game/Soft".to_string(), 1),]
+        );
     }
 
     #[test]
