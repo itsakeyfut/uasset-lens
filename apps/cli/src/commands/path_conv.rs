@@ -34,10 +34,7 @@ pub fn handle_path_conv(
                 input: input.to_owned(),
                 output,
             };
-            println!(
-                "{}",
-                serde_json::to_string_pretty(&out).context("Failed to serialize path output")?
-            );
+            crate::emit_json(&out, "Failed to serialize path output")?;
         }
         FormatKind::GithubActions | FormatKind::Text => println!("{output}"),
     }

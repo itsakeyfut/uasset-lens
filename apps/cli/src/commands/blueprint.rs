@@ -1,4 +1,3 @@
-use std::collections::HashMap;
 use std::path::Path;
 
 use anyhow::Context;
@@ -46,10 +45,7 @@ pub fn handle_blueprint(
             let assets = db
                 .all_assets()
                 .context("Failed to read assets from database")?;
-            let path_lookup: HashMap<&str, &std::path::Path> = assets
-                .iter()
-                .map(|r| (r.asset_path.as_str(), r.file_path.as_path()))
-                .collect();
+            let path_lookup = crate::path_lookup(&assets);
             for e in &entries {
                 let rel = crate::rel_path_for_annotation(
                     path_lookup
@@ -70,11 +66,7 @@ pub fn handle_blueprint(
             return Ok(0);
         }
         FormatKind::Json => {
-            println!(
-                "{}",
-                serde_json::to_string_pretty(&entries)
-                    .context("Failed to serialize blueprint output to JSON")?
-            );
+            crate::emit_json(&entries, "Failed to serialize blueprint output to JSON")?;
         }
         FormatKind::Text => {
             println!("Blueprint Complexity Report");

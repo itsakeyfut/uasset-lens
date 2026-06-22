@@ -53,20 +53,12 @@ pub fn handle_deps(
                     "transitive": transitive_count,
                     "total_size_bytes": total_size,
                 });
-                println!(
-                    "{}",
-                    serde_json::to_string_pretty(&stats)
-                        .context("Failed to serialize deps stats to JSON")?
-                );
+                crate::emit_json(&stats, "Failed to serialize deps stats to JSON")?;
             } else {
                 let mut in_path = HashSet::new();
                 let root_node =
                     build_json_node(&graph, &asset_map, &target, &mut in_path, 0, max_depth);
-                println!(
-                    "{}",
-                    serde_json::to_string_pretty(&root_node)
-                        .context("Failed to serialize deps tree to JSON")?
-                );
+                crate::emit_json(&root_node, "Failed to serialize deps tree to JSON")?;
             }
         }
         FormatKind::GithubActions | FormatKind::Text => {

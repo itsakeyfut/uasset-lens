@@ -55,11 +55,14 @@ pub(crate) fn handle_init(
 
     if config_path.exists() && !force {
         if json {
-            print_json(&serde_json::json!({
-                "written": false,
-                "path": ".uasset-lens.toml",
-                "error": "config_exists",
-            }))?;
+            crate::emit_json(
+                &serde_json::json!({
+                    "written": false,
+                    "path": ".uasset-lens.toml",
+                    "error": "config_exists",
+                }),
+                "Failed to serialize init output to JSON",
+            )?;
         } else {
             eprintln!("error: .uasset-lens.toml already exists. Use --force to overwrite.");
         }
@@ -79,25 +82,20 @@ pub(crate) fn handle_init(
         .with_context(|| format!("failed to write {}", config_path.display()))?;
 
     if json {
-        print_json(&serde_json::json!({
-            "written": true,
-            "path": ".uasset-lens.toml",
-            "preset": preset.name(),
-        }))?;
+        crate::emit_json(
+            &serde_json::json!({
+                "written": true,
+                "path": ".uasset-lens.toml",
+                "preset": preset.name(),
+            }),
+            "Failed to serialize init output to JSON",
+        )?;
     } else {
         println!("Wrote .uasset-lens.toml (preset: {})", preset.name());
         println!();
         println!("Tip: add .uasset-lens/ to your .gitignore to exclude the local database.");
     }
     Ok(0)
-}
-
-fn print_json(value: &serde_json::Value) -> anyhow::Result<()> {
-    println!(
-        "{}",
-        serde_json::to_string_pretty(value).context("Failed to serialize init output to JSON")?
-    );
-    Ok(())
 }
 
 /// Interactive scale + confirmation prompts (stderr). Returns `None` when the user declines.

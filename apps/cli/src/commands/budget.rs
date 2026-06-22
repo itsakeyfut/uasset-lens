@@ -1,4 +1,4 @@
-use std::collections::{BTreeMap, HashMap};
+use std::collections::BTreeMap;
 use std::path::Path;
 
 use anyhow::Context;
@@ -57,10 +57,7 @@ pub fn handle_budget(
             println!("{}", crate::sarif::to_sarif_json(&findings)?);
         }
         FormatKind::GithubActions => {
-            let path_lookup: HashMap<&str, &std::path::Path> = assets
-                .iter()
-                .map(|r| (r.asset_path.as_str(), r.file_path.as_path()))
-                .collect();
+            let path_lookup = crate::path_lookup(&assets);
             for e in &entries {
                 let rel = crate::rel_path_for_annotation(
                     path_lookup
@@ -88,11 +85,7 @@ pub fn handle_budget(
                 violations: entries,
                 total,
             };
-            println!(
-                "{}",
-                serde_json::to_string_pretty(&output)
-                    .context("Failed to serialize budget output to JSON")?
-            );
+            crate::emit_json(&output, "Failed to serialize budget output to JSON")?;
         }
         FormatKind::Text => {
             println!("Budget Report");
@@ -148,10 +141,7 @@ fn build_budget_findings(
     assets: &[uasset_lens_asset_db::AssetRecord],
     project_dir: &std::path::Path,
 ) -> Vec<crate::sarif::SarifFinding> {
-    let path_lookup: HashMap<&str, &std::path::Path> = assets
-        .iter()
-        .map(|r| (r.asset_path.as_str(), r.file_path.as_path()))
-        .collect();
+    let path_lookup = crate::path_lookup(assets);
     violations
         .iter()
         .map(|v| crate::sarif::SarifFinding {

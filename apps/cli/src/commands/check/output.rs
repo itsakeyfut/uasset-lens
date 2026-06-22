@@ -1,4 +1,3 @@
-use std::collections::HashMap;
 use std::path::Path;
 
 use crate::FormatKind;
@@ -70,10 +69,7 @@ pub(super) fn build_check_findings(
     assets: &[uasset_lens_asset_db::AssetRecord],
     project_dir: &Path,
 ) -> Vec<crate::sarif::SarifFinding> {
-    let path_lookup: HashMap<&str, &Path> = assets
-        .iter()
-        .map(|r| (r.asset_path.as_str(), r.file_path.as_path()))
-        .collect();
+    let path_lookup = crate::path_lookup(assets);
     violations
         .iter()
         .map(|v| crate::sarif::SarifFinding {

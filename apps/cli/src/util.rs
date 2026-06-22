@@ -65,11 +65,6 @@ pub(crate) fn maybe_hint_github_actions(format: &FormatKind, quiet: bool) {
     }
 }
 
-/// Error returned when `--format sarif` is used on a command that does not produce violations.
-pub(crate) fn sarif_not_supported() -> anyhow::Error {
-    anyhow::anyhow!("--format sarif is only supported by the check, lint, and budget commands")
-}
-
 pub(crate) fn rel_path_for_annotation(file_path: &Path, project_dir: &Path) -> String {
     file_path
         .strip_prefix(project_dir)

@@ -159,11 +159,7 @@ pub fn handle_stats(
                 largest,
                 graph: graph_stat,
             };
-            println!(
-                "{}",
-                serde_json::to_string_pretty(&output)
-                    .context("Failed to serialize stats output to JSON")?
-            );
+            crate::emit_json(&output, "Failed to serialize stats output to JSON")?;
         }
         FormatKind::GithubActions | FormatKind::Text => {
             let project_name = project_dir

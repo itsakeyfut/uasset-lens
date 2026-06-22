@@ -3,7 +3,7 @@ use clap::Parser;
 use crate::cli::{Cli, Commands, ConfigCommand, FormatKind};
 use crate::commands;
 use crate::resolve_db_path;
-use crate::util::sarif_not_supported;
+use crate::sarif_not_supported;
 
 pub fn run() -> i32 {
     run_with(Cli::parse())

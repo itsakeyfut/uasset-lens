@@ -1,7 +1,6 @@
 ﻿use std::collections::HashSet;
 use std::path::Path;
 
-use anyhow::Context;
 use uasset_lens_shared::AssetPath;
 
 use crate::FormatKind;
@@ -70,11 +69,7 @@ pub fn handle_impact(
                     target: target.as_str().to_owned(),
                     children,
                 };
-                println!(
-                    "{}",
-                    serde_json::to_string_pretty(&out)
-                        .context("Failed to serialize impact tree output to JSON")?
-                );
+                crate::emit_json(&out, "Failed to serialize impact tree output to JSON")?;
             }
             FormatKind::GithubActions | FormatKind::Text => {
                 println!("{}  [target]", target.as_str());
@@ -111,11 +106,7 @@ pub fn handle_impact(
                     .collect(),
                 total,
             };
-            println!(
-                "{}",
-                serde_json::to_string_pretty(&output)
-                    .context("Failed to serialize impact output to JSON")?
-            );
+            crate::emit_json(&output, "Failed to serialize impact output to JSON")?;
         }
         FormatKind::GithubActions | FormatKind::Text => {
             println!("  Impact Analysis: {}", target.as_str());
