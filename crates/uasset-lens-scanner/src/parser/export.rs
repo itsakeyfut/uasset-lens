@@ -48,24 +48,11 @@ pub fn parse_export_table(
         if entry_pos + 4 > data.len() {
             return Err(ScanError::UnexpectedEof);
         }
-        let class_index = i32::from_le_bytes([
-            data[entry_pos],
-            data[entry_pos + 1],
-            data[entry_pos + 2],
-            data[entry_pos + 3],
-        ]);
-
-        if class_index >= 0 {
-            continue;
-        }
-
-        let imp_i = (-class_index - 1) as usize;
-        if let Some(class_name) = import_class_name_idxs
-            .get(imp_i)
-            .and_then(|&idx| name_table.get(idx))
+        if let Some(class_name) =
+            super::export_class_name(data, entry_pos, import_class_name_idxs, name_table)
         {
             if first_class_name.is_none() {
-                first_class_name = Some(class_name.clone());
+                first_class_name = Some(class_name.to_owned());
             }
             if let Some(asset_type) = class_name_to_asset_type(class_name) {
                 return Ok(asset_type);

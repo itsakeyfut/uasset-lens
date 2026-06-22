@@ -38,22 +38,9 @@ pub(crate) fn extract_anim_montage_soft_refs(
             break;
         }
 
-        let class_index = i32::from_le_bytes([
-            data[entry_pos],
-            data[entry_pos + 1],
-            data[entry_pos + 2],
-            data[entry_pos + 3],
-        ]);
-        if class_index >= 0 {
-            continue;
-        }
-
-        let imp_i = (-class_index - 1) as usize;
-        let class_name = import_class_name_idxs
-            .get(imp_i)
-            .and_then(|&idx| name_table.get(idx))
-            .map(String::as_str)
-            .unwrap_or("");
+        let class_name =
+            crate::parser::export_class_name(data, entry_pos, import_class_name_idxs, name_table)
+                .unwrap_or("");
         if class_name != "AnimMontage" {
             continue;
         }
