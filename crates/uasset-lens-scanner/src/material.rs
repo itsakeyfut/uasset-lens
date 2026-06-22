@@ -32,21 +32,9 @@ pub(crate) fn extract_texture_sample_count(
         if entry_pos + 4 > data.len() {
             break;
         }
-        let class_index = i32::from_le_bytes([
-            data[entry_pos],
-            data[entry_pos + 1],
-            data[entry_pos + 2],
-            data[entry_pos + 3],
-        ]);
-        if class_index >= 0 {
-            continue;
-        }
-        let imp_i = (-class_index - 1) as usize;
-        let matches = import_class_name_idxs
-            .get(imp_i)
-            .and_then(|&idx| name_table.get(idx))
-            .map(|s| s == "MaterialExpressionTextureSample")
-            .unwrap_or(false);
+        let matches =
+            crate::parser::export_class_name(data, entry_pos, import_class_name_idxs, name_table)
+                .is_some_and(|n| n == "MaterialExpressionTextureSample");
         if matches {
             count += 1;
         }

@@ -3,6 +3,7 @@ use std::io::Cursor;
 use uasset_lens_shared::{AssetPath, AssetType};
 
 use crate::ScanError;
+use crate::parser::{advance, export_class_name, map_io, skip_fstring};
 
 pub(crate) fn is_data_table_asset(asset_type: &AssetType) -> bool {
     matches!(asset_type, AssetType::DataTable)
@@ -36,22 +37,8 @@ pub(crate) fn extract_data_table_soft_refs(
             break;
         }
 
-        let class_index = i32::from_le_bytes([
-            data[entry_pos],
-            data[entry_pos + 1],
-            data[entry_pos + 2],
-            data[entry_pos + 3],
-        ]);
-        if class_index >= 0 {
-            continue;
-        }
-
-        let imp_i = (-class_index - 1) as usize;
-        let class_name = import_class_name_idxs
-            .get(imp_i)
-            .and_then(|&idx| name_table.get(idx))
-            .map(String::as_str)
-            .unwrap_or("");
+        let class_name =
+            export_class_name(data, entry_pos, import_class_name_idxs, name_table).unwrap_or("");
         if class_name != "DataTable" {
             continue;
         }
@@ -227,35 +214,6 @@ fn scan_props(
                 advance(cur, prop_size.max(0) as u64)?;
             }
         }
-    }
-}
-
-fn advance(cur: &mut Cursor<&[u8]>, n: u64) -> Result<(), ScanError> {
-    let new_pos = cur.position() + n;
-    if new_pos > cur.get_ref().len() as u64 {
-        return Err(ScanError::UnexpectedEof);
-    }
-    cur.set_position(new_pos);
-    Ok(())
-}
-
-fn skip_fstring(cur: &mut Cursor<&[u8]>) -> Result<(), ScanError> {
-    let len = cur.read_i32::<LittleEndian>().map_err(map_io)?;
-    let byte_count: u64 = if len == 0 {
-        0
-    } else if len < 0 {
-        (-len as u64) * 2
-    } else {
-        len as u64
-    };
-    advance(cur, byte_count)
-}
-
-fn map_io(e: std::io::Error) -> ScanError {
-    if e.kind() == std::io::ErrorKind::UnexpectedEof {
-        ScanError::UnexpectedEof
-    } else {
-        ScanError::Io(e)
     }
 }
 
