@@ -38,6 +38,20 @@ impl AssetPath {
         let canonical_root = content_root
             .canonicalize()
             .map_err(|_| AssetPathError::NotUnderContentRoot)?;
+        Self::from_fs_path_with_canonical_root(&canonical_root, file_path)
+    }
+
+    /// Like [`from_fs_path`](Self::from_fs_path) but takes an already-canonicalized content root,
+    /// skipping the root `canonicalize()` syscall. Hot-path callers (the scanner's per-file loop)
+    /// canonicalize the root once per scan and reuse it across every asset.
+    ///
+    /// The caller is responsible for passing a canonical root; a non-canonical root only ever
+    /// causes `strip_prefix` to over-reject (returning `NotUnderContentRoot`), never to admit a
+    /// path that escapes the root, so the traversal defense degrades safely.
+    pub fn from_fs_path_with_canonical_root(
+        canonical_root: &Path,
+        file_path: &Path,
+    ) -> Result<Self, AssetPathError> {
         // Resolve symlinks to verify the real file lives under content_root.
         // For files that no longer exist on disk (stale assets being cleaned up),
         // canonicalize the parent directory instead so the prefix still aligns with
@@ -50,7 +64,7 @@ impl AssetPath {
                 .unwrap_or_else(|| file_path.to_path_buf())
         });
         let relative = canonical_file
-            .strip_prefix(&canonical_root)
+            .strip_prefix(canonical_root)
             .map_err(|_| AssetPathError::NotUnderContentRoot)?;
 
         let without_ext = relative.with_extension("");
@@ -143,6 +157,40 @@ mod tests {
         std::fs::write(&file_path, b"").unwrap();
 
         let result = AssetPath::from_fs_path(&content_root, &file_path);
+        let _ = std::fs::remove_dir_all(&dir);
+        assert_eq!(result, Err(AssetPathError::NotUnderContentRoot));
+    }
+
+    #[test]
+    fn from_fs_path_with_canonical_root_should_match_from_fs_path() {
+        let dir = std::env::temp_dir().join(format!("uasset_canon_match_{}", std::process::id()));
+        let content_root = dir.join("Content");
+        let chars_dir = content_root.join("Characters");
+        std::fs::create_dir_all(&chars_dir).unwrap();
+        let file_path = chars_dir.join("BP_Player.uasset");
+        std::fs::write(&file_path, b"").unwrap();
+
+        let canonical_root = content_root.canonicalize().unwrap();
+        let via_canonical =
+            AssetPath::from_fs_path_with_canonical_root(&canonical_root, &file_path).unwrap();
+        let via_full = AssetPath::from_fs_path(&content_root, &file_path).unwrap();
+        let _ = std::fs::remove_dir_all(&dir);
+        assert_eq!(via_canonical, via_full);
+        assert_eq!(via_canonical.as_str(), "/Game/Characters/BP_Player");
+    }
+
+    #[test]
+    fn from_fs_path_with_canonical_root_should_reject_path_outside_root() {
+        let dir = std::env::temp_dir().join(format!("uasset_canon_outside_{}", std::process::id()));
+        let content_root = dir.join("Content");
+        let other_dir = dir.join("Other");
+        std::fs::create_dir_all(&content_root).unwrap();
+        std::fs::create_dir_all(&other_dir).unwrap();
+        let file_path = other_dir.join("BP_Player.uasset");
+        std::fs::write(&file_path, b"").unwrap();
+
+        let canonical_root = content_root.canonicalize().unwrap();
+        let result = AssetPath::from_fs_path_with_canonical_root(&canonical_root, &file_path);
         let _ = std::fs::remove_dir_all(&dir);
         assert_eq!(result, Err(AssetPathError::NotUnderContentRoot));
     }

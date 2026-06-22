@@ -1,4 +1,4 @@
-﻿#![doc = include_str!("../README.md")]
+#![doc = include_str!("../README.md")]
 
 mod anim_montage;
 mod blueprint;
@@ -65,17 +65,23 @@ pub fn scan_files_with_progress<F: Fn() + Sync>(
     content_root: &Path,
     on_file: F,
 ) -> ScanResult {
+    // Canonicalize the content root once: the root never changes during a scan, so resolving it
+    // per file inside par_iter would repeat one realpath/stat syscall for every asset (notably
+    // slow on Windows). `None` (root canonicalize failed) falls back to per-file resolution below,
+    // reproducing the prior all-files-skipped behavior for an unresolvable root.
+    let canonical_root = content_root.canonicalize().ok();
     let pairs: Vec<Result<AssetMetadata, SkippedFile>> = files
         .par_iter()
         .map(|path| {
-            let result = scan_single(path, content_root).map_err(|reason| {
-                tracing::warn!(path = %path.display(), reason = %reason, "Skipping file");
-                SkippedFile {
-                    // clone required: SkippedFile owns the path; par_iter yields references
-                    file_path: path.clone(),
-                    reason,
-                }
-            });
+            let result =
+                scan_single(path, content_root, canonical_root.as_deref()).map_err(|reason| {
+                    tracing::warn!(path = %path.display(), reason = %reason, "Skipping file");
+                    SkippedFile {
+                        // clone required: SkippedFile owns the path; par_iter yields references
+                        file_path: path.clone(),
+                        reason,
+                    }
+                });
             on_file();
             result
         })
@@ -92,7 +98,11 @@ pub fn scan_files_with_progress<F: Fn() + Sync>(
     ScanResult { assets, skipped }
 }
 
-fn scan_single(file: &Path, content_root: &Path) -> Result<AssetMetadata, ScanError> {
+fn scan_single(
+    file: &Path,
+    content_root: &Path,
+    canonical_root: Option<&Path>,
+) -> Result<AssetMetadata, ScanError> {
     let fs_meta = std::fs::metadata(file)?;
     let file_size = fs_meta.len();
     let last_modified = fs_meta
@@ -220,7 +230,11 @@ fn scan_single(file: &Path, content_root: &Path) -> Result<AssetMetadata, ScanEr
     soft_dependencies.sort_unstable_by(|a, b| a.as_str().cmp(b.as_str()));
     soft_dependencies.dedup_by(|a, b| a.as_str() == b.as_str());
 
-    let asset_path = AssetPath::from_fs_path(content_root, file)?;
+    let asset_path = match canonical_root {
+        Some(root) => AssetPath::from_fs_path_with_canonical_root(root, file)?,
+        // Root canonicalize failed: fall back to per-file resolution (reproduces prior behavior).
+        None => AssetPath::from_fs_path(content_root, file)?,
+    };
 
     Ok(AssetMetadata {
         asset_path,
