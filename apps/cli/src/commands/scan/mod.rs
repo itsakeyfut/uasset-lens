@@ -234,11 +234,25 @@ pub fn handle_scan(
 
     let total_file_count = all_files.len();
 
-    let paths_to_scan: Vec<PathBuf> = if opts.full_scan {
-        all_files.into_iter().map(|(p, _)| p).collect()
+    let scan_inputs: Vec<uasset_lens_scanner::ScanInput> = if opts.full_scan {
+        all_files
+            .into_iter()
+            .map(|(path, mtime)| uasset_lens_scanner::ScanInput { path, mtime })
+            .collect()
     } else {
-        db.filter_changed(&all_files)
-            .context("Failed to check for changed files")?
+        let changed = db
+            .filter_changed(&all_files)
+            .context("Failed to check for changed files")?;
+        // Reuse the mtime the walk already captured instead of re-stat'ing each changed file.
+        let mtime_of: HashMap<&Path, u64> =
+            all_files.iter().map(|(p, m)| (p.as_path(), *m)).collect();
+        changed
+            .into_iter()
+            .map(|path| {
+                let mtime = mtime_of.get(path.as_path()).copied().unwrap_or(0);
+                uasset_lens_scanner::ScanInput { path, mtime }
+            })
+            .collect()
     };
 
     if !opts.quiet {
@@ -248,7 +262,7 @@ pub fn handle_scan(
                 &content_root,
                 opts.full_scan,
                 total_file_count,
-                paths_to_scan.len()
+                scan_inputs.len()
             )
         );
     }
@@ -259,7 +273,7 @@ pub fn handle_scan(
         opts.no_progress,
         std::io::stderr().is_terminal(),
     ) {
-        let pb = indicatif::ProgressBar::new(paths_to_scan.len() as u64);
+        let pb = indicatif::ProgressBar::new(scan_inputs.len() as u64);
         pb.set_style(
             indicatif::ProgressStyle::with_template(
                 "  {spinner} [{elapsed_precise}] [{bar:30}] {pos}/{len} files (ETA {eta})",
@@ -275,10 +289,9 @@ pub fn handle_scan(
         indicatif::ProgressBar::hidden()
     };
 
-    let result =
-        uasset_lens_scanner::scan_files_with_progress(&paths_to_scan, &content_root, || {
-            progress.inc(1);
-        });
+    let result = uasset_lens_scanner::scan_files_with_progress(&scan_inputs, &content_root, || {
+        progress.inc(1);
+    });
     progress.finish_and_clear();
 
     let new_count = result

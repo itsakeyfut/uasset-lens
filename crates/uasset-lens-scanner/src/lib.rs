@@ -54,14 +54,31 @@ pub struct SkippedFile {
     pub reason: ScanError,
 }
 
+/// A file to scan plus the modification time captured when it was discovered. Threading the
+/// directory walk's mtime through here lets the scanner avoid re-`stat`ing each file for `mtime`.
+#[derive(Debug, Clone)]
+pub struct ScanInput {
+    pub path: PathBuf,
+    pub mtime: u64,
+}
+
 pub fn scan_files(files: &[PathBuf], content_root: &Path) -> ScanResult {
-    scan_files_with_progress(files, content_root, || {})
+    // Convenience for callers that have not already captured mtimes (watcher, git-diff, tests):
+    // stat each file once here to build the `ScanInput`, then scan without a second stat.
+    let inputs: Vec<ScanInput> = files
+        .iter()
+        .map(|p| ScanInput {
+            path: p.clone(),
+            mtime: file_mtime(p),
+        })
+        .collect();
+    scan_files_with_progress(&inputs, content_root, || {})
 }
 
 /// Like [`scan_files`], but invokes `on_file` once as each file finishes parsing. The callback
 /// runs from `rayon` worker threads (hence `Sync`); the CLI uses it to advance a progress bar.
 pub fn scan_files_with_progress<F: Fn() + Sync>(
-    files: &[PathBuf],
+    inputs: &[ScanInput],
     content_root: &Path,
     on_file: F,
 ) -> ScanResult {
@@ -70,15 +87,15 @@ pub fn scan_files_with_progress<F: Fn() + Sync>(
     // slow on Windows). `None` (root canonicalize failed) falls back to per-file resolution below,
     // reproducing the prior all-files-skipped behavior for an unresolvable root.
     let canonical_root = content_root.canonicalize().ok();
-    let pairs: Vec<Result<AssetMetadata, SkippedFile>> = files
+    let pairs: Vec<Result<AssetMetadata, SkippedFile>> = inputs
         .par_iter()
-        .map(|path| {
+        .map(|input| {
             let result =
-                scan_single(path, content_root, canonical_root.as_deref()).map_err(|reason| {
-                    tracing::warn!(path = %path.display(), reason = %reason, "Skipping file");
+                scan_single(input, content_root, canonical_root.as_deref()).map_err(|reason| {
+                    tracing::warn!(path = %input.path.display(), reason = %reason, "Skipping file");
                     SkippedFile {
                         // clone required: SkippedFile owns the path; par_iter yields references
-                        file_path: path.clone(),
+                        file_path: input.path.clone(),
                         reason,
                     }
                 });
@@ -99,22 +116,18 @@ pub fn scan_files_with_progress<F: Fn() + Sync>(
 }
 
 fn scan_single(
-    file: &Path,
+    input: &ScanInput,
     content_root: &Path,
     canonical_root: Option<&Path>,
 ) -> Result<AssetMetadata, ScanError> {
-    let fs_meta = std::fs::metadata(file)?;
-    let file_size = fs_meta.len();
-    let last_modified = fs_meta
-        .modified()
-        .ok()
-        .and_then(|t| t.duration_since(UNIX_EPOCH).ok())
-        .map(|d| d.as_secs())
-        .unwrap_or(0);
+    let data = std::fs::read(&input.path)?;
+    // Size comes from the bytes just read and mtime from the caller-supplied `ScanInput`, so the
+    // file is not re-`stat`ed here (the directory walk already captured its mtime).
+    let file_size = data.len() as u64;
+    let last_modified = input.mtime;
 
-    let data = std::fs::read(file)?;
-
-    let is_umap = file
+    let is_umap = input
+        .path
         .extension()
         .and_then(|e| e.to_str())
         .map(|e| e.eq_ignore_ascii_case("umap"))
@@ -231,14 +244,14 @@ fn scan_single(
     soft_dependencies.dedup_by(|a, b| a.as_str() == b.as_str());
 
     let asset_path = match canonical_root {
-        Some(root) => AssetPath::from_fs_path_with_canonical_root(root, file)?,
+        Some(root) => AssetPath::from_fs_path_with_canonical_root(root, &input.path)?,
         // Root canonicalize failed: fall back to per-file resolution (reproduces prior behavior).
-        None => AssetPath::from_fs_path(content_root, file)?,
+        None => AssetPath::from_fs_path(content_root, &input.path)?,
     };
 
     Ok(AssetMetadata {
         asset_path,
-        file_path: file.to_path_buf(),
+        file_path: input.path.clone(),
         asset_type,
         file_size,
         last_modified,
@@ -247,6 +260,16 @@ fn scan_single(
         blueprint_metrics,
         material_texture_samples,
     })
+}
+
+/// Reads a file's modification time as seconds since the Unix epoch, or 0 if it cannot be read.
+fn file_mtime(path: &Path) -> u64 {
+    std::fs::metadata(path)
+        .ok()
+        .and_then(|m| m.modified().ok())
+        .and_then(|t| t.duration_since(UNIX_EPOCH).ok())
+        .map(|d| d.as_secs())
+        .unwrap_or(0)
 }
 
 #[cfg(test)]
@@ -261,18 +284,42 @@ mod tests {
 
         // Root is the fixtures dir so both the valid and the invalid file resolve under it.
         let content_root = PathBuf::from(FIXTURES_DIR);
-        let files = vec![
-            PathBuf::from(format!("{FIXTURES_DIR}/valid/BP_Simple.uasset")),
-            PathBuf::from(format!("{FIXTURES_DIR}/invalid/bad_magic.bin")),
+        let inputs = vec![
+            ScanInput {
+                path: PathBuf::from(format!("{FIXTURES_DIR}/valid/BP_Simple.uasset")),
+                mtime: 0,
+            },
+            ScanInput {
+                path: PathBuf::from(format!("{FIXTURES_DIR}/invalid/bad_magic.bin")),
+                mtime: 0,
+            },
         ];
         let calls = AtomicUsize::new(0);
-        let result = scan_files_with_progress(&files, &content_root, || {
+        let result = scan_files_with_progress(&inputs, &content_root, || {
             calls.fetch_add(1, Ordering::Relaxed);
         });
         // The callback must fire for the skipped file too, so a progress bar reaches its total.
-        assert_eq!(calls.load(Ordering::Relaxed), files.len());
+        assert_eq!(calls.load(Ordering::Relaxed), inputs.len());
         assert_eq!(result.assets.len(), 1);
         assert_eq!(result.skipped.len(), 1);
+    }
+
+    #[test]
+    fn scan_files_with_progress_should_use_provided_mtime_without_restat() {
+        // The scanner must trust the caller-supplied mtime instead of re-stat'ing the file: pass a
+        // sentinel mtime and assert it survives to the AssetMetadata (a re-stat would overwrite it
+        // with the file's real mtime). file_size is derived from the bytes read.
+        let path = PathBuf::from(format!("{FIXTURES_DIR}/valid/BP_Simple.uasset"));
+        let content_root = PathBuf::from(format!("{FIXTURES_DIR}/valid"));
+        let expected_size = std::fs::read(&path).unwrap().len() as u64;
+        let inputs = vec![ScanInput {
+            path,
+            mtime: 12_345,
+        }];
+        let result = scan_files_with_progress(&inputs, &content_root, || {});
+        assert_eq!(result.assets.len(), 1);
+        assert_eq!(result.assets[0].last_modified, 12_345);
+        assert_eq!(result.assets[0].file_size, expected_size);
     }
 
     #[test]
