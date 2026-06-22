@@ -122,11 +122,7 @@ pub fn handle_clean(
                     targets,
                     total_size_bytes,
                 };
-                println!(
-                    "{}",
-                    serde_json::to_string_pretty(&output)
-                        .context("Failed to serialize dry-run output to JSON")?
-                );
+                crate::emit_json(&output, "Failed to serialize dry-run output to JSON")?;
             }
             FormatKind::GithubActions | FormatKind::Text => {
                 for e in &entries {
@@ -269,11 +265,7 @@ pub fn handle_clean(
                 skipped,
                 errors,
             };
-            println!(
-                "{}",
-                serde_json::to_string_pretty(&summary)
-                    .context("Failed to serialize summary to JSON")?
-            );
+            crate::emit_json(&summary, "Failed to serialize summary to JSON")?;
         }
         FormatKind::GithubActions | FormatKind::Text => {
             println!(

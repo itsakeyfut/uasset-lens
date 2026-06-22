@@ -1,7 +1,5 @@
 ﻿use std::path::Path;
 
-use anyhow::Context;
-
 use crate::FormatKind;
 
 #[derive(serde::Serialize)]
@@ -34,11 +32,7 @@ pub fn handle_redirectors(
                 count,
                 redirectors: redirector_paths,
             };
-            println!(
-                "{}",
-                serde_json::to_string_pretty(&output)
-                    .context("Failed to serialize redirectors output to JSON")?
-            );
+            crate::emit_json(&output, "Failed to serialize redirectors output to JSON")?;
         }
         FormatKind::GithubActions | FormatKind::Text => {
             let header = format!("ObjectRedirectors ({} found)", redirector_paths.len());

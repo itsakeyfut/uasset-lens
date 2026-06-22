@@ -89,10 +89,7 @@ pub fn handle_lint(
             println!("{}", crate::sarif::to_sarif_json(&findings)?);
         }
         FormatKind::GithubActions => {
-            let path_lookup: HashMap<&str, &std::path::Path> = assets
-                .iter()
-                .map(|r| (r.asset_path.as_str(), r.file_path.as_path()))
-                .collect();
+            let path_lookup = crate::path_lookup(&assets);
             let has_error = violations
                 .iter()
                 .any(|v| v.severity == uasset_lens_analysis::Severity::Error);
@@ -116,11 +113,7 @@ pub fn handle_lint(
             return if has_error { Ok(1) } else { Ok(0) };
         }
         FormatKind::Json => {
-            println!(
-                "{}",
-                serde_json::to_string_pretty(&entries)
-                    .context("Failed to serialize lint output to JSON")?
-            );
+            crate::emit_json(&entries, "Failed to serialize lint output to JSON")?;
         }
         FormatKind::Text => {
             println!("Lint Results");
@@ -158,10 +151,7 @@ fn build_lint_findings(
     assets: &[uasset_lens_asset_db::AssetRecord],
     project_dir: &Path,
 ) -> Vec<crate::sarif::SarifFinding> {
-    let path_lookup: HashMap<&str, &std::path::Path> = assets
-        .iter()
-        .map(|r| (r.asset_path.as_str(), r.file_path.as_path()))
-        .collect();
+    let path_lookup = crate::path_lookup(assets);
     violations
         .iter()
         .map(|v| crate::sarif::SarifFinding {

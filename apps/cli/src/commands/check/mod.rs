@@ -533,11 +533,7 @@ pub fn handle_check_with_baseline(
                     })
                     .collect(),
             };
-            println!(
-                "{}",
-                serde_json::to_string_pretty(&output)
-                    .context("Failed to serialize check output to JSON")?
-            );
+            crate::emit_json(&output, "Failed to serialize check output to JSON")?;
             // Keep stdout a single JSON value; report the regression verdict on stderr.
             if let Some(regs) = &regressions {
                 eprintln!(

@@ -439,11 +439,7 @@ pub fn handle_scan(
                     removed: removed_count,
                     skipped: skipped_entries,
                 };
-                println!(
-                    "{}",
-                    serde_json::to_string_pretty(&output)
-                        .context("Failed to serialize scan output to JSON")?
-                );
+                crate::emit_json(&output, "Failed to serialize scan output to JSON")?;
             }
         }
         FormatKind::Text | FormatKind::GithubActions => {
@@ -553,11 +549,7 @@ pub fn handle_scan_dry_run(
                 "scanned": plan.scanned,
                 "ignored": plan.ignored.iter().map(|e| &e.path).collect::<Vec<_>>(),
             });
-            println!(
-                "{}",
-                serde_json::to_string_pretty(&out)
-                    .context("Failed to serialize dry-run output to JSON")?
-            );
+            crate::emit_json(&out, "Failed to serialize dry-run output to JSON")?;
         }
         FormatKind::GithubActions | FormatKind::Text => {
             for path in &plan.scanned {

@@ -110,11 +110,7 @@ pub fn handle_find(
                 total_bytes,
                 assets: entries,
             };
-            println!(
-                "{}",
-                serde_json::to_string_pretty(&out)
-                    .context("Failed to serialize find output to JSON")?
-            );
+            crate::emit_json(&out, "Failed to serialize find output to JSON")?;
         }
         FormatKind::GithubActions | FormatKind::Text => {
             let header = format!("Found {} assets", entries.len());

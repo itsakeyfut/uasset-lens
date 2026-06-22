@@ -1,7 +1,6 @@
 use std::collections::{HashMap, HashSet};
 use std::path::Path;
 
-use anyhow::Context;
 use uasset_lens_shared::AssetPath;
 
 use crate::FormatKind;
@@ -78,11 +77,7 @@ pub fn handle_graph(
                 total_edges,
                 cycles: cycle_entries,
             };
-            println!(
-                "{}",
-                serde_json::to_string_pretty(&output)
-                    .context("Failed to serialize graph output to JSON")?
-            );
+            crate::emit_json(&output, "Failed to serialize graph output to JSON")?;
         }
         FormatKind::GithubActions | FormatKind::Text => {
             if !cycles_only {

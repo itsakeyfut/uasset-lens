@@ -247,7 +247,7 @@ pub fn handle_doctor(
             },
             "issues_found": issues,
         });
-        println!("{}", serde_json::to_string_pretty(&value)?);
+        crate::emit_json(&value, "Failed to serialize doctor output to JSON")?;
     } else {
         print_text(tool_version, &lines, issues);
     }

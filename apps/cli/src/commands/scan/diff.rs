@@ -1,8 +1,6 @@
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 
-use anyhow::Context;
-
 use crate::FormatKind;
 use crate::time::format_utc;
 
@@ -130,11 +128,7 @@ pub(super) fn print_diff(
                 regressions,
                 size_increases,
             };
-            println!(
-                "{}",
-                serde_json::to_string_pretty(&out)
-                    .context("Failed to serialize diff output to JSON")?
-            );
+            crate::emit_json(&out, "Failed to serialize diff output to JSON")?;
         }
         FormatKind::Text => {
             println!();

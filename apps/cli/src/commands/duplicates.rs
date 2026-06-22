@@ -74,11 +74,7 @@ pub fn handle_duplicates(
     match format {
         FormatKind::Sarif => return Err(crate::sarif_not_supported()),
         FormatKind::Json => {
-            println!(
-                "{}",
-                serde_json::to_string_pretty(&entries)
-                    .context("Failed to serialize duplicates output to JSON")?
-            );
+            crate::emit_json(&entries, "Failed to serialize duplicates output to JSON")?;
         }
         FormatKind::GithubActions | FormatKind::Text => {
             println!("Duplicate Assets");

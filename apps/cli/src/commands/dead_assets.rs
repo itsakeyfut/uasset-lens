@@ -1,8 +1,6 @@
 use std::collections::HashMap;
 use std::path::Path;
 
-use anyhow::Context;
-
 use crate::{FormatKind, GroupMode};
 
 #[derive(serde::Serialize)]
@@ -129,11 +127,7 @@ pub fn handle_dead_assets(
         match format {
             FormatKind::Sarif => return Err(crate::sarif_not_supported()),
             FormatKind::Json => {
-                println!(
-                    "{}",
-                    serde_json::to_string_pretty(&groups)
-                        .context("Failed to serialize grouped output to JSON")?
-                );
+                crate::emit_json(&groups, "Failed to serialize grouped output to JSON")?;
             }
             FormatKind::GithubActions | FormatKind::Text => {
                 let max_name = groups.iter().map(|g| g.group.len()).max().unwrap_or(1);
@@ -171,11 +165,7 @@ pub fn handle_dead_assets(
                 total_size_bytes,
                 by_type,
             };
-            println!(
-                "{}",
-                serde_json::to_string_pretty(&output)
-                    .context("Failed to serialize dead assets output to JSON")?
-            );
+            crate::emit_json(&output, "Failed to serialize dead assets output to JSON")?;
         }
         FormatKind::GithubActions | FormatKind::Text => {
             for entry in &entries {

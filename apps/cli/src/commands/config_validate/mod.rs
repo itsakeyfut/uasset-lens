@@ -7,8 +7,6 @@ mod validator;
 
 use std::path::{Path, PathBuf};
 
-use anyhow::Context;
-
 use crate::FormatKind;
 
 use validator::validate;
@@ -106,13 +104,16 @@ pub fn handle_config_validate(
 
     if !path.exists() {
         if json {
-            print_json(&serde_json::json!({
-                "valid": true,
-                "path": path_str,
-                "present": false,
-                "errors": [],
-                "warnings": [],
-            }))?;
+            crate::emit_json(
+                &serde_json::json!({
+                    "valid": true,
+                    "path": path_str,
+                    "present": false,
+                    "errors": [],
+                    "warnings": [],
+                }),
+                "Failed to serialize config validate output",
+            )?;
         } else {
             println!("No config file found at {path_str} (using defaults).");
         }
@@ -153,12 +154,15 @@ pub fn handle_config_validate(
             .iter()
             .map(|w| serde_json::json!({ "line": w.line, "section": w.section, "message": w.rendered() }))
             .collect();
-        print_json(&serde_json::json!({
-            "valid": errors.is_empty(),
-            "path": path_str,
-            "errors": errs,
-            "warnings": warns,
-        }))?;
+        crate::emit_json(
+            &serde_json::json!({
+                "valid": errors.is_empty(),
+                "path": path_str,
+                "errors": errs,
+                "warnings": warns,
+            }),
+            "Failed to serialize config validate output",
+        )?;
     } else {
         print_text(&path_str, &errors, &warnings);
     }
@@ -201,15 +205,6 @@ fn format_entry(line: Option<u32>, section: &str, message: &str) -> String {
         Some(n) => format!("line {n}: [{section}] — {message}"),
         None => format!("[{section}] — {message}"),
     }
-}
-
-fn print_json(value: &serde_json::Value) -> anyhow::Result<()> {
-    println!(
-        "{}",
-        serde_json::to_string_pretty(value)
-            .context("Failed to serialize config validate output")?
-    );
-    Ok(())
 }
 
 #[cfg(test)]
