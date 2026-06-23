@@ -108,6 +108,19 @@ fn dir_excluded(rel: &str, normalized: &[String]) -> bool {
     normalized.iter().any(|p| rel_dir.starts_with(p.as_str()))
 }
 
+/// Fails (non-zero exit) when the scan target is missing or not a directory, instead of letting
+/// `WalkDir` silently yield zero files and exit 0 — a fail-open that would let a CI quality gate
+/// pass without scanning anything (e.g. a typo'd path or a misconfigured CI variable).
+fn require_project_dir(project_dir: &Path) -> anyhow::Result<()> {
+    if !project_dir.is_dir() {
+        anyhow::bail!(
+            "project directory does not exist or is not a directory: {}",
+            project_dir.display()
+        );
+    }
+    Ok(())
+}
+
 pub fn handle_scan(
     project_dir: &Path,
     db_path: &Path,
@@ -115,6 +128,7 @@ pub fn handle_scan(
     cfg: &crate::config::ConfigFile,
     opts: &ScanOptions<'_>,
 ) -> anyhow::Result<i32> {
+    require_project_dir(project_dir)?;
     let use_color = crate::use_color(format, opts.no_color);
 
     if let Some(parent) = db_path.parent().filter(|p| !p.as_os_str().is_empty()) {
@@ -553,6 +567,7 @@ pub fn handle_scan_dry_run(
     cfg: &crate::config::ConfigFile,
     format: &FormatKind,
 ) -> anyhow::Result<i32> {
+    require_project_dir(project_dir)?;
     let plan = classify_for_dry_run(project_dir, cfg)?;
 
     match format {
@@ -1121,6 +1136,69 @@ mod tests {
 
         assert_eq!(result, 0);
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    fn default_scan_options() -> ScanOptions<'static> {
+        ScanOptions {
+            full_scan: false,
+            diff: false,
+            yes: false,
+            save_baseline: None,
+            diff_from: None,
+            quiet: false,
+            suppress_report: false,
+            no_color: false,
+            no_progress: false,
+        }
+    }
+
+    #[test]
+    fn handle_scan_should_return_error_when_project_dir_does_not_exist() {
+        let (dir, db_path) = test_db_in_tempdir("scan_missing_dir");
+        let missing = dir.join("does_not_exist");
+        let result = handle_scan(
+            &missing,
+            &db_path,
+            &FormatKind::Text,
+            &Default::default(),
+            &default_scan_options(),
+        );
+        let _ = std::fs::remove_dir_all(&dir);
+        assert!(
+            result.is_err(),
+            "scan on a nonexistent project dir must fail, not silently exit 0"
+        );
+    }
+
+    #[test]
+    fn handle_scan_should_return_error_when_project_dir_is_a_file() {
+        let (dir, db_path) = test_db_in_tempdir("scan_file_as_dir");
+        let file = dir.join("not_a_dir.txt");
+        std::fs::write(&file, b"x").unwrap();
+        let result = handle_scan(
+            &file,
+            &db_path,
+            &FormatKind::Text,
+            &Default::default(),
+            &default_scan_options(),
+        );
+        let _ = std::fs::remove_dir_all(&dir);
+        assert!(
+            result.is_err(),
+            "scan on a file path must fail, not silently exit 0"
+        );
+    }
+
+    #[test]
+    fn handle_scan_dry_run_should_return_error_when_project_dir_does_not_exist() {
+        let (dir, _db_path) = test_db_in_tempdir("scan_dry_missing");
+        let missing = dir.join("does_not_exist");
+        let result = handle_scan_dry_run(&missing, &Default::default(), &FormatKind::Text);
+        let _ = std::fs::remove_dir_all(&dir);
+        assert!(
+            result.is_err(),
+            "dry-run on a nonexistent project dir must fail, not exit 0"
+        );
     }
 
     #[test]
