@@ -15,4 +15,4 @@ pub use test_support::{make_record, set_schema_version};
 
 pub use db::{AssetDb, CURRENT_SCHEMA_VERSION};
 pub use error::DbError;
-pub use record::{AssetFilter, AssetRecord, BlueprintRow, ScanSnapshot};
+pub use record::{AssetFilter, AssetRecord, BlueprintRow, ScanSnapshot, TextureRow};

@@ -89,6 +89,7 @@ mod tests {
             soft_dependencies: vec![],
             blueprint_metrics: None,
             material_texture_samples: texture_samples,
+            texture_metadata: None,
         }
     }
 

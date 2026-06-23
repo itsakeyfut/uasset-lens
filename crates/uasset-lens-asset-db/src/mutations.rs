@@ -42,6 +42,22 @@ fn upsert_asset_conn(
         ])?;
     }
 
+    // Same cascade-delete-then-reinsert as blueprint_metrics. source_x/source_y/has_alpha are
+    // not yet extracted (see #299 MVP scope), so they are stored as NULL.
+    if let Some(ref tm) = meta.texture_metadata {
+        conn.prepare_cached(
+            "INSERT INTO texture_metadata \
+             (asset_id, compression, mip_gen, has_alpha, texture_group, source_x, source_y) \
+             VALUES (?1, ?2, ?3, NULL, ?4, NULL, NULL)",
+        )?
+        .execute(rusqlite::params![
+            id,
+            tm.compression,
+            tm.mip_gen,
+            tm.texture_group,
+        ])?;
+    }
+
     Ok(id)
 }
 
@@ -424,5 +440,77 @@ mod tests {
 
         let rows = db.all_blueprint_metrics().unwrap();
         assert!(rows.is_empty());
+    }
+
+    #[test]
+    fn upsert_asset_should_store_texture_metadata_when_present() {
+        let db = AssetDb::open(Path::new(":memory:")).unwrap();
+        let tm = uasset_lens_scanner::TextureMetadata {
+            compression: Some("TC_Normalmap".to_string()),
+            mip_gen: None,
+            texture_group: Some("TEXTUREGROUP_Character".to_string()),
+        };
+        let meta = uasset_lens_scanner::AssetMetadata {
+            file_path: PathBuf::from("/proj/Content/T_Hero.uasset"),
+            file_size: 4096,
+            last_modified: 100,
+            texture_metadata: Some(tm),
+            ..uasset_lens_scanner::make_meta("/Game/T_Hero", AssetType::Texture2D)
+        };
+        db.upsert_asset(&meta).unwrap();
+
+        let rows = db.all_texture_metadata().unwrap();
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].asset_path.as_str(), "/Game/T_Hero");
+        assert_eq!(rows[0].compression.as_deref(), Some("TC_Normalmap"));
+        assert_eq!(rows[0].mip_gen, None);
+        assert_eq!(
+            rows[0].texture_group.as_deref(),
+            Some("TEXTUREGROUP_Character")
+        );
+        // MVP scope: these columns exist but are not yet populated.
+        assert_eq!(rows[0].has_alpha, None);
+        assert_eq!(rows[0].source_x, None);
+        assert_eq!(rows[0].source_y, None);
+    }
+
+    #[test]
+    fn upsert_asset_should_not_store_texture_metadata_when_absent() {
+        let db = AssetDb::open(Path::new(":memory:")).unwrap();
+        let meta = uasset_lens_scanner::AssetMetadata {
+            file_path: PathBuf::from("/proj/Content/BP_Plain.uasset"),
+            last_modified: 100,
+            ..uasset_lens_scanner::make_meta("/Game/BP_Plain", AssetType::Blueprint)
+        };
+        db.upsert_asset(&meta).unwrap();
+
+        let rows = db.all_texture_metadata().unwrap();
+        assert!(rows.is_empty());
+    }
+
+    #[test]
+    fn upsert_all_should_replace_texture_metadata_on_re_upsert() {
+        let mut db = AssetDb::open(Path::new(":memory:")).unwrap();
+        let with_meta = |compression: &str| uasset_lens_scanner::AssetMetadata {
+            file_path: PathBuf::from("/proj/Content/T_Hero.uasset"),
+            file_size: 4096,
+            last_modified: 100,
+            texture_metadata: Some(uasset_lens_scanner::TextureMetadata {
+                compression: Some(compression.to_string()),
+                mip_gen: None,
+                texture_group: None,
+            }),
+            ..uasset_lens_scanner::make_meta("/Game/T_Hero", AssetType::Texture2D)
+        };
+        db.upsert_all(&[with_meta("TC_Default")]).unwrap();
+        db.upsert_all(&[with_meta("TC_Normalmap")]).unwrap();
+
+        let rows = db.all_texture_metadata().unwrap();
+        assert_eq!(
+            rows.len(),
+            1,
+            "re-upsert must not duplicate the texture row"
+        );
+        assert_eq!(rows[0].compression.as_deref(), Some("TC_Normalmap"));
     }
 }

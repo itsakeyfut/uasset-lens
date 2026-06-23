@@ -7,6 +7,7 @@ pub mod error;
 mod level_sequence;
 mod material;
 pub mod parser;
+mod texture;
 
 #[cfg(any(test, feature = "test-support"))]
 pub mod test_support;
@@ -16,6 +17,7 @@ pub use test_support::make_meta;
 pub use blueprint::BlueprintMetrics;
 pub use error::ScanError;
 pub use parser::properties::{ParsedProperty, parse_properties};
+pub use texture::TextureMetadata;
 
 use std::path::{Path, PathBuf};
 use std::time::UNIX_EPOCH;
@@ -40,6 +42,7 @@ pub struct AssetMetadata {
     pub soft_dependencies: Vec<AssetPath>,
     pub blueprint_metrics: Option<BlueprintMetrics>,
     pub material_texture_samples: Option<u32>,
+    pub texture_metadata: Option<TextureMetadata>,
 }
 
 #[derive(Debug)]
@@ -230,6 +233,19 @@ fn scan_single(
 
     soft_dependencies.extend(ls_soft_refs);
 
+    let texture_metadata = if texture::is_texture_asset(&asset_type) {
+        Some(texture::extract_texture_metadata(
+            &data,
+            hdr.export_offset,
+            hdr.export_count,
+            hdr.depends_offset,
+            &cls_name_idxs,
+            &name_table,
+        ))
+    } else {
+        None
+    };
+
     // Deduplicate: import table can reference the same package multiple times, and multiple
     // soft-ref sources (DataTable, AnimMontage, LevelSequence) can overlap each other or the
     // hard dep list. Hard deps take priority, so soft deps that duplicate a hard dep are dropped.
@@ -259,6 +275,7 @@ fn scan_single(
         soft_dependencies,
         blueprint_metrics,
         material_texture_samples,
+        texture_metadata,
     })
 }
 
@@ -379,6 +396,31 @@ mod tests {
             meta.material_texture_samples.is_none(),
             "Texture2D should not have material texture samples"
         );
+    }
+
+    #[test]
+    fn scan_files_should_attach_texture_metadata_for_texture_asset() {
+        let fixture = PathBuf::from(format!("{FIXTURES_DIR}/valid/T_Rock.uasset"));
+        let content_root = PathBuf::from(format!("{FIXTURES_DIR}/valid"));
+        let result = scan_files(&[fixture], &content_root);
+
+        assert!(result.skipped.is_empty());
+        assert_eq!(result.assets.len(), 1);
+        let meta = &result.assets[0];
+        assert_eq!(meta.asset_type, AssetType::Texture2D);
+
+        // A texture asset always gets a metadata struct. This fixture is a source (editor) asset
+        // whose CompressionSettings / LODGroup sit at their defaults, so UE omits them from the
+        // serialized property stream and every field stays None. The value still proves the real
+        // UE5.4 tagged-property walk runs over the whole export without desyncing; per-field
+        // capture is covered by the unit tests in `texture.rs`.
+        let tm = meta
+            .texture_metadata
+            .as_ref()
+            .expect("Texture2D should have texture metadata");
+        assert_eq!(tm.compression, None);
+        assert_eq!(tm.mip_gen, None);
+        assert_eq!(tm.texture_group, None);
     }
 
     #[test]

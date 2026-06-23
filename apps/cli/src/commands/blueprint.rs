@@ -131,6 +131,7 @@ mod tests {
                     dependency_depth: 4,
                 }),
                 material_texture_samples: None,
+                texture_metadata: None,
             },
             uasset_lens_scanner::AssetMetadata {
                 asset_path: AssetPath::new("/Game/BP_Player").unwrap(),
@@ -147,6 +148,7 @@ mod tests {
                     dependency_depth: 3,
                 }),
                 material_texture_samples: None,
+                texture_metadata: None,
             },
         ];
         db.upsert_all(&assets).unwrap();

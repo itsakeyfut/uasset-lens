@@ -6,7 +6,7 @@ use uasset_lens_shared::AssetPath;
 
 use crate::db::AssetDb;
 use crate::error::DbError;
-use crate::record::{AssetFilter, AssetRecord, BlueprintRow, ScanSnapshot};
+use crate::record::{AssetFilter, AssetRecord, BlueprintRow, ScanSnapshot, TextureRow};
 
 fn parse_asset_record(
     id: i64,
@@ -326,6 +326,42 @@ impl AssetDb {
                 event_tick_count: et as u32,
                 cast_count: cc as u32,
                 dependency_depth: dd as u32,
+            })
+        })
+        .collect()
+    }
+
+    pub fn all_texture_metadata(&self) -> Result<Vec<TextureRow>, DbError> {
+        let mut stmt = self.conn.prepare(
+            "SELECT a.asset_path, a.asset_type, \
+                    tm.compression, tm.mip_gen, tm.has_alpha, tm.texture_group, \
+                    tm.source_x, tm.source_y \
+             FROM texture_metadata tm \
+             JOIN assets a ON tm.asset_id = a.id",
+        )?;
+        stmt.query_map([], |row| {
+            Ok((
+                row.get::<_, String>(0)?,
+                row.get::<_, String>(1)?,
+                row.get::<_, Option<String>>(2)?,
+                row.get::<_, Option<String>>(3)?,
+                row.get::<_, Option<i64>>(4)?,
+                row.get::<_, Option<String>>(5)?,
+                row.get::<_, Option<i64>>(6)?,
+                row.get::<_, Option<i64>>(7)?,
+            ))
+        })?
+        .map(|r| {
+            let (ap, at, compression, mip_gen, has_alpha, texture_group, source_x, source_y) = r?;
+            Ok(TextureRow {
+                asset_path: AssetPath::from_owned(ap)?,
+                asset_type: serde_json::from_str(&at)?,
+                compression,
+                mip_gen,
+                has_alpha: has_alpha.map(|v| v != 0),
+                texture_group,
+                source_x,
+                source_y,
             })
         })
         .collect()
