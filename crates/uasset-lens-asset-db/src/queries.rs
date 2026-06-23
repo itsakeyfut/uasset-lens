@@ -18,7 +18,8 @@ fn parse_asset_record(
 ) -> Result<AssetRecord, DbError> {
     Ok(AssetRecord {
         id,
-        asset_path: AssetPath::new(&asset_path)?,
+        // from_owned moves the row's String instead of copying it.
+        asset_path: AssetPath::from_owned(asset_path)?,
         file_path: PathBuf::from(file_path),
         asset_type: serde_json::from_str(&asset_type_json)?,
         file_size: file_size as u64,
@@ -96,6 +97,7 @@ impl AssetDb {
         let mut stmt = self.conn.prepare(
             "SELECT id, asset_path, file_path, asset_type, file_size, last_modified FROM assets",
         )?;
+        // Stream rows straight into AssetRecord: no intermediate tuple Vec is materialized.
         stmt.query_map([], |row| {
             Ok((
                 row.get::<_, i64>(0)?,
@@ -106,9 +108,10 @@ impl AssetDb {
                 row.get::<_, i64>(5)?,
             ))
         })?
-        .collect::<Result<Vec<_>, _>>()?
-        .into_iter()
-        .map(|(id, ap, fp, at, fs, lm)| parse_asset_record(id, ap, fp, at, fs, lm))
+        .map(|r| {
+            let (id, ap, fp, at, fs, lm) = r?;
+            parse_asset_record(id, ap, fp, at, fs, lm)
+        })
         .collect()
     }
 
@@ -123,7 +126,8 @@ impl AssetDb {
         })?
         .map(|r| {
             let (from, to) = r?;
-            Ok((AssetPath::new(&from)?, AssetPath::new(&to)?))
+            // from_owned moves each row String instead of copying it.
+            Ok((AssetPath::from_owned(from)?, AssetPath::from_owned(to)?))
         })
         .collect()
     }
@@ -301,6 +305,8 @@ impl AssetDb {
              FROM blueprint_metrics bm \
              JOIN assets a ON bm.asset_id = a.id",
         )?;
+        // Stream rows straight into BlueprintRow: no intermediate tuple Vec, and the row String
+        // is moved into the AssetPath rather than copied.
         stmt.query_map([], |row| {
             Ok((
                 row.get::<_, String>(0)?,
@@ -311,11 +317,10 @@ impl AssetDb {
                 row.get::<_, i64>(5)?,
             ))
         })?
-        .collect::<Result<Vec<_>, _>>()?
-        .into_iter()
-        .map(|(ap, at, nc, et, cc, dd)| {
+        .map(|r| {
+            let (ap, at, nc, et, cc, dd) = r?;
             Ok(BlueprintRow {
-                asset_path: AssetPath::new(&ap)?,
+                asset_path: AssetPath::from_owned(ap)?,
                 asset_type: serde_json::from_str(&at)?,
                 node_count: nc as u32,
                 event_tick_count: et as u32,
