@@ -43,7 +43,11 @@ pub enum SortKey {
 }
 
 #[derive(Debug, Parser)]
-#[command(name = "uasset-lens", about = "Unreal Engine 5 asset static analyzer")]
+#[command(
+    name = "uasset-lens",
+    version,
+    about = "Unreal Engine 5 asset static analyzer"
+)]
 pub struct Cli {
     #[arg(long, value_enum, default_value_t = FormatKind::Text, global = true)]
     pub format: FormatKind,
@@ -307,5 +311,26 @@ mod tests {
         ]);
         let err = result.expect_err("--only and --skip together must be a clap error");
         assert_eq!(err.kind(), clap::error::ErrorKind::ArgumentConflict);
+    }
+
+    #[test]
+    fn cli_should_display_version_with_long_flag() {
+        use clap::Parser;
+        let err = Cli::try_parse_from(["uasset-lens", "--version"])
+            .expect_err("--version must short-circuit parsing");
+        assert_eq!(err.kind(), clap::error::ErrorKind::DisplayVersion);
+        assert!(
+            err.to_string().contains(env!("CARGO_PKG_VERSION")),
+            "version output must contain the workspace version, got: {err}"
+        );
+    }
+
+    #[test]
+    fn cli_should_display_version_with_short_flag() {
+        use clap::Parser;
+        let err =
+            Cli::try_parse_from(["uasset-lens", "-V"]).expect_err("-V must short-circuit parsing");
+        assert_eq!(err.kind(), clap::error::ErrorKind::DisplayVersion);
+        assert!(err.to_string().contains(env!("CARGO_PKG_VERSION")));
     }
 }
