@@ -16,7 +16,7 @@ pub enum AssetPathError {
 }
 
 impl AssetPath {
-    pub fn new(s: &str) -> Result<Self, AssetPathError> {
+    fn validate(s: &str) -> Result<(), AssetPathError> {
         if s.is_empty() {
             return Err(AssetPathError::Empty);
         }
@@ -27,7 +27,20 @@ impl AssetPath {
         if last_segment.contains('.') {
             return Err(AssetPathError::InvalidCharacter);
         }
+        Ok(())
+    }
+
+    pub fn new(s: &str) -> Result<Self, AssetPathError> {
+        Self::validate(s)?;
         Ok(Self(s.to_owned()))
+    }
+
+    /// Like [`new`](Self::new) but takes ownership of `s`, avoiding the `to_owned()` copy when the
+    /// caller already owns the `String` (e.g. a value fetched from a database row). Validation is
+    /// identical to `new`.
+    pub fn from_owned(s: String) -> Result<Self, AssetPathError> {
+        Self::validate(&s)?;
+        Ok(Self(s))
     }
 
     pub fn as_str(&self) -> &str {
@@ -130,6 +143,29 @@ mod tests {
     fn new_should_succeed_for_valid_path() {
         let path = AssetPath::new("/Game/Characters/BP_Player").unwrap();
         assert_eq!(path.as_str(), "/Game/Characters/BP_Player");
+    }
+
+    #[test]
+    fn from_owned_should_succeed_for_valid_path_and_match_new() {
+        let path = AssetPath::from_owned("/Game/Characters/BP_Player".to_string()).unwrap();
+        assert_eq!(path.as_str(), "/Game/Characters/BP_Player");
+        assert_eq!(path, AssetPath::new("/Game/Characters/BP_Player").unwrap());
+    }
+
+    #[test]
+    fn from_owned_should_reject_invalid_path_like_new() {
+        assert_eq!(
+            AssetPath::from_owned(String::new()),
+            Err(AssetPathError::Empty)
+        );
+        assert_eq!(
+            AssetPath::from_owned("Game/X".to_string()),
+            Err(AssetPathError::MissingLeadingSlash)
+        );
+        assert_eq!(
+            AssetPath::from_owned("/Game/X.uasset".to_string()),
+            Err(AssetPathError::InvalidCharacter)
+        );
     }
 
     #[test]

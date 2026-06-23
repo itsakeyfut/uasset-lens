@@ -36,10 +36,11 @@ pub(crate) fn load_graph(
         .all_assets()
         .context("Failed to read assets from database")?;
     let nodes: Vec<uasset_lens_dependency_graph::AssetNode> = records
-        .iter()
+        .into_iter()
         .map(|r| uasset_lens_dependency_graph::AssetNode {
-            path: r.asset_path.clone(),       // clone required: AssetPath is not Copy
-            asset_type: r.asset_type.clone(), // clone required: AssetType is not Copy
+            // move out of the record (freed incrementally) instead of cloning.
+            path: r.asset_path,
+            asset_type: r.asset_type,
         })
         .collect();
     let edges = db
