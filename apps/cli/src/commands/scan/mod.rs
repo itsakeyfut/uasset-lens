@@ -374,8 +374,16 @@ pub fn handle_scan(
 
         if confirmed {
             let mut removed = 0usize;
+            // Canonicalize the content root once for the whole stale set instead of per file.
+            let canonical_root = content_root.canonicalize().ok();
             for path in &stale {
-                match uasset_lens_shared::AssetPath::from_fs_path(&content_root, path) {
+                let resolved = match canonical_root.as_deref() {
+                    Some(root) => {
+                        uasset_lens_shared::AssetPath::from_fs_path_with_canonical_root(root, path)
+                    }
+                    None => uasset_lens_shared::AssetPath::from_fs_path(&content_root, path),
+                };
+                match resolved {
                     Ok(ap) => {
                         db.delete_asset(&ap)
                             .context("Failed to delete stale asset from database")?;

@@ -63,10 +63,20 @@ pub(super) fn print_diff(
         .map(|a| a.asset_path.as_str().to_owned())
         .collect();
 
+    // Canonicalize the content root once for the whole stale set instead of per file.
+    let deleted_root = input.content_root.canonicalize().ok();
     let deleted_asset_paths: Vec<String> = input
         .stale
         .iter()
-        .filter_map(|p| uasset_lens_shared::AssetPath::from_fs_path(input.content_root, p).ok())
+        .filter_map(|p| {
+            match deleted_root.as_deref() {
+                Some(root) => {
+                    uasset_lens_shared::AssetPath::from_fs_path_with_canonical_root(root, p)
+                }
+                None => uasset_lens_shared::AssetPath::from_fs_path(input.content_root, p),
+            }
+            .ok()
+        })
         .map(|ap| ap.as_str().to_owned())
         .collect();
 

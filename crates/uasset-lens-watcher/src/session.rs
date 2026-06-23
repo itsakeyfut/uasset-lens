@@ -20,6 +20,9 @@ pub enum WatchSessionError {
 pub struct WatchSession {
     db: uasset_lens_asset_db::AssetDb,
     content_root: PathBuf,
+    /// The content root canonicalized once at session start, reused for every deleted-path
+    /// resolution so each debounced batch does not re-`canonicalize` the (unchanging) root.
+    canonical_content_root: Option<PathBuf>,
     external_roots: Vec<String>,
     last_dead: HashSet<AssetPath>,
     last_cycles: Vec<Vec<AssetPath>>,
@@ -31,9 +34,11 @@ impl WatchSession {
         content_root: PathBuf,
         external_roots: Vec<String>,
     ) -> Self {
+        let canonical_content_root = content_root.canonicalize().ok();
         Self {
             db,
             content_root,
+            canonical_content_root,
             external_roots,
             last_dead: HashSet::new(),
             last_cycles: Vec::new(),
@@ -91,7 +96,11 @@ impl WatchSession {
         }
 
         for path in &to_delete {
-            match AssetPath::from_fs_path(&self.content_root, path) {
+            let resolved = match self.canonical_content_root.as_deref() {
+                Some(root) => AssetPath::from_fs_path_with_canonical_root(root, path),
+                None => AssetPath::from_fs_path(&self.content_root, path),
+            };
+            match resolved {
                 Ok(asset_path) => {
                     self.db.delete_asset(&asset_path)?;
                     tracing::debug!(path = %path.display(), "deleted asset from db");
