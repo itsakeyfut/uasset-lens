@@ -17,5 +17,6 @@ pub fn make_meta(asset_path: &str, asset_type: AssetType) -> AssetMetadata {
         soft_dependencies: vec![],
         blueprint_metrics: None,
         material_texture_samples: None,
+        texture_metadata: None,
     }
 }

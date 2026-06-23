@@ -23,6 +23,18 @@ pub struct BlueprintRow {
 }
 
 #[derive(Debug)]
+pub struct TextureRow {
+    pub asset_path: AssetPath,
+    pub asset_type: AssetType,
+    pub compression: Option<String>,
+    pub mip_gen: Option<String>,
+    pub has_alpha: Option<bool>,
+    pub texture_group: Option<String>,
+    pub source_x: Option<i64>,
+    pub source_y: Option<i64>,
+}
+
+#[derive(Debug)]
 pub struct AssetFilter {
     pub asset_type: Option<AssetType>,
     pub min_size: Option<u64>,

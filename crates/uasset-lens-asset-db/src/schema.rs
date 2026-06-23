@@ -35,6 +35,16 @@ impl AssetDb {
                  dep_depth  INTEGER NOT NULL
              );
 
+             CREATE TABLE IF NOT EXISTS texture_metadata (
+                 asset_id      INTEGER PRIMARY KEY REFERENCES assets(id) ON DELETE CASCADE,
+                 compression   TEXT,
+                 mip_gen       TEXT,
+                 has_alpha     INTEGER,
+                 texture_group TEXT,
+                 source_x      INTEGER,
+                 source_y      INTEGER
+             );
+
              CREATE TABLE IF NOT EXISTS scan_history (
                  id              INTEGER PRIMARY KEY AUTOINCREMENT,
                  scanned_at      INTEGER NOT NULL,
@@ -124,6 +134,34 @@ mod tests {
             names.contains(&"blueprint_metrics".to_string()),
             "blueprint_metrics table should be created by init_schema"
         );
+    }
+
+    #[test]
+    fn open_should_create_texture_metadata_table_with_expected_columns() {
+        let db = AssetDb::open(Path::new(":memory:")).unwrap();
+        let mut stmt = db
+            .conn
+            .prepare("PRAGMA table_info(texture_metadata)")
+            .unwrap();
+        let col_names: Vec<String> = stmt
+            .query_map([], |row| row.get::<_, String>(1))
+            .unwrap()
+            .filter_map(|r| r.ok())
+            .collect();
+        for col in [
+            "asset_id",
+            "compression",
+            "mip_gen",
+            "has_alpha",
+            "texture_group",
+            "source_x",
+            "source_y",
+        ] {
+            assert!(
+                col_names.contains(&col.to_string()),
+                "texture_metadata table must have {col} column, got {col_names:?}"
+            );
+        }
     }
 
     #[test]

@@ -196,6 +196,7 @@ mod tests {
             soft_dependencies: vec![],
             blueprint_metrics: None,
             material_texture_samples: None,
+            texture_metadata: None,
         }
     }
 
@@ -264,6 +265,7 @@ mod tests {
                     dependency_depth: 0,
                 }),
                 material_texture_samples: None,
+                texture_metadata: None,
             }])
             .unwrap();
         }
@@ -408,6 +410,7 @@ mod tests {
                     dependency_depth: 0,
                 }),
                 material_texture_samples: None,
+                texture_metadata: None,
             }])
             .unwrap();
         }

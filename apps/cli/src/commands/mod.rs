@@ -36,6 +36,7 @@ pub(crate) fn make_meta(
         soft_dependencies: vec![],
         blueprint_metrics: None,
         material_texture_samples: None,
+        texture_metadata: None,
     }
 }
 

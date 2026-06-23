@@ -40,17 +40,29 @@ All fields are read from the cooked export property table. Fields absent from th
 
 ## Database Schema
 
+The `assets` table is keyed by an integer `id` (with a `UNIQUE asset_path`), so the foreign key
+references `assets(id)`, matching the existing `blueprint_metrics` table.
+
 ```sql
 CREATE TABLE texture_metadata (
-    asset_path TEXT PRIMARY KEY REFERENCES assets(path) ON DELETE CASCADE,
-    compression TEXT,
-    mip_gen   TEXT,
-    has_alpha INTEGER,  -- 0 or 1; NULL if unknown
+    asset_id      INTEGER PRIMARY KEY REFERENCES assets(id) ON DELETE CASCADE,
+    compression   TEXT,
+    mip_gen       TEXT,
+    has_alpha     INTEGER,  -- 0 or 1; NULL if unknown
     texture_group TEXT,
-    source_x  INTEGER,
-    source_y  INTEGER
+    source_x      INTEGER,
+    source_y      INTEGER
 );
 ```
+
+`compression`, `mip_gen`, and `texture_group` store the enum **value name** as text
+(e.g. `TC_Default`, `TEXTUREGROUP_World`) — in cooked UE5 assets these are serialized as
+`ByteProperty` enum values (FName), not raw `uint32` indices.
+
+**MVP scope (#299):** the scanner currently populates `compression`, `mip_gen`, and
+`texture_group` from the tagged-property stream. `has_alpha`, `source_x`, and `source_y` require
+parsing `FTexturePlatformData` (and `has_alpha` has no field in its documented layout); these
+columns exist but are written as `NULL` until a follow-up issue adds that extraction.
 
 ---
 
